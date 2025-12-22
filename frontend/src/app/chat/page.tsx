@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import {
+  MessageSquare,
   Sparkles,
   User,
   Copy,
   Check,
-  Menu,
   Plus,
   GitBranch,
   Settings,
@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import type { ChatSession, ToolCall, ToolResult, MCPTool } from '@/lib/types';
-import { MessageRenderer, ChatSidebar, ToolBelt, MCPSettingsModal, ChatSettingsModal } from '@/components/chat';
-import { ToolCallCard } from '@/components/chat/tool-call-card';
+import {
+  MessageRenderer, ChatSidebar, ToolBelt, MCPSettingsModal, ChatSettingsModal } from '@/components/chat';
+import {
+  ToolCallCard } from '@/components/chat/tool-call-card';
 import type { Attachment, MCPServerConfig } from '@/components/chat';
 
 interface Message {
@@ -1249,7 +1251,7 @@ export default function ChatPage() {
                   className="p-1.5 -ml-1 rounded-lg hover:bg-[var(--accent)] transition-colors"
                   title="Chat history"
                 >
-                  <Menu className="h-5 w-5" />
+                  <MessageSquare className="h-5 w-5" />
                 </button>
               )}
 

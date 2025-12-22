@@ -103,6 +103,8 @@ services:
     environment:
       # Backend URL for server-side API routes (localhost via host network)
       - BACKEND_URL=http://localhost:8080
+      - LITELLM_URL=http://localhost:4100
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-master}
       - API_KEY=${VLLM_STUDIO_API_KEY:-}
       # LiteLLM for chat (client-side, via tunnel)
       - NEXT_PUBLIC_LITELLM_URL=${NEXT_PUBLIC_LITELLM_URL:-https://homelabai.org}
