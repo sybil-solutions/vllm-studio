@@ -299,6 +299,37 @@ export default function ChatPage() {
     }
   }, [mcpEnabled]);
 
+  // Prevent stream death when PWA goes to background
+  useEffect(() => {
+    let wakeLock: WakeLockSentinel | null = null;
+
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator && isLoading) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } catch (e) {
+          // Wake lock not supported or failed
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isLoading) {
+        requestWakeLock();
+      }
+    };
+
+    if (isLoading) {
+      requestWakeLock();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      wakeLock?.release();
+    };
+  }, [isLoading]);
+
   const loadMCPServers = async () => {
     try {
       const servers = await api.getMCPServers();
@@ -545,26 +576,45 @@ export default function ChatPage() {
         role: 'system',
         content: `You are a Deep Research Assistant. Your task is to conduct thorough, multi-step research to provide comprehensive, well-sourced answers.
 
+## CRITICAL: ALWAYS PLAN FIRST
+
+Before making ANY tool calls, you MUST output a research plan. This is non-negotiable.
+
+**Your first response to any research question must be:**
+1. A brief restatement of what you're researching
+2. Your research plan with numbered steps
+3. The specific queries you'll run
+
+Example format:
+\`\`\`
+**Research Goal:** [What you're investigating]
+
+**Plan:**
+1. Search for [topic] - understand the basics
+2. Search for [recent developments] - get current state
+3. Search for [specific aspect] - deep dive on key area
+4. Search for [contrasting view] - get alternative perspectives
+5. Synthesize findings into comprehensive answer
+
+**Starting research...**
+\`\`\`
+
+Only AFTER outputting this plan should you begin making tool calls.
+
 ## RESEARCH METHODOLOGY
 
-When the user asks a question, follow this systematic research process:
-
-### Step 1: Query Analysis
-- Break down the user's question into 2-4 specific research angles or sub-questions
+### Step 1: Query Analysis & Planning
+- Break down the user's question into 2-4 specific research angles
 - Identify key concepts, entities, and terms to search for
 - Consider different perspectives (technical, practical, historical, current trends)
+- OUTPUT YOUR PLAN before proceeding
 
 ### Step 2: Multi-Source Search Strategy
-You MUST use the Exa search tool (exa__search or similar) to gather information. Perform ${numSources} separate searches with different queries:
+Perform ${numSources} separate searches with different queries:
 - Search 1: Direct query for the main topic
-- Search 2: Query for recent developments/news on the topic
+- Search 2: Query for recent developments/news
 - Search 3: Query for expert opinions or academic perspectives
-- Search 4+: Queries for specific sub-questions or related concepts
-
-For each search, use tool_calls to invoke the Exa search tool with varied queries. Example:
-\`\`\`
-tool_call: exa__search with query="[your search query]" and numResults=5
-\`\`\`
+- Search 4+: Queries for specific sub-questions
 
 ### Step 3: Source Analysis (${searchDepth === 'thorough' ? 'Deep Analysis' : 'Standard Analysis'})
 For each search result:
@@ -587,23 +637,23 @@ Include citations for all factual claims using this format:
 
 ## IMPORTANT GUIDELINES
 
-1. **Always use tools first** - Do not answer from memory alone. Search for current information.
-2. **Diverse queries** - Use different phrasings and angles for each search to maximize coverage.
-3. **Verify claims** - Cross-reference important facts across multiple sources.
-4. **Acknowledge limitations** - If information is scarce or conflicting, say so.
-5. **Stay current** - Prioritize recent sources when recency matters.
+1. **PLAN FIRST** - Always output your research plan before making any tool calls.
+2. **Always use tools** - Do not answer from memory alone. Search for current information.
+3. **Diverse queries** - Use different phrasings and angles for each search.
+4. **Verify claims** - Cross-reference important facts across multiple sources.
+5. **Acknowledge limitations** - If information is scarce or conflicting, say so.
 6. **Be thorough** - This is DEEP research. Take the time to gather comprehensive information.
 
 ## TOOL USAGE
 
-You have access to web search and content fetching tools. Use them liberally:
+You have access to web search and content fetching tools:
 - \`exa__search\`: Search the web for information (use query parameter)
 - \`exa__findSimilar\`: Find pages similar to a given URL
 - \`exa__getContents\`: Get full content from URLs
 - \`brave-search__brave_web_search\`: Alternative web search
 - \`fetch__fetch\`: Fetch and read webpage content
 
-Start your research immediately when you receive a question. Do not ask for clarification unless the question is truly ambiguous.`,
+Remember: Plan first, then execute systematically.`,
       });
     }
 
@@ -1661,17 +1711,43 @@ Start your research immediately when you receive a question. Do not ask for clar
             </div>
 
             <div className="flex items-center gap-0.5 md:gap-2 flex-shrink-0">
-              {/* Usage (desktop only) */}
-              {!isMobile && currentSessionId && sessionUsage && (
-                <button
-                  onClick={() => setUsageDetailsOpen(true)}
-                  className="text-[10px] font-mono text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-                  title="Usage details"
-                >
-                  {sessionUsage.total_tokens.toLocaleString()} tok
-                  {sessionUsage.estimated_cost_usd != null ? ` • $${sessionUsage.estimated_cost_usd.toFixed(4)}` : ''}
-                </button>
-              )}
+              {/* Context usage indicator (desktop only) */}
+              {!isMobile && currentSessionId && sessionUsage && (() => {
+                const currentModel = availableModels.find(m => m.id === selectedModel || m.id === runningModel);
+                const maxContext = currentModel?.max_model_len || 128000;
+                const usedTokens = sessionUsage.total_tokens || 0;
+                const usagePercent = Math.min((usedTokens / maxContext) * 100, 100);
+                const isWarning = usagePercent > 70;
+                const isCritical = usagePercent > 90;
+                return (
+                  <button
+                    onClick={() => setUsageDetailsOpen(true)}
+                    className="flex items-center gap-2 group"
+                    title={`${usedTokens.toLocaleString()} / ${maxContext.toLocaleString()} tokens (${usagePercent.toFixed(1)}%)`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-16 h-1.5 bg-[#363432] rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            isCritical ? 'bg-[#c97a6b]' : isWarning ? 'bg-[#c9a66b]' : 'bg-[#7d9a6a]'
+                          }`}
+                          style={{ width: `${usagePercent}%` }}
+                        />
+                      </div>
+                      <span className={`text-[10px] font-mono ${
+                        isCritical ? 'text-[#c97a6b]' : isWarning ? 'text-[#c9a66b]' : 'text-[#9a9088]'
+                      }`}>
+                        {usagePercent < 1 ? '<1%' : `${Math.round(usagePercent)}%`}
+                      </span>
+                    </div>
+                    {sessionUsage.estimated_cost_usd != null && (
+                      <span className="text-[10px] font-mono text-[#9a9088] opacity-0 group-hover:opacity-100 transition-opacity">
+                        ${sessionUsage.estimated_cost_usd.toFixed(4)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })()}
 
               {/* Toggle buttons (desktop only) */}
               {!isMobile && (
@@ -1756,32 +1832,16 @@ Start your research immediately when you receive a question. Do not ask for clar
                 </div>
               </div>
             ) : (
-              <div className="max-w-3xl mx-auto py-4 md:py-6 px-3 md:px-6 space-y-6">
+              <div className="max-w-3xl mx-auto py-4 md:py-6 px-3 md:px-6 space-y-4">
                   {messages.map((message, index) => (
                     <div key={message.id} className="animate-slide-up">
-                      {/* User Message - Clean, right-aligned feel */}
+                      {/* User Message - Right aligned, minimal */}
                       {message.role === 'user' ? (
-                        <div className="flex gap-3">
-                          <div className="w-6 h-6 rounded-full bg-[#363432] flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <User className="h-3 w-3 text-[#9a9088]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-medium text-[#9a9088]">You</span>
-                              <button
-                                onClick={() => copyToClipboard(message.content, index)}
-                                className="p-0.5 rounded hover:bg-[#363432] transition-colors opacity-0 group-hover:opacity-100"
-                              >
-                                {copiedIndex === index ? (
-                                  <Check className="h-3 w-3 text-[#7d9a6a]" />
-                                ) : (
-                                  <Copy className="h-3 w-3 text-[#9a9088]" />
-                                )}
-                              </button>
-                            </div>
+                        <div className="flex justify-end">
+                          <div className="max-w-[85%] md:max-w-[75%]">
                             {/* User images */}
                             {message.images && message.images.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mb-2">
+                              <div className="flex flex-wrap gap-2 mb-2 justify-end">
                                 {message.images.map((base64, i) => (
                                   <img
                                     key={i}
@@ -1792,20 +1852,29 @@ Start your research immediately when you receive a question. Do not ask for clar
                                 ))}
                               </div>
                             )}
-                            <p className="text-sm text-[#f0ebe3] whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
+                            <div className="group relative">
+                              <div className="bg-[#2a2826] rounded-2xl rounded-tr-sm px-4 py-2.5">
+                                <p className="text-sm text-[#f0ebe3] whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
+                              </div>
+                              <button
+                                onClick={() => copyToClipboard(message.content, index)}
+                                className="absolute -left-8 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-[#363432] transition-all"
+                              >
+                                {copiedIndex === index ? (
+                                  <Check className="h-3 w-3 text-[#7d9a6a]" />
+                                ) : (
+                                  <Copy className="h-3 w-3 text-[#9a9088]" />
+                                )}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ) : (
-                        /* Assistant Message - Clean with subtle separator */
-                        <div className="flex gap-3">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${message.isStreaming ? 'bg-[#7d9a6a]/20' : 'bg-[#1e1e1e]'}`}>
-                            <Sparkles className={`h-3 w-3 ${message.isStreaming ? 'text-[#7d9a6a] animate-pulse' : 'text-[#8b7355]'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-medium text-[#8b7355]">
-                                {message.model?.split('/').pop() || selectedModel?.split('/').pop() || modelName || 'Assistant'}
-                              </span>
+                        /* Assistant Message - Left aligned, clean */
+                        <div className="flex justify-start">
+                          <div className="max-w-[95%] md:max-w-[85%] group">
+                            {/* Token count and actions */}
+                            <div className="flex items-center gap-2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               {(message.total_tokens || message.prompt_tokens || message.completion_tokens) && (
                                 <span className="text-[10px] text-[#9a9088]/60 font-mono">
                                   {(() => {
@@ -1846,9 +1915,9 @@ Start your research immediately when you receive a question. Do not ask for clar
                                 isStreaming={message.isStreaming}
                                 artifactsEnabled={artifactsEnabled}
                               />
-                              {/* Tool Calls - Only show inline on mobile */}
-                              {isMobile && message.toolCalls && message.toolCalls.length > 0 && (
-                                <div className="mt-3 space-y-2">
+                              {/* Tool Calls */}
+                              {message.toolCalls && message.toolCalls.length > 0 && (
+                                <div className="mt-3 space-y-1.5">
                                   {message.toolCalls.map((toolCall) => (
                                     <ToolCallCard
                                       key={toolCall.id}
@@ -1869,16 +1938,11 @@ Start your research immediately when you receive a question. Do not ask for clar
                 {isLoading &&
                   messages[messages.length - 1]?.role === 'assistant' &&
                   messages[messages.length - 1]?.content === '' && (
-                    <div className="flex gap-3 animate-slide-up">
-                      <div className="w-6 h-6 rounded-full bg-[#7d9a6a]/20 flex items-center justify-center flex-shrink-0">
-                        <Sparkles className="h-3 w-3 text-[#7d9a6a] animate-pulse" />
-                      </div>
-                      <div className="flex items-center pt-1.5">
-                        <div className="flex gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" style={{ animationDelay: '150ms' }} />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" style={{ animationDelay: '300ms' }} />
-                        </div>
+                    <div className="flex justify-start animate-slide-up">
+                      <div className="flex items-center gap-1.5 text-[#9a9088]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" style={{ animationDelay: '300ms' }} />
                       </div>
                     </div>
                   )}

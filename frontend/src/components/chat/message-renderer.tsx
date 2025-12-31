@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChevronDown, ChevronRight, Brain, Copy, Check, AlertCircle, Play } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, Check, AlertCircle, Play } from 'lucide-react';
 import mermaid from 'mermaid';
 import { CodeSandbox } from './code-sandbox';
 import { ArtifactRenderer, extractArtifacts, getArtifactType } from './artifact-renderer';
@@ -115,28 +115,26 @@ function splitThinking(content: string): {
 
 function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const wordCount = content.split(/\s+/).filter(Boolean).length;
 
   return (
-    <div className="my-2 md:my-3 rounded-md md:rounded-lg border border-[var(--border)] overflow-hidden bg-[var(--accent)]/30">
+    <div className="mb-3">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)]/50 transition-colors"
+        className="group flex items-center gap-2 text-[11px] text-[#9a9088] hover:text-[#c9a66b] transition-colors"
       >
-        {isExpanded ? (
-          <ChevronDown className="h-3 w-3 md:h-3.5 md:w-3.5 flex-shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 md:h-3.5 md:w-3.5 flex-shrink-0" />
-        )}
-        <Brain className="h-3 w-3 md:h-3.5 md:w-3.5 flex-shrink-0" />
-        <span className="flex-shrink-0">Thinking{isStreaming ? '...' : ''}</span>
-        {!isExpanded && (
-          <span className="ml-auto text-[var(--muted)] truncate max-w-[100px] md:max-w-[200px]">
-            {content.slice(0, 30)}...
-          </span>
+        <span className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>
+          <ChevronRight className="h-3 w-3" />
+        </span>
+        <span className="font-medium">
+          {isStreaming ? 'reasoning' : `reasoned for ${wordCount} words`}
+        </span>
+        {isStreaming && (
+          <span className="w-1.5 h-1.5 rounded-full bg-[#c9a66b] animate-pulse" />
         )}
       </button>
       {isExpanded && (
-        <div className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm text-[var(--muted-foreground)] border-t border-[var(--border)] bg-[var(--background)]/50 whitespace-pre-wrap max-h-[40vh] overflow-y-auto">
+        <div className="mt-2 pl-5 border-l-2 border-[#363432] text-[13px] text-[#9a9088] leading-relaxed whitespace-pre-wrap max-h-[50vh] overflow-y-auto">
           {content}
         </div>
       )}
