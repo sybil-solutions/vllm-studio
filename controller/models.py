@@ -58,6 +58,16 @@ class Recipe(BaseModel):
     # Extra CLI args
     extra_args: Dict[str, Any] = Field(default_factory=dict)
 
+    # Reasoning/Thinking configuration
+    max_thinking_tokens: Optional[int] = Field(
+        default=None,
+        description="Max tokens for reasoning/thinking phase. If None, auto-calculated based on model"
+    )
+    thinking_mode: str = Field(
+        default="conservative",
+        description="Thinking mode: 'auto', 'conservative', 'balanced', 'aggressive', or 'disabled'. Default is conservative (16K tokens) for efficiency"
+    )
+
     @model_validator(mode="before")
     @classmethod
     def normalize(cls, data: Any) -> Any:
@@ -156,3 +166,45 @@ class OpenAIModelList(BaseModel):
 
     object: str = "list"
     data: List[OpenAIModelInfo]
+
+
+class ServiceInfo(BaseModel):
+    """Information about a service in the system topology."""
+
+    name: str
+    port: int
+    internal_port: int
+    protocol: str
+    status: str
+    description: Optional[str] = None
+
+
+class SystemConfig(BaseModel):
+    """System configuration settings."""
+
+    host: str
+    port: int
+    inference_port: int
+    api_key_configured: bool
+    models_dir: str
+    data_dir: str
+    db_path: str
+    sglang_python: Optional[str]
+    tabby_api_dir: Optional[str]
+
+
+class EnvironmentInfo(BaseModel):
+    """Environment URLs and connection info."""
+
+    controller_url: str
+    inference_url: str
+    litellm_url: str
+    frontend_url: str
+
+
+class SystemConfigResponse(BaseModel):
+    """Complete system configuration and service topology."""
+
+    config: SystemConfig
+    services: List[ServiceInfo]
+    environment: EnvironmentInfo

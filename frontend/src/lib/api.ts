@@ -363,6 +363,36 @@ class APIClient {
   }> {
     return this.request('/usage');
   }
+
+  async getSystemConfig(): Promise<{
+    config: {
+      host: string;
+      port: number;
+      inference_port: number;
+      api_key_configured: boolean;
+      models_dir: string;
+      data_dir: string;
+      db_path: string;
+      sglang_python: string | null;
+      tabby_api_dir: string | null;
+    };
+    services: Array<{
+      name: string;
+      port: number;
+      internal_port: number;
+      protocol: string;
+      status: string;
+      description: string | null;
+    }>;
+    environment: {
+      controller_url: string;
+      inference_url: string;
+      litellm_url: string;
+      frontend_url: string;
+    };
+  }> {
+    return this.request('/config');
+  }
 }
 
 export const api = new APIClient('/api/proxy', true);

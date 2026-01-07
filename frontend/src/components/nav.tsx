@@ -29,6 +29,7 @@ const navItems = [
   { href: '/recipes', label: 'Recipes', icon: Settings, description: 'Model configurations' },
   { href: '/logs', label: 'Logs', icon: FileText, description: 'View backend logs' },
   { href: '/usage', label: 'Usage', icon: BarChart3, description: 'Token analytics' },
+  { href: '/configs', label: 'Configs', icon: Settings, description: 'System configuration' },
 ];
 
 export default function Nav() {
@@ -198,6 +199,13 @@ export default function Nav() {
       hint: '/usage',
       keywords: ['analytics', 'tokens', 'stats'],
       run: () => router.push('/usage'),
+    },
+    {
+      id: 'go-configs',
+      label: 'Go to Configs',
+      hint: '/configs',
+      keywords: ['settings', 'configuration', 'system', 'topology'],
+      run: () => router.push('/configs'),
     },
     {
       id: 'go-logs',
