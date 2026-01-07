@@ -23,7 +23,10 @@ from .metrics import (
 )
 from .config import settings
 from .gpu import get_gpu_info
-from .models import HealthResponse, LaunchResult, OpenAIModelInfo, OpenAIModelList, Recipe
+from .models import (
+    HealthResponse, LaunchResult, OpenAIModelInfo, OpenAIModelList, Recipe,
+    SystemConfigResponse, ServiceInfo, SystemConfig, EnvironmentInfo
+)
 from .process import evict_model, find_inference_process, kill_process
 from .store import RecipeStore, ChatStore, PeakMetricsStore, LifetimeMetricsStore
 
@@ -475,6 +478,184 @@ async def gpus():
         "count": len(gpu_list),
         "gpus": [gpu.model_dump() for gpu in gpu_list],
     }
+
+
+@app.get("/config", response_model=SystemConfigResponse, tags=["System"])
+async def get_config():
+    """Get system configuration and service topology."""
+    import socket
+
+    # Helper to check if a service is reachable
+    async def check_service(host: str, port: int, timeout: float = 1.0) -> bool:
+        try:
+            _, _, _ = await asyncio.get_event_loop().getaddrinfo(host, port)
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port),
+                timeout=timeout
+            )
+            writer.close()
+            await writer.wait_closed()
+            return True
+        except Exception:
+            return False
+
+    # Get hostname/domain
+    hostname = socket.gethostname()
+
+    # Build service topology based on docker-compose configuration
+    services = []
+
+    # Controller service
+    controller_status = "running"  # We're running, so it's up
+    services.append(ServiceInfo(
+        name="Controller",
+        port=settings.port,
+        internal_port=settings.port,
+        protocol="http",
+        status=controller_status,
+        description="FastAPI model lifecycle manager"
+    ))
+
+    # Inference backend (vLLM/SGLang)
+    inference_status = "unknown"
+    try:
+        current = find_inference_process(settings.inference_port)
+        if current:
+            # Try to reach the health endpoint
+            async with httpx.AsyncClient(timeout=2) as client:
+                r = await client.get(f"http://localhost:{settings.inference_port}/health")
+                inference_status = "running" if r.status_code == 200 else "error"
+        else:
+            inference_status = "stopped"
+    except Exception:
+        inference_status = "stopped"
+
+    services.append(ServiceInfo(
+        name="vLLM/SGLang",
+        port=settings.inference_port,
+        internal_port=settings.inference_port,
+        protocol="http",
+        status=inference_status,
+        description="Inference backend (vLLM or SGLang)"
+    ))
+
+    # LiteLLM
+    litellm_status = "unknown"
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            r = await client.get("http://localhost:4100/health")
+            litellm_status = "running" if r.status_code == 200 else "error"
+    except Exception:
+        litellm_status = "stopped"
+
+    services.append(ServiceInfo(
+        name="LiteLLM",
+        port=4100,
+        internal_port=4000,
+        protocol="http",
+        status=litellm_status,
+        description="API gateway and load balancer"
+    ))
+
+    # PostgreSQL
+    postgres_status = "unknown"
+    is_postgres_reachable = await check_service("localhost", 5432)
+    postgres_status = "running" if is_postgres_reachable else "stopped"
+    services.append(ServiceInfo(
+        name="PostgreSQL",
+        port=5432,
+        internal_port=5432,
+        protocol="tcp",
+        status=postgres_status,
+        description="Database for LiteLLM"
+    ))
+
+    # Redis
+    redis_status = "unknown"
+    is_redis_reachable = await check_service("localhost", 6379)
+    redis_status = "running" if is_redis_reachable else "stopped"
+    services.append(ServiceInfo(
+        name="Redis",
+        port=6379,
+        internal_port=6379,
+        protocol="tcp",
+        status=redis_status,
+        description="Cache and rate limiting"
+    ))
+
+    # Prometheus
+    prometheus_status = "unknown"
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            r = await client.get("http://localhost:9090/-/healthy")
+            prometheus_status = "running" if r.status_code == 200 else "error"
+    except Exception:
+        prometheus_status = "stopped"
+    services.append(ServiceInfo(
+        name="Prometheus",
+        port=9090,
+        internal_port=9090,
+        protocol="http",
+        status=prometheus_status,
+        description="Metrics collection"
+    ))
+
+    # Grafana
+    grafana_status = "unknown"
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            r = await client.get("http://localhost:3001/api/health")
+            grafana_status = "running" if r.status_code == 200 else "error"
+    except Exception:
+        grafana_status = "stopped"
+    services.append(ServiceInfo(
+        name="Grafana",
+        port=3001,
+        internal_port=3000,
+        protocol="http",
+        status=grafana_status,
+        description="Metrics dashboards"
+    ))
+
+    # Frontend
+    frontend_status = "unknown"
+    is_frontend_reachable = await check_service("localhost", 3000)
+    frontend_status = "running" if is_frontend_reachable else "stopped"
+    services.append(ServiceInfo(
+        name="Frontend",
+        port=3000,
+        internal_port=3000,
+        protocol="http",
+        status=frontend_status,
+        description="Next.js web UI"
+    ))
+
+    # Build system config
+    config = SystemConfig(
+        host=settings.host,
+        port=settings.port,
+        inference_port=settings.inference_port,
+        api_key_configured=settings.api_key is not None,
+        models_dir=str(settings.models_dir),
+        data_dir=str(settings.data_dir),
+        db_path=str(settings.db_path),
+        sglang_python=settings.sglang_python,
+        tabby_api_dir=settings.tabby_api_dir,
+    )
+
+    # Build environment info
+    environment = EnvironmentInfo(
+        controller_url=f"http://{hostname}:{settings.port}",
+        inference_url=f"http://{hostname}:{settings.inference_port}",
+        litellm_url=f"http://{hostname}:4100",
+        frontend_url=f"http://{hostname}:3000",
+    )
+
+    return SystemConfigResponse(
+        config=config,
+        services=services,
+        environment=environment
+    )
 
 
 # --- OpenAI-compatible endpoints ---
