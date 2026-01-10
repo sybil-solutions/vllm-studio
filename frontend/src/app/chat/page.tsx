@@ -488,6 +488,38 @@ export default function ChatPage() {
     }, 350);
   };
 
+  // Recalculate context tokens from current messages
+  const recalculateContextTokens = async (msgs: Message[], modelId?: string) => {
+    if (msgs.length === 0) {
+      setContextUsage(prev => ({ ...prev, currentTokens: 0 }));
+      return;
+    }
+    const model = modelId || selectedModel || runningModel;
+    if (!model) return;
+
+    try {
+      // Convert messages to OpenAI format for tokenization
+      const openAIMessages: OpenAIMessage[] = [];
+      for (const m of msgs) {
+        if (m.role === 'user') {
+          openAIMessages.push({ role: 'user', content: m.content });
+        } else if (m.role === 'assistant') {
+          openAIMessages.push({ role: 'assistant', content: m.content });
+        }
+      }
+
+      const tok = await api.tokenizeChatCompletions({
+        model,
+        messages: openAIMessages as unknown[],
+      });
+      if (tok.input_tokens) {
+        setContextUsage(prev => ({ ...prev, currentTokens: tok.input_tokens! }));
+      }
+    } catch {
+      // Tokenization is best-effort
+    }
+  };
+
   const loadSession = async (sessionId: string) => {
     try {
       const data = await api.getChatSession(sessionId);
@@ -559,6 +591,8 @@ export default function ChatPage() {
       setEditingTitle(false);
       setTitleDraft(session.title || '');
       refreshUsage(sessionId);
+      // Recalculate context tokens for loaded messages
+      recalculateContextTokens(loadedMessages, session.model);
     } catch (e) {
       console.error('Failed to load session:', e);
       setError('Failed to load conversation');
@@ -572,6 +606,7 @@ export default function ChatPage() {
     setSelectedModel(runningModel || availableModels[0]?.id || '');
     setCurrentSessionTitle('New Chat');
     setSessionUsage(null);
+    setContextUsage(prev => ({ ...prev, currentTokens: 0 }));
     setEditingTitle(false);
     setTitleDraft('');
     setTimeout(() => {
