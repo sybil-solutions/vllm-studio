@@ -276,8 +276,8 @@ export default function Nav() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Hide nav on mobile when on chat page (chat page has its own unified header)
-  if (isChatPage && isMobile) {
+  // Hide nav completely on chat page (sidebar has all navigation)
+  if (isChatPage) {
     return (
       <>
         <CommandPalette

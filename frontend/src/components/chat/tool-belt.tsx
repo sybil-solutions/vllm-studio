@@ -406,83 +406,76 @@ export function ToolBelt({
                 )}
               </button>
 
-              {/* Divider */}
-              <div className="w-px h-4 bg-[var(--border)] mx-1 hidden sm:block" />
-
-              {/* MCP/Web Search Toggle */}
+              {/* Tools Toggle */}
               <button
                 onClick={onMcpToggle}
                 disabled={disabled}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-2.5 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
+                className={`flex items-center gap-1.5 px-2 py-1.5 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
                   mcpEnabled
-                    ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30 shadow-sm shadow-blue-500/10'
+                    ? 'bg-[var(--accent)] text-[var(--foreground)]'
                     : 'hover:bg-[var(--accent)] text-[#9a9590]'
                 }`}
                 title={mcpEnabled ? 'Disable web search & tools' : 'Enable web search & tools'}
               >
                 <Globe className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                <span className="text-xs font-medium hidden sm:inline">Tools</span>
+                <span className="text-xs hidden sm:inline">Tools</span>
               </button>
 
-              {/* Artifacts/Code Execution Toggle */}
+              {/* Preview Toggle */}
               <button
                 onClick={onArtifactsToggle}
                 disabled={disabled}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-2.5 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
+                className={`flex items-center gap-1.5 px-2 py-1.5 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
                   artifactsEnabled
-                    ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30 shadow-sm shadow-purple-500/10'
+                    ? 'bg-[var(--accent)] text-[var(--foreground)]'
                     : 'hover:bg-[var(--accent)] text-[#9a9590]'
                 }`}
                 title={artifactsEnabled ? 'Disable code preview' : 'Enable code preview & sandbox'}
               >
                 <Code className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                <span className="text-xs font-medium hidden sm:inline">Preview</span>
+                <span className="text-xs hidden sm:inline">Preview</span>
               </button>
 
-              {/* Deep Research Toggle */}
+              {/* Research Toggle */}
               {onDeepResearchToggle && (
                 <button
                   onClick={onDeepResearchToggle}
                   disabled={disabled}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-2.5 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
+                  className={`flex items-center gap-1.5 px-2 py-1.5 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
                     deepResearchEnabled
-                      ? 'bg-gradient-to-r from-emerald-500/15 to-blue-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
+                      ? 'bg-[var(--accent)] text-[var(--foreground)]'
                       : 'hover:bg-[var(--accent)] text-[#9a9590]'
                   }`}
-                  title={deepResearchEnabled ? 'Deep Research enabled - Multi-step web research' : 'Enable Deep Research mode'}
+                  title={deepResearchEnabled ? 'Deep Research enabled' : 'Enable Deep Research mode'}
                 >
                   <Brain className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                  <span className="text-xs font-medium hidden sm:inline">Research</span>
+                  <span className="text-xs hidden sm:inline">Research</span>
                 </button>
               )}
 
-              {/* Divider */}
-              <div className="w-px h-4 bg-[var(--border)] mx-1 hidden sm:block" />
-
-              {/* MCP Server Settings */}
+              {/* MCP Settings */}
               <button
                 onClick={onOpenMcpSettings}
                 disabled={disabled}
                 className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-[var(--accent)] transition-colors disabled:opacity-50 hidden sm:inline-flex text-[#9a9590]"
-                title="Configure MCP servers (web search, fetch, etc.)"
+                title="Configure MCP servers"
               >
                 <Settings className="h-3.5 w-3.5" />
-                <span className="text-xs">MCP</span>
               </button>
 
-              {/* Chat Settings (System Prompt) */}
+              {/* System Prompt */}
               <button
                 onClick={onOpenChatSettings}
                 disabled={disabled}
                 className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all disabled:opacity-50 ${
                   hasSystemPrompt
-                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                    ? 'bg-[var(--accent)] text-[var(--foreground)]'
                     : 'hover:bg-[var(--accent)] text-[#9a9590]'
                 }`}
-                title={hasSystemPrompt ? 'System prompt active - Click to edit' : 'Configure system prompt'}
+                title={hasSystemPrompt ? 'System prompt active' : 'Configure system prompt'}
               >
                 <SlidersHorizontal className="h-3.5 w-3.5" />
-                <span className="text-xs font-medium hidden sm:inline">System</span>
+                <span className="text-xs hidden sm:inline">System</span>
               </button>
             </div>
 

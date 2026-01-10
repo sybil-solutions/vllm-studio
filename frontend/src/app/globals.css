@@ -1,25 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  /* Warm Paper Design - Light Mode */
-  --background: hsl(40, 30%, 97%);
-  --foreground: hsl(30, 15%, 15%);
-  --muted: hsl(35, 15%, 60%);
-  --muted-foreground: hsl(30, 12%, 45%);
-  --border: hsl(35, 15%, 85%);
-  --card: hsl(40, 25%, 95%);
-  --card-hover: hsl(40, 20%, 92%);
-  --accent: hsl(35, 20%, 88%);
-  --accent-hover: hsl(35, 25%, 82%);
+  /* Warm Paper Design v2 - Light Mode (Improved Readability) */
+  --background: hsl(40, 25%, 94%);
+  --foreground: hsl(30, 10%, 20%);
+  --muted: hsl(35, 15%, 50%);
+  --muted-foreground: hsl(35, 12%, 40%);
+  --border: hsl(35, 15%, 82%);
+  --card: hsl(40, 20%, 92%);
+  --card-hover: hsl(40, 15%, 88%);
+  --accent: hsl(35, 15%, 85%);
+  --accent-hover: hsl(35, 20%, 80%);
   --accent-foreground: hsl(30, 15%, 15%);
   --success: hsl(142, 50%, 40%);
   --warning: hsl(38, 92%, 50%);
   --error: hsl(0, 65%, 50%);
   --ring: hsl(30, 20%, 25%);
+  --link: hsl(270, 30%, 45%);
+  --link-hover: hsl(270, 35%, 40%);
+  --accent-purple: hsl(270, 25%, 92%);
+  --accent-purple-shine: hsl(270, 30%, 88%);
 }
 
 .dark {
-  /* Warm Paper Design - Dark Mode */
+  /* Warm Paper Design v2 - Dark Mode */
   --background: hsl(30, 5%, 10.5%);
   --foreground: hsl(40, 20%, 92%);
   --muted: hsl(30, 8%, 40%);
@@ -34,6 +38,10 @@
   --warning: hsl(38, 85%, 55%);
   --error: hsl(0, 60%, 55%);
   --ring: hsl(35, 15%, 70%);
+  --link: hsl(270, 40%, 70%);
+  --link-hover: hsl(270, 45%, 75%);
+  --accent-purple: hsl(270, 20%, 18%);
+  --accent-purple-shine: hsl(270, 25%, 22%);
 }
 
 @theme inline {
@@ -84,6 +92,18 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Links - consistent, less dominant */
+a {
+  color: var(--link);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
 }
 
 /* Scrollbar - Premium thin design */
