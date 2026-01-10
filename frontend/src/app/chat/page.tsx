@@ -408,6 +408,13 @@ export default function ChatPage() {
     prevIsLoadingRef.current = isLoading;
   }, [isLoading, queuedContext]);
 
+  // Recalculate context tokens when messages change (after streaming completes)
+  useEffect(() => {
+    if (!isLoading && messages.length > 0) {
+      recalculateContextTokens(messages);
+    }
+  }, [messages, isLoading]);
+
   const loadMCPServers = async () => {
     try {
       const servers = await api.getMCPServers();
@@ -489,34 +496,37 @@ export default function ChatPage() {
   };
 
   // Recalculate context tokens from current messages
-  const recalculateContextTokens = async (msgs: Message[], modelId?: string) => {
+  // Uses stored token values from API responses, falls back to character-based estimate
+  const recalculateContextTokens = (msgs: Message[]) => {
     if (msgs.length === 0) {
       setContextUsage(prev => ({ ...prev, currentTokens: 0 }));
       return;
     }
-    const model = modelId || selectedModel || runningModel;
-    if (!model) return;
 
-    try {
-      // Convert messages to OpenAI format for tokenization
-      const openAIMessages: OpenAIMessage[] = [];
-      for (const m of msgs) {
-        if (m.role === 'user') {
-          openAIMessages.push({ role: 'user', content: m.content });
-        } else if (m.role === 'assistant') {
-          openAIMessages.push({ role: 'assistant', content: m.content });
+    let totalTokens = 0;
+    let hasStoredTokens = false;
+
+    for (const m of msgs) {
+      // Prefer stored token values from API responses
+      const msgTokens = m.request_total_input_tokens ?? m.request_prompt_tokens ?? m.total_tokens ?? m.prompt_tokens;
+      if (msgTokens && msgTokens > 0) {
+        // For assistant messages, add completion tokens too
+        if (m.role === 'assistant') {
+          const compTokens = m.request_completion_tokens ?? m.completion_tokens ?? 0;
+          totalTokens += compTokens;
         }
+        hasStoredTokens = true;
       }
+    }
 
-      const tok = await api.tokenizeChatCompletions({
-        model,
-        messages: openAIMessages as unknown[],
-      });
-      if (tok.input_tokens) {
-        setContextUsage(prev => ({ ...prev, currentTokens: tok.input_tokens! }));
-      }
-    } catch {
-      // Tokenization is best-effort
+    // If we have stored tokens, use them. Otherwise estimate from content.
+    if (hasStoredTokens && totalTokens > 0) {
+      setContextUsage(prev => ({ ...prev, currentTokens: totalTokens }));
+    } else {
+      // Rough estimate: ~4 characters per token (common for English text)
+      const totalChars = msgs.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+      const estimatedTokens = Math.ceil(totalChars / 4);
+      setContextUsage(prev => ({ ...prev, currentTokens: estimatedTokens }));
     }
   };
 
@@ -592,7 +602,7 @@ export default function ChatPage() {
       setTitleDraft(session.title || '');
       refreshUsage(sessionId);
       // Recalculate context tokens for loaded messages
-      recalculateContextTokens(loadedMessages, session.model);
+      recalculateContextTokens(loadedMessages);
     } catch (e) {
       console.error('Failed to load session:', e);
       setError('Failed to load conversation');
