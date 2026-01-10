@@ -223,6 +223,8 @@ export default function ChatPage() {
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [bookmarkedMessages, setBookmarkedMessages] = useState<Set<string>>(new Set());
+  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
 
   // Detect mobile viewport
   useEffect(() => {
@@ -1718,7 +1720,7 @@ Start your research immediately when you receive a question. Do not ask for clar
       )}
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col min-h-0 overflow-x-hidden ${isMobile ? '' : sidebarCollapsed ? 'md:ml-8' : 'md:ml-56'} `}>
+      <div className={`flex-1 flex flex-col min-h-0 overflow-x-hidden ${isMobile ? '' : sidebarCollapsed ? 'md:ml-12' : 'md:ml-60'} `}>
         {/* Unified Header - different layout for mobile vs desktop */}
         <div className={`relative z-40 bg-[var(--card)] border-b border-[var(--border)] flex-shrink-0`}
           style={isMobile ? { paddingTop: 'env(safe-area-inset-top, 0)' } : undefined}
@@ -1859,10 +1861,68 @@ Start your research immediately when you receive a question. Do not ask for clar
                           <Pencil className="h-3.5 w-3.5 text-[#9a9590]" />
                         </button>
                       )}
-                      {selectedModel && (
-                        <span className="text-[11px] text-[#9a9590] px-2 py-0.5 border border-[var(--border)] rounded">
-                          {selectedModel.split('/').pop()}
-                        </span>
+
+                      {/* Model Selector Dropdown */}
+                      {availableModels.length > 0 && (
+                        <div className="relative">
+                          <button
+                            onClick={() => setModelSelectorOpen(!modelSelectorOpen)}
+                            className="flex items-center gap-1.5 px-2 py-1 text-xs border border-[var(--border)] rounded hover:bg-[var(--accent)] transition-colors"
+                          >
+                            <span className="font-medium">
+                              {selectedModel?.split('/').pop() || runningModel?.split('/').pop() || 'Select Model'}
+                            </span>
+                            <ChevronDown className="h-3 w-3 text-[#9a9590]" />
+                          </button>
+
+                          {modelSelectorOpen && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setModelSelectorOpen(false)} />
+                              <div className="absolute left-0 top-full mt-1 w-64 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg z-50 max-h-80 overflow-hidden flex flex-col">
+                                <div className="p-2 border-b border-[var(--border)]">
+                                  <input
+                                    type="text"
+                                    placeholder="Search models..."
+                                    value={modelSearchQuery}
+                                    onChange={(e) => setModelSearchQuery(e.target.value)}
+                                    className="w-full px-2 py-1 text-xs bg-[var(--background)] border border-[var(--border)] rounded focus:outline-none focus:border-[var(--foreground)]"
+                                  />
+                                </div>
+                                <div className="overflow-y-auto flex-1 p-1">
+                                  {availableModels
+                                    .filter(m => 
+                                      m.id.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+                                      (m.root && m.root.toLowerCase().includes(modelSearchQuery.toLowerCase()))
+                                    )
+                                    .map((model) => (
+                                      <button
+                                        key={model.id}
+                                        onClick={() => {
+                                          setSelectedModel(model.id);
+                                          setModelSelectorOpen(false);
+                                          setModelSearchQuery('');
+                                        }}
+                                        className={`w-full px-3 py-2 text-left rounded transition-colors ${
+                                          selectedModel === model.id
+                                            ? 'bg-[var(--accent)] text-[var(--foreground)]'
+                                            : 'hover:bg-[var(--card-hover)]'
+                                        }`}
+                                      >
+                                        <div className="text-xs font-medium truncate">
+                                          {model.id.split('/').pop()}
+                                        </div>
+                                        {model.root && (
+                                          <div className="text-[10px] text-[#9a9590] truncate">
+                                            {model.root}
+                                          </div>
+                                        )}
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       )}
                     </>
                   )}
@@ -1916,31 +1976,6 @@ Start your research immediately when you receive a question. Do not ask for clar
                     <span className="text-orange-400">⚡{contextUsage.compactionCount}</span>
                   )}
                 </div>
-              )}
-              {/* Toggle buttons (desktop only) */}
-              {!isMobile && (
-                <>
-                  <button
-                    onClick={() => setMcpEnabled((v) => !v)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded border text-xs transition-colors ${
-                      mcpEnabled ? 'border-blue-500/40 bg-blue-500/10 text-blue-400' : 'border-[var(--border)] text-[#9a9590] hover:bg-[var(--accent)]'
-                    }`}
-                    title="Toggle tools"
-                  >
-                    <Globe className="h-3.5 w-3.5" />
-                    Tools
-                  </button>
-                  <button
-                    onClick={() => setArtifactsEnabled((v) => !v)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded border text-xs transition-colors ${
-                      artifactsEnabled ? 'border-purple-500/40 bg-purple-500/10 text-purple-400' : 'border-[var(--border)] text-[#9a9590] hover:bg-[var(--accent)]'
-                    }`}
-                    title="Toggle previews"
-                  >
-                    <Code className="h-3.5 w-3.5" />
-                    Preview
-                  </button>
-                </>
               )}
 
               {/* Action buttons */}

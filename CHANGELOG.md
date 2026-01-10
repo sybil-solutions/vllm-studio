@@ -7,10 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-01-10
+
+### Added
+- **Unified Sidebar Navigation**: All app navigation (Dashboard, Chat, Recipes, Logs, Usage, Configs) moved into the chat sidebar
+- **Chat Pagination**: Chats now load 15 at a time with "Load more" button to prevent performance issues
+- **Date Grouping**: Chat sessions organized by Today, Yesterday, Last 7 days, Older
+- **Model Selector Dropdown**: Quick model switching directly in chat header with search
+- **Sidebar Search**: Filter conversations by title or model name
+- **Empty State Illustration**: Friendly SVG art when no conversations exist
+
+### Changed
+- **Sidebar Design**: Full-height sidebar with logo, nav, and chat list in one unified component
+- **Color Scheme**: Replaced green accent with subtle purple (`hsl(270)`) for links and highlights
+- **Composer Buttons**: Unified dim accent styling instead of multiple colored badges (blue/purple/emerald/amber)
+- **Light Mode**: Improved readability with better contrast and softer backgrounds
+- **Collapsed Sidebar**: Minimal icon rail with nav icons and first-letter chat indicators
+
 ### Fixed
-- Frontend: Added redirect from `/models` to `/recipes` to fix 404 error when accessing model management page (2025-12-20)
+- Chat page layout now properly accounts for full-height sidebar
+- Navigation hidden on chat page (sidebar contains all nav)
+
+## [0.2.1] - 2025-12-20
+
+### Fixed
+- Frontend: Added redirect from `/models` to `/recipes` to fix 404 error when accessing model management page
   - Updated `frontend/next.config.ts` with permanent redirect (HTTP 308)
-  - Rebuilt frontend Docker image with the fix
 
 ## [0.2.0] - 2024-12-XX
 
