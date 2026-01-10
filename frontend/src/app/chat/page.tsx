@@ -28,6 +28,8 @@ import {
   Wrench,
   Clock,
   Menu,
+  Bookmark,
+  BookmarkCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -1590,6 +1592,27 @@ Start your research immediately when you receive a question. Do not ask for clar
     }
   };
 
+  const toggleBookmark = (messageId: string) => {
+    setBookmarkedMessages(prev => {
+      const next = new Set(prev);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  };
+
+  const copyLastResponse = () => {
+    const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+    if (lastAssistantMsg) {
+      navigator.clipboard.writeText(lastAssistantMsg.content);
+      setCopiedIndex(messages.indexOf(lastAssistantMsg));
+      setTimeout(() => setCopiedIndex(null), 2000);
+    }
+  };
+
   const saveTitle = async () => {
     if (!currentSessionId) {
       setEditingTitle(false);
@@ -2048,6 +2071,75 @@ Start your research immediately when you receive a question. Do not ask for clar
                 {isMobile && researchSources.length > 0 && !researchProgress && (
                   <div className="animate-slide-up">
                     <CitationsPanel sources={researchSources} />
+                  </div>
+                )}
+
+                {/* Response Footer - Actions & Token Usage */}
+                {messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && !isLoading && (
+                  <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-4 animate-fade-in">
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={copyLastResponse}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-[var(--accent)] transition-colors text-[#8a8580]"
+                        title="Copy response"
+                      >
+                        {copiedIndex === messages.length - 1 ? (
+                          <Check className="h-3.5 w-3.5 text-[var(--success)]" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                        <span className="text-xs">Copy</span>
+                      </button>
+                      <button
+                        onClick={() => toggleBookmark(messages[messages.length - 1].id)}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-[var(--accent)] transition-colors text-[#8a8580]"
+                        title={bookmarkedMessages.has(messages[messages.length - 1].id) ? 'Remove bookmark' : 'Bookmark'}
+                      >
+                        {bookmarkedMessages.has(messages[messages.length - 1].id) ? (
+                          <BookmarkCheck className="h-3.5 w-3.5 text-[var(--link)]" />
+                        ) : (
+                          <Bookmark className="h-3.5 w-3.5" />
+                        )}
+                        <span className="text-xs">Bookmark</span>
+                      </button>
+                      {currentSessionId && (
+                        <button
+                          onClick={() => forkAtMessage(messages[messages.length - 1].id)}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-[var(--accent)] transition-colors text-[#8a8580]"
+                          title="Fork conversation from here"
+                        >
+                          <GitBranch className="h-3.5 w-3.5" />
+                          <span className="text-xs">Fork</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Token usage */}
+                    <div className="flex items-center gap-2 text-[10px] text-[#6a6560] font-mono tabular-nums">
+                      <div className="flex items-center gap-1" title="Context tokens used / available">
+                        <Layers className="h-3 w-3" />
+                        <span>{contextUsage.currentTokens.toLocaleString()}</span>
+                        <span>/</span>
+                        <span>{contextUsage.maxTokens.toLocaleString()}</span>
+                      </div>
+                      {sessionUsage && (
+                        <>
+                          <span className="text-[#4a4540]">•</span>
+                          <div
+                            className="flex items-center gap-1 cursor-pointer hover:text-[#9a9590] transition-colors"
+                            onClick={() => setUsageDetailsOpen(true)}
+                            title="Session total (click for details)"
+                          >
+                            <BarChart3 className="h-3 w-3" />
+                            <span>{sessionUsage.total_tokens.toLocaleString()} total</span>
+                            {sessionUsage.estimated_cost_usd != null && (
+                              <span className="text-[#8a8580]">(${sessionUsage.estimated_cost_usd.toFixed(4)})</span>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
 
