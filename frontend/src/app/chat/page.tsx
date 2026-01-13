@@ -141,7 +141,11 @@ export default function ChatPage() {
 
   // Context management
   const maxContext = useMemo(() => {
-    const model = availableModels.find(m => m.id === selectedModel || m.id === runningModel);
+    // Match by id first, then by root (model_path) for cases where selectedModel is the path
+    const model = availableModels.find(m =>
+      m.id === selectedModel || m.id === runningModel ||
+      m.root === selectedModel || m.root === runningModel
+    );
     return model?.max_model_len || 200000;
   }, [availableModels, selectedModel, runningModel]);
 

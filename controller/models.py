@@ -157,6 +157,7 @@ class OpenAIModelInfo(BaseModel):
     object: str = "model"
     created: int
     owned_by: str = "vllm-studio"
+    root: Optional[str] = None  # model_path for frontend matching
     active: bool = False
     max_model_len: Optional[int] = None
 

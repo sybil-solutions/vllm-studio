@@ -67,6 +67,7 @@ async def list_models_openai():
             OpenAIModelInfo(
                 id=model_id,
                 created=current_time,
+                root=recipe.model_path,
                 active=is_active,
                 max_model_len=max_model_len,
             )
@@ -111,6 +112,7 @@ async def get_model_openai(model_id: str, store: RecipeStore = Depends(get_store
     return OpenAIModelInfo(
         id=display_id,
         created=int(time.time()),
+        root=recipe.model_path,
         active=is_active,
         max_model_len=max_model_len,
     )
