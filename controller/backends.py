@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional
 
 from .config import settings
 from .models import Recipe
-from .thinking_config import get_chat_template_kwargs
 
 
 def _normalize_json_arg(value: Any) -> Any:
@@ -157,10 +156,10 @@ def build_vllm_command(recipe: Recipe) -> List[str]:
     if recipe.dtype:
         cmd.extend(["--dtype", recipe.dtype])
 
-    # Add chat template kwargs for reasoning models (max_thinking_tokens, etc.)
-    chat_kwargs = get_chat_template_kwargs(recipe)
-    if chat_kwargs:
-        cmd.extend(["--default-chat-template-kwargs", json.dumps(chat_kwargs)])
+    # Note: --default-chat-template-kwargs requires vLLM 0.8+
+    # For older versions, thinking tokens should be controlled per-request via chat_template_kwargs
+    # To enable server-wide thinking config, add to extra_args:
+    #   extra_args: {"--default-chat-template-kwargs": "{\"max_thinking_tokens\": 16000}"}
 
     _append_extra_args(cmd, recipe.extra_args)
     return cmd
