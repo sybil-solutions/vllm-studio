@@ -70,9 +70,10 @@ function getStatusBg(status: string): string {
 
 interface ApiConnectionSettings {
   backendUrl: string;
-  litellmUrl: string;
   apiKey: string;
   hasApiKey: boolean;
+  voiceUrl: string;
+  voiceModel: string;
 }
 
 export default function ConfigsPage() {
@@ -83,9 +84,10 @@ export default function ConfigsPage() {
   // API Connection settings state
   const [apiSettings, setApiSettings] = useState<ApiConnectionSettings>({
     backendUrl: 'http://localhost:8080',
-    litellmUrl: 'http://localhost:4100',
     apiKey: '',
     hasApiKey: false,
+    voiceUrl: '',
+    voiceModel: 'whisper-1',
   });
   const [apiSettingsLoading, setApiSettingsLoading] = useState(true);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -103,9 +105,10 @@ export default function ConfigsPage() {
         const settings = await res.json();
         setApiSettings({
           backendUrl: settings.backendUrl || 'http://localhost:8080',
-          litellmUrl: settings.litellmUrl || 'http://localhost:4100',
           apiKey: settings.apiKey || '',
           hasApiKey: settings.hasApiKey || false,
+          voiceUrl: settings.voiceUrl || '',
+          voiceModel: settings.voiceModel || 'whisper-1',
         });
       }
     } catch (e) {
@@ -125,17 +128,19 @@ export default function ConfigsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           backendUrl: apiSettings.backendUrl,
-          litellmUrl: apiSettings.litellmUrl,
           apiKey: apiSettings.apiKey,
+          voiceUrl: apiSettings.voiceUrl,
+          voiceModel: apiSettings.voiceModel,
         }),
       });
       if (res.ok) {
         const updated = await res.json();
         setApiSettings({
           backendUrl: updated.backendUrl,
-          litellmUrl: updated.litellmUrl,
           apiKey: updated.apiKey,
           hasApiKey: updated.hasApiKey,
+          voiceUrl: updated.voiceUrl || apiSettings.voiceUrl,
+          voiceModel: updated.voiceModel || apiSettings.voiceModel,
         });
         setStatusMessage('Settings saved');
         // Reload system config with new settings
@@ -195,29 +200,8 @@ export default function ConfigsPage() {
     loadApiSettings();
   }, []);
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center h-full bg-[#1b1b1b]">
-        <Activity className="h-5 w-5 text-[#9a9088] animate-pulse" />
-      </div>
-    );
-  }
-
-  if (error && !data) {
-    return (
-      <div className="flex items-center justify-center h-full bg-[#1b1b1b]">
-        <div className="text-center">
-          <p className="text-[#c97a6b] mb-4">{error}</p>
-          <button
-            onClick={loadConfig}
-            className="px-4 py-2 bg-[#363432] rounded-lg text-[#f0ebe3] hover:bg-[#4a4846]"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const hasConfigData = Boolean(data);
+  const isInitialLoading = loading && !hasConfigData;
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-[#1b1b1b] text-[#f0ebe3]">
@@ -250,24 +234,12 @@ export default function ConfigsPage() {
               <div className="space-y-4">
                 {/* Backend URL */}
                 <div>
-                  <label className="block text-xs text-[#9a9088] mb-1.5">Backend URL</label>
+                  <label className="block text-xs text-[#9a9088] mb-1.5">API URL</label>
                   <input
                     type="text"
                     value={apiSettings.backendUrl}
                     onChange={(e) => setApiSettings({ ...apiSettings, backendUrl: e.target.value })}
-                    placeholder="http://localhost:8080"
-                    className="w-full px-3 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] placeholder-[#9a9088]/50 focus:outline-none focus:border-[var(--accent-purple)]"
-                  />
-                </div>
-
-                {/* LiteLLM URL */}
-                <div>
-                  <label className="block text-xs text-[#9a9088] mb-1.5">LiteLLM URL</label>
-                  <input
-                    type="text"
-                    value={apiSettings.litellmUrl}
-                    onChange={(e) => setApiSettings({ ...apiSettings, litellmUrl: e.target.value })}
-                    placeholder="http://localhost:4100"
+                    placeholder="https://api.example.com"
                     className="w-full px-3 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] placeholder-[#9a9088]/50 focus:outline-none focus:border-[var(--accent-purple)]"
                   />
                 </div>
@@ -291,6 +263,30 @@ export default function ConfigsPage() {
                       {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
+                </div>
+
+                {/* Voice URL */}
+                <div>
+                  <label className="block text-xs text-[#9a9088] mb-1.5">Voice URL</label>
+                  <input
+                    type="text"
+                    value={apiSettings.voiceUrl}
+                    onChange={(e) => setApiSettings({ ...apiSettings, voiceUrl: e.target.value })}
+                    placeholder="https://voice.example.com"
+                    className="w-full px-3 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] placeholder-[#9a9088]/50 focus:outline-none focus:border-[var(--accent-purple)]"
+                  />
+                </div>
+
+                {/* Voice Model */}
+                <div>
+                  <label className="block text-xs text-[#9a9088] mb-1.5">Voice Model</label>
+                  <input
+                    type="text"
+                    value={apiSettings.voiceModel}
+                    onChange={(e) => setApiSettings({ ...apiSettings, voiceModel: e.target.value })}
+                    placeholder="whisper-1"
+                    className="w-full px-3 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] placeholder-[#9a9088]/50 focus:outline-none focus:border-[var(--accent-purple)]"
+                  />
                 </div>
 
                 {/* Actions */}
@@ -330,6 +326,38 @@ export default function ConfigsPage() {
             )}
           </div>
         </div>
+
+        {!hasConfigData && (
+          <div className="mb-6 sm:mb-8">
+            <div className="bg-[#1e1e1e] rounded-lg p-4 sm:p-6 border border-[#363432]">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-[#f0ebe3]">
+                    {isInitialLoading ? (
+                      <Activity className="h-4 w-4 text-[#9a9088] animate-pulse" />
+                    ) : (
+                      <Server className="h-4 w-4 text-[#c9a66b]" />
+                    )}
+                    <span>{isInitialLoading ? 'Checking controller connection…' : 'No backend detected'}</span>
+                  </div>
+                  <p className="text-xs text-[#9a9088]">
+                    Configure the API connection above and click Test or Retry to load system details.
+                  </p>
+                  {error && !isInitialLoading && (
+                    <p className="text-[10px] text-[#c97a6b]">Last error: {error}</p>
+                  )}
+                </div>
+                <button
+                  onClick={loadConfig}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-[#363432] rounded-lg text-xs text-[#f0ebe3] hover:bg-[#4a4846] disabled:opacity-50"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {data && (
           <div className="grid lg:grid-cols-3 gap-6 sm:gap-8">

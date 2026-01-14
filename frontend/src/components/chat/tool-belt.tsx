@@ -20,7 +20,6 @@ import {
   Clock,
   Plus,
   Loader2,
-  Database,
 } from 'lucide-react';
 
 export interface Attachment {
@@ -61,10 +60,6 @@ interface ToolBeltProps {
   // Deep Research
   deepResearchEnabled?: boolean;
   onDeepResearchToggle?: () => void;
-  // RAG (Retrieval Augmented Generation)
-  ragEnabled?: boolean;
-  onRagToggle?: () => void;
-  ragStatus?: 'online' | 'offline' | 'checking';
   // Timer for streaming duration
   elapsedSeconds?: number;
   // Queued context - additional input while streaming
@@ -91,9 +86,6 @@ export function ToolBelt({
   hasSystemPrompt = false,
   deepResearchEnabled = false,
   onDeepResearchToggle,
-  ragEnabled = false,
-  onRagToggle,
-  ragStatus = 'offline',
   elapsedSeconds = 0,
   queuedContext = '',
   onQueuedContextChange,
@@ -521,36 +513,6 @@ export function ToolBelt({
                 >
                   <Brain className="h-4 w-4 md:h-3.5 md:w-3.5" />
                   <span className="text-xs hidden sm:inline">Research</span>
-                </button>
-              )}
-
-              {/* RAG Toggle */}
-              {onRagToggle && (
-                <button
-                  onClick={onRagToggle}
-                  disabled={disabled || ragStatus === 'checking'}
-                  className={`flex items-center gap-1.5 px-2 py-1.5 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
-                    ragEnabled && ragStatus === 'online'
-                      ? 'bg-green-500/10 text-green-400 dark:text-green-300'
-                      : ragEnabled && ragStatus === 'offline'
-                      ? 'bg-yellow-500/10 text-yellow-400'
-                      : 'hover:bg-[var(--accent)] text-[#9a9590]'
-                  }`}
-                  title={
-                    ragStatus === 'checking'
-                      ? 'Checking RAG connection...'
-                      : ragEnabled
-                      ? ragStatus === 'online'
-                        ? 'RAG enabled - knowledge base connected'
-                        : 'RAG enabled - server offline'
-                      : 'Enable RAG knowledge base'
-                  }
-                >
-                  <Database className={`h-4 w-4 md:h-3.5 md:w-3.5 ${ragStatus === 'checking' ? 'animate-pulse' : ''}`} />
-                  <span className="text-xs hidden sm:inline">RAG</span>
-                  {ragEnabled && ragStatus === 'online' && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                  )}
                 </button>
               )}
 

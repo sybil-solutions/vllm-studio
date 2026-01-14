@@ -4,14 +4,16 @@ import path from 'path';
 
 export interface ApiSettings {
   backendUrl: string;
-  litellmUrl: string;
   apiKey: string;
+  voiceUrl: string;
+  voiceModel: string;
 }
 
 const DEFAULT_SETTINGS: ApiSettings = {
   backendUrl: process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
-  litellmUrl: process.env.LITELLM_URL || process.env.NEXT_PUBLIC_LITELLM_URL || 'http://localhost:4100',
   apiKey: process.env.API_KEY || '',
+  voiceUrl: process.env.VOICE_URL || process.env.NEXT_PUBLIC_VOICE_URL || '',
+  voiceModel: process.env.VOICE_MODEL || process.env.NEXT_PUBLIC_VOICE_MODEL || 'whisper-1',
 };
 
 // Settings file path - relative to frontend directory
@@ -26,8 +28,9 @@ export async function getApiSettings(): Promise<ApiSettings> {
       // Merge with defaults (env vars still take precedence if settings file has empty values)
       return {
         backendUrl: saved.backendUrl || DEFAULT_SETTINGS.backendUrl,
-        litellmUrl: saved.litellmUrl || DEFAULT_SETTINGS.litellmUrl,
         apiKey: saved.apiKey || DEFAULT_SETTINGS.apiKey,
+        voiceUrl: saved.voiceUrl || DEFAULT_SETTINGS.voiceUrl,
+        voiceModel: saved.voiceModel || DEFAULT_SETTINGS.voiceModel,
       };
     }
   } catch (error) {

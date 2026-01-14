@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const VOICE_URL = process.env.VOICE_URL || 'REDACTED';
-const API_KEY = process.env.API_KEY || '';
+import { getApiSettings } from '@/lib/api-settings';
 
 export async function POST(request: NextRequest) {
   try {
     // Get the form data from the request
     const formData = await request.formData();
+    const settings = await getApiSettings();
+    const voiceUrl = settings.voiceUrl;
+
+    if (!voiceUrl) {
+      return NextResponse.json(
+        { error: 'Voice URL not configured' },
+        { status: 400 }
+      );
+    }
+
+    if (settings.voiceModel) {
+      formData.set('model', settings.voiceModel);
+    }
 
     // Build headers with API key
     const headers: HeadersInit = {};
@@ -15,12 +26,12 @@ export async function POST(request: NextRequest) {
     const incomingAuth = request.headers.get('authorization');
     if (incomingAuth) {
       headers['Authorization'] = incomingAuth;
-    } else if (API_KEY) {
-      headers['Authorization'] = `Bearer ${API_KEY}`;
+    } else if (settings.apiKey) {
+      headers['Authorization'] = `Bearer ${settings.apiKey}`;
     }
 
     // Forward to voice transcription service
-    const response = await fetch(`${VOICE_URL}/v1/audio/transcriptions`, {
+    const response = await fetch(`${voiceUrl}/v1/audio/transcriptions`, {
       method: 'POST',
       headers,
       body: formData,

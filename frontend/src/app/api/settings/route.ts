@@ -7,9 +7,10 @@ export async function GET() {
     // Return settings with masked API key for display
     return NextResponse.json({
       backendUrl: settings.backendUrl,
-      litellmUrl: settings.litellmUrl,
       apiKey: maskApiKey(settings.apiKey),
       hasApiKey: Boolean(settings.apiKey),
+      voiceUrl: settings.voiceUrl,
+      voiceModel: settings.voiceModel,
     });
   } catch (error) {
     return NextResponse.json(
@@ -22,18 +23,19 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { backendUrl, litellmUrl, apiKey } = body as Partial<ApiSettings>;
+    const { backendUrl, apiKey, voiceUrl, voiceModel } = body as Partial<ApiSettings>;
 
-    // Validate URLs
+    // Validate URL
     if (backendUrl && !isValidUrl(backendUrl)) {
       return NextResponse.json(
         { error: 'Invalid backend URL format' },
         { status: 400 }
       );
     }
-    if (litellmUrl && !isValidUrl(litellmUrl)) {
+
+    if (voiceUrl && !isValidUrl(voiceUrl)) {
       return NextResponse.json(
-        { error: 'Invalid LiteLLM URL format' },
+        { error: 'Invalid voice URL format' },
         { status: 400 }
       );
     }
@@ -43,9 +45,10 @@ export async function POST(request: NextRequest) {
 
     const newSettings: ApiSettings = {
       backendUrl: backendUrl || current.backendUrl,
-      litellmUrl: litellmUrl || current.litellmUrl,
       // Only update API key if explicitly provided (not masked value)
       apiKey: apiKey && !apiKey.includes('••••') ? apiKey : current.apiKey,
+      voiceUrl: voiceUrl || current.voiceUrl,
+      voiceModel: voiceModel || current.voiceModel,
     };
 
     await saveApiSettings(newSettings);
@@ -53,9 +56,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       backendUrl: newSettings.backendUrl,
-      litellmUrl: newSettings.litellmUrl,
       apiKey: maskApiKey(newSettings.apiKey),
       hasApiKey: Boolean(newSettings.apiKey),
+      voiceUrl: newSettings.voiceUrl,
+      voiceModel: newSettings.voiceModel,
     });
   } catch (error) {
     return NextResponse.json(

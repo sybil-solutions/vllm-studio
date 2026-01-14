@@ -6,14 +6,14 @@ import {
   PanelRightOpen, Bookmark, BookmarkCheck,
 } from 'lucide-react';
 import Link from 'next/link';
-import { api, RAGClient } from '@/lib/api';
-import type { ChatSession, ToolCall, ToolResult, Artifact, RAGDocument } from '@/lib/types';
+import { api } from '@/lib/api';
+import type { ChatSession, ToolCall, ToolResult, Artifact } from '@/lib/types';
 import {
   MessageRenderer, ChatSidebar, ToolBelt, MCPSettingsModal, ChatSettingsModal, extractArtifacts, ArtifactPanel,
 } from '@/components/chat';
 import { ResearchProgressIndicator, CitationsPanel } from '@/components/chat/research-progress';
 import { MessageSearch } from '@/components/chat/message-search';
-import type { Attachment, MCPServerConfig, DeepResearchSettings, RAGSettings } from '@/components/chat';
+import type { Attachment, MCPServerConfig, DeepResearchSettings } from '@/components/chat';
 import type { ResearchProgress, ResearchSource } from '@/components/chat/research-progress';
 import { loadState, saveState, debouncedSave } from '@/lib/chat-state-persistence';
 import { useContextManager } from '@/hooks/useContextManager';
@@ -91,6 +91,7 @@ export default function ChatPage() {
   const [toolPanelOpen, setToolPanelOpen] = useState(true);
   const [activePanel, setActivePanel] = useState<'tools' | 'artifacts'>('tools');
   const [sessionArtifacts, setSessionArtifacts] = useState<Artifact[]>([]);
+  const [historyDropdownOpen, setHistoryDropdownOpen] = useState(false);
 
   // MCP state
   const [mcpEnabled, setMcpEnabled] = useState(false);
@@ -111,15 +112,6 @@ export default function ChatPage() {
   });
   const [researchProgress, setResearchProgress] = useState<ResearchProgress | null>(null);
   const [researchSources, setResearchSources] = useState<ResearchSource[]>([]);
-
-  // RAG state
-  const [ragSettings, setRagSettings] = useState<RAGSettings>({
-    enabled: false, endpoint: 'http://localhost:3002', topK: 5, minScore: 0.0,
-    includeMetadata: true, contextPosition: 'system', useProxy: true,
-  });
-  const [ragStatus, setRagStatus] = useState<'online' | 'offline' | 'checking'>('offline');
-  const [ragContext, setRagContext] = useState<RAGDocument[]>([]);
-  const ragClientRef = useRef<RAGClient | null>(null);
 
   // Usage state
   const [sessionUsage, setSessionUsage] = useState<{ prompt_tokens: number; completion_tokens: number; total_tokens: number; estimated_cost_usd?: number | null } | null>(null);
@@ -181,29 +173,11 @@ export default function ChatPage() {
     try {
       const dr = localStorage.getItem('vllm-studio-deep-research');
       if (dr) setDeepResearch(JSON.parse(dr));
-      const rag = localStorage.getItem('vllm-studio-rag-settings');
-      if (rag) setRagSettings(JSON.parse(rag));
     } catch {}
   }, []);
 
   useEffect(() => { debouncedSave({ mcpEnabled, artifactsEnabled, systemPrompt, selectedModel }, 1000); }, [mcpEnabled, artifactsEnabled, systemPrompt, selectedModel]);
   useEffect(() => { loadStatus(); loadSessions(); loadMCPServers(); loadAvailableModels(); }, []);
-  useEffect(() => { if (ragSettings.endpoint) ragClientRef.current = new RAGClient(ragSettings.endpoint, ragSettings.apiKey, ragSettings.useProxy); }, [ragSettings.endpoint, ragSettings.apiKey, ragSettings.useProxy]);
-
-  useEffect(() => {
-    if (!ragSettings.enabled) { setRagStatus('offline'); return; }
-    const check = async () => {
-      setRagStatus('checking');
-      try {
-        if (!ragClientRef.current) ragClientRef.current = new RAGClient(ragSettings.endpoint, ragSettings.apiKey, ragSettings.useProxy);
-        const health = await ragClientRef.current.health();
-        setRagStatus(health.status === 'ok' || health.status === 'healthy' ? 'online' : 'offline');
-      } catch { setRagStatus('offline'); }
-    };
-    check();
-    const interval = setInterval(check, 30000);
-    return () => clearInterval(interval);
-  }, [ragSettings.enabled, ragSettings.endpoint, ragSettings.apiKey, ragSettings.useProxy]);
 
   useEffect(() => { if (!userScrolledUp) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, userScrolledUp]);
   useEffect(() => { if (mcpEnabled) loadMCPTools(); else setMcpTools([]); }, [mcpEnabled]);
@@ -276,7 +250,7 @@ export default function ChatPage() {
     } catch { console.log('Failed to load session'); }
   };
 
-  const createSession = () => { setCurrentSessionId(null); setCurrentSessionTitle('New Chat'); setTitleDraft(''); setMessages([]); setToolResultsMap(new Map()); setSessionUsage(null); setRagContext([]); setResearchSources([]); setSidebarCollapsed(isMobile); };
+  const createSession = () => { setCurrentSessionId(null); setCurrentSessionTitle('New Chat'); setTitleDraft(''); setMessages([]); setToolResultsMap(new Map()); setSessionUsage(null); setResearchSources([]); setSidebarCollapsed(isMobile); };
   const deleteSession = async (sessionId: string) => { try { await api.deleteChatSession(sessionId); setSessions(prev => prev.filter(s => s.id !== sessionId)); if (currentSessionId === sessionId) createSession(); } catch {} };
 
   const refreshUsage = async (sessionId: string) => {
@@ -288,10 +262,9 @@ export default function ChatPage() {
   const handleScroll = () => { const container = messagesContainerRef.current; if (!container) return; const { scrollTop, scrollHeight, clientHeight } = container; setUserScrolledUp(scrollHeight - scrollTop - clientHeight >= 100); };
 
   // Build API messages
-  const buildAPIMessages = (msgs: Message[], ragDocs: RAGDocument[] = []): OpenAIMessage[] => {
+  const buildAPIMessages = (msgs: Message[]): OpenAIMessage[] => {
     const apiMessages: OpenAIMessage[] = [];
-    let sysContent = systemPrompt.trim();
-    if (ragDocs.length > 0 && ragSettings.contextPosition === 'system') { const ragText = ragDocs.map(d => d.content).join('\n\n---\n\n'); sysContent = sysContent ? `${sysContent}\n\n## Retrieved Context:\n${ragText}` : `## Retrieved Context:\n${ragText}`; }
+    const sysContent = systemPrompt.trim();
     if (sysContent) apiMessages.push({ role: 'system', content: sysContent });
     if (mcpEnabled && mcpTools.length > 0) { const toolsList = mcpTools.map(t => `- ${t.server}__${t.name}: ${t.description || 'No description'}`).join('\n'); apiMessages.push({ role: 'system', content: `Available tools:\n${toolsList}` }); }
     for (const msg of msgs) {
@@ -315,14 +288,6 @@ export default function ChatPage() {
     catch (error) { return { tool_call_id: toolCall.id, content: `Error: ${error instanceof Error ? error.message : String(error)}`, isError: true }; }
   };
 
-  const queryRAG = async (text: string): Promise<RAGDocument[]> => {
-    if (!ragSettings.enabled || ragStatus !== 'online' || !ragClientRef.current) return [];
-    try {
-      const result = await ragClientRef.current.query(text, { topK: ragSettings.topK });
-      return (result.documents || []).map(d => ({ id: d.id, content: d.content, score: d.score, metadata: d.metadata, source: d.source }));
-    } catch { return []; }
-  };
-
   // Send message
   const sendMessage = async (attachments?: Attachment[]) => {
     const hasText = input.trim().length > 0; const hasAttachments = attachments?.length; const activeModelId = (selectedModel || runningModel || '').trim();
@@ -331,8 +296,7 @@ export default function ChatPage() {
     const userMessage: Message = { id: Date.now().toString(), role: 'user', content: userContent || (imageAttachments.length ? '[Image]' : '...'), images: imageAttachments.map(a => a.base64!), model: activeModelId };
     setMessages(prev => [...prev, userMessage]); setInput(''); setIsLoading(true); setStreamingStartTime(Date.now()); setElapsedSeconds(0); setError(null);
     abortControllerRef.current = new AbortController();
-    let ragDocs: RAGDocument[] = []; if (ragSettings.enabled && ragStatus === 'online') { try { ragDocs = await queryRAG(userContent); setRagContext(ragDocs); } catch {} }
-    let conversationMessages = buildAPIMessages([...messages, userMessage], ragDocs); let sessionId = currentSessionId; let finalAssistantContent = '';
+    let conversationMessages = buildAPIMessages([...messages, userMessage]); let sessionId = currentSessionId; let finalAssistantContent = '';
     const bumpSessionUpdatedAt = () => { if (!sessionId) return; setSessions(prev => { const existing = prev.find(s => s.id === sessionId); const updated = existing ? { ...existing, updated_at: new Date().toISOString() } : undefined; return updated ? [updated, ...prev.filter(s => s.id !== sessionId)] : prev; }); };
 
     try {
@@ -391,17 +355,12 @@ export default function ChatPage() {
   const exportAsMarkdown = () => { const payload = buildChatExport(); const lines = [`# ${payload.title}`, '']; if (payload.model) lines.push(`- Model: \`${payload.model}\``); lines.push(''); payload.messages.forEach(m => { lines.push(`## ${m.role === 'user' ? 'User' : 'Assistant'}`, '', m.content || '', ''); }); const name = (currentSessionTitle || 'chat').replace(/[^\w.-]+/g, '_').slice(0, 80); downloadTextFile(`${name}.md`, lines.join('\n'), 'text/markdown'); };
 
   // Render
-  if (pageLoading) { return <div className="flex items-center justify-center h-[100dvh]"><div className="animate-pulse-soft"><Sparkles className="h-8 w-8 text-[#9a9590]" /></div></div>; }
+  if (pageLoading) { return <div className="flex items-center justify-center h-full"><div className="animate-pulse-soft"><Sparkles className="h-8 w-8 text-[#9a9590]" /></div></div>; }
 
   return (
     <>
-      <div className="relative h-[100dvh] flex flex-col overflow-hidden w-full max-w-full">
-        {!isMobile && <ChatSidebar sessions={sessions} currentSessionId={currentSessionId} onSelectSession={loadSession} onNewSession={createSession} onDeleteSession={deleteSession} isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} isLoading={sessionsLoading} isMobile={false} />}
-        {isMobile && !sidebarCollapsed && <ChatSidebar sessions={sessions} currentSessionId={currentSessionId} onSelectSession={loadSession} onNewSession={createSession} onDeleteSession={deleteSession} isCollapsed={false} onToggleCollapse={() => setSidebarCollapsed(true)} isLoading={sessionsLoading} isMobile={true} />}
-
-        <div className={`flex-1 flex flex-col min-h-0 overflow-x-hidden ${isMobile ? '' : sidebarCollapsed ? 'md:ml-12' : 'md:ml-60'}`}>
-          {isMobile && <ChatMobileHeader currentSessionTitle={currentSessionTitle} currentSessionId={currentSessionId} sessions={sessions} onSelectSession={loadSession} onNewSession={createSession} onOpenSidebar={() => setSidebarCollapsed(false)} />}
-
+      <div className="relative h-full flex overflow-hidden w-full max-w-full">
+        <div className="flex-1 flex flex-col min-h-0 overflow-x-hidden">
           <div className="flex-1 flex overflow-hidden relative">
             {messageSearchOpen && (
               <div className="absolute inset-0 z-50 bg-[var(--background)]/95 backdrop-blur-sm">
@@ -442,7 +401,7 @@ export default function ChatPage() {
               {!isMobile && hasSidePanelContent && !toolPanelOpen && <button onClick={() => setToolPanelOpen(true)} className="absolute right-3 top-3 p-1.5 bg-[var(--card)] border border-[var(--border)] rounded hover:bg-[var(--accent)] z-10" title="Show tools"><PanelRightOpen className="h-4 w-4 text-[#9a9590]" />{executingTools.size > 0 && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[var(--success)] rounded-full text-[9px] text-white font-medium">{executingTools.size}</span>}</button>}
 
               <div className="flex-shrink-0 pb-0 md:pb-3">
-                <ToolBelt value={input} onChange={setInput} onSubmit={sendMessage} onStop={stopGeneration} disabled={!((selectedModel || runningModel || '').trim())} isLoading={isLoading} modelName={selectedModel || modelName} placeholder={(selectedModel || runningModel) ? 'Message...' : 'Select a model in Settings'} mcpEnabled={mcpEnabled} onMcpToggle={() => setMcpEnabled(!mcpEnabled)} mcpServers={mcpServers.map(s => ({ name: s.name, enabled: s.enabled }))} artifactsEnabled={artifactsEnabled} onArtifactsToggle={() => setArtifactsEnabled(!artifactsEnabled)} onOpenMcpSettings={() => setMcpSettingsOpen(true)} onOpenChatSettings={() => setChatSettingsOpen(true)} hasSystemPrompt={systemPrompt.trim().length > 0} deepResearchEnabled={deepResearch.enabled} onDeepResearchToggle={() => { setDeepResearch(p => ({ ...p, enabled: !p.enabled })); if (!deepResearch.enabled && !mcpEnabled) setMcpEnabled(true); }} ragEnabled={ragSettings.enabled} onRagToggle={() => { setRagSettings(p => ({ ...p, enabled: !p.enabled })); localStorage.setItem('vllm-studio-rag-settings', JSON.stringify({ ...ragSettings, enabled: !ragSettings.enabled })); }} ragStatus={ragStatus} elapsedSeconds={elapsedSeconds} queuedContext={queuedContext} onQueuedContextChange={setQueuedContext} />
+                <ToolBelt value={input} onChange={setInput} onSubmit={sendMessage} onStop={stopGeneration} disabled={!((selectedModel || runningModel || '').trim())} isLoading={isLoading} modelName={selectedModel || modelName} placeholder={(selectedModel || runningModel) ? 'Message...' : 'Select a model in Settings'} mcpEnabled={mcpEnabled} onMcpToggle={() => setMcpEnabled(!mcpEnabled)} mcpServers={mcpServers.map(s => ({ name: s.name, enabled: s.enabled }))} artifactsEnabled={artifactsEnabled} onArtifactsToggle={() => setArtifactsEnabled(!artifactsEnabled)} onOpenMcpSettings={() => setMcpSettingsOpen(true)} onOpenChatSettings={() => setChatSettingsOpen(true)} hasSystemPrompt={systemPrompt.trim().length > 0} deepResearchEnabled={deepResearch.enabled} onDeepResearchToggle={() => { setDeepResearch(p => ({ ...p, enabled: !p.enabled })); if (!deepResearch.enabled && !mcpEnabled) setMcpEnabled(true); }} elapsedSeconds={elapsedSeconds} queuedContext={queuedContext} onQueuedContextChange={setQueuedContext} />
               </div>
             </div>
 
@@ -454,7 +413,7 @@ export default function ChatPage() {
       <UsageModal isOpen={usageDetailsOpen} onClose={() => setUsageDetailsOpen(false)} sessionUsage={sessionUsage} messages={messages} selectedModel={selectedModel} />
       <ExportModal isOpen={exportOpen} onClose={() => setExportOpen(false)} onExportMarkdown={exportAsMarkdown} onExportJson={exportAsJson} />
       <MCPSettingsModal isOpen={mcpSettingsOpen} onClose={() => setMcpSettingsOpen(false)} servers={mcpServers} onServersChange={setMcpServers} />
-      <ChatSettingsModal isOpen={chatSettingsOpen} onClose={() => setChatSettingsOpen(false)} systemPrompt={systemPrompt} onSystemPromptChange={setSystemPrompt} availableModels={availableModels} selectedModel={selectedModel} onSelectedModelChange={async (modelId) => { setSelectedModel((modelId || '').trim()); if (currentSessionId) { try { await api.updateChatSession(currentSessionId, { model: modelId || undefined }); setSessions(p => p.map(s => s.id === currentSessionId ? { ...s, model: modelId } : s)); } catch {} } }} onForkModels={async (modelIds) => { if (!currentSessionId) return; for (const m of modelIds) { try { const { session } = await api.forkChatSession(currentSessionId, { model: m }); setSessions(p => [session, ...p]); } catch {} } await loadSessions(); }} deepResearch={deepResearch} onDeepResearchChange={s => { setDeepResearch(s); localStorage.setItem('vllm-studio-deep-research', JSON.stringify(s)); if (s.enabled && !mcpEnabled) setMcpEnabled(true); }} ragSettings={ragSettings} onRagSettingsChange={s => { setRagSettings(s); localStorage.setItem('vllm-studio-rag-settings', JSON.stringify(s)); }} onTestRagConnection={async () => { if (!ragClientRef.current) ragClientRef.current = new RAGClient(ragSettings.endpoint, ragSettings.apiKey, ragSettings.useProxy); return ragClientRef.current.health(); }} />
+      <ChatSettingsModal isOpen={chatSettingsOpen} onClose={() => setChatSettingsOpen(false)} systemPrompt={systemPrompt} onSystemPromptChange={setSystemPrompt} availableModels={availableModels} selectedModel={selectedModel} onSelectedModelChange={async (modelId) => { setSelectedModel((modelId || '').trim()); if (currentSessionId) { try { await api.updateChatSession(currentSessionId, { model: modelId || undefined }); setSessions(p => p.map(s => s.id === currentSessionId ? { ...s, model: modelId } : s)); } catch {} } }} onForkModels={async (modelIds) => { if (!currentSessionId) return; for (const m of modelIds) { try { const { session } = await api.forkChatSession(currentSessionId, { model: m }); setSessions(p => [session, ...p]); } catch {} } await loadSessions(); }} deepResearch={deepResearch} onDeepResearchChange={s => { setDeepResearch(s); localStorage.setItem('vllm-studio-deep-research', JSON.stringify(s)); if (s.enabled && !mcpEnabled) setMcpEnabled(true); }} />
     </>
   );
 }
