@@ -253,7 +253,7 @@ export function CodeSandbox({
   }, [onError, onOutput]);
 
   // Toolbar buttons component to avoid duplication
-  const ToolbarButtons = ({ inFooter = false }: { inFooter?: boolean }) => (
+  const renderToolbarButtons = (inFooter = false) => (
     <div className={`flex items-center gap-0.5 md:gap-1 ${inFooter ? 'justify-center' : ''}`}>
       {/* Run/Stop - always visible */}
       {isRunning ? (
@@ -350,7 +350,7 @@ export function CodeSandbox({
         </div>
 
         {/* Show controls in header only when NOT fullscreen */}
-        {!isFullscreen && <ToolbarButtons />}
+        {!isFullscreen && renderToolbarButtons()}
 
         {/* In fullscreen, just show minimize button in header */}
         {isFullscreen && (
@@ -385,7 +385,7 @@ export function CodeSandbox({
       {/* Footer controls - only in fullscreen mode */}
       {isFullscreen && (
         <div className="flex-shrink-0 px-3 py-3 bg-[var(--accent)] border-t border-[var(--border)]">
-          <ToolbarButtons inFooter />
+          {renderToolbarButtons(true)}
         </div>
       )}
       </div>

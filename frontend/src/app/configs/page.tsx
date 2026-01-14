@@ -150,7 +150,7 @@ export default function ConfigsPage() {
         setStatusMessage(err.error || 'Failed to save');
         setConnectionStatus('error');
       }
-    } catch (e) {
+    } catch {
       setStatusMessage('Failed to save settings');
       setConnectionStatus('error');
     } finally {
@@ -174,7 +174,7 @@ export default function ConfigsPage() {
         setConnectionStatus('error');
         setStatusMessage(`Error: ${res.status}`);
       }
-    } catch (e) {
+    } catch {
       setConnectionStatus('error');
       setStatusMessage('Connection failed');
     } finally {

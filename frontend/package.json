@@ -25,6 +25,7 @@
     "react-syntax-highlighter": "^16.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "zustand": "^4.5.4",
     "zod": "^4.2.1"
   },
   "devDependencies": {

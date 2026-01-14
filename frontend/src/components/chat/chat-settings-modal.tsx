@@ -66,7 +66,7 @@ export function ChatSettingsModal({
     if (saved && !systemPrompt) {
       onSystemPromptChange(saved);
     }
-  }, []);
+  }, [onSystemPromptChange, systemPrompt]);
 
   if (!isOpen) return null;
 

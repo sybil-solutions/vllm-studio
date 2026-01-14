@@ -1,40 +1,42 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
-  Sparkles, Copy, Check, Plus, GitBranch, X, BarChart3,
+  Sparkles, Copy, Check, GitBranch, X, BarChart3,
   PanelRightOpen, Bookmark, BookmarkCheck,
 } from 'lucide-react';
-import Link from 'next/link';
+import { shallow } from 'zustand/shallow';
 import { api } from '@/lib/api';
-import type { ChatSession, ToolCall, ToolResult, Artifact } from '@/lib/types';
+import { useAppStore, type ChatMessage } from '@/store';
+import type { ToolCall, ToolResult, Artifact } from '@/lib/types';
 import {
-  MessageRenderer, ChatSidebar, ToolBelt, MCPSettingsModal, ChatSettingsModal, extractArtifacts, ArtifactPanel,
+ ToolBelt, MCPSettingsModal, ChatSettingsModal, extractArtifacts, splitThinking,
 } from '@/components/chat';
 import { ResearchProgressIndicator, CitationsPanel } from '@/components/chat/research-progress';
 import { MessageSearch } from '@/components/chat/message-search';
-import type { Attachment, MCPServerConfig, DeepResearchSettings } from '@/components/chat';
-import type { ResearchProgress, ResearchSource } from '@/components/chat/research-progress';
-import { loadState, saveState, debouncedSave } from '@/lib/chat-state-persistence';
+import type { Attachment } from '@/components/chat';
+import { debouncedSave } from '@/lib/chat-state-persistence';
 import { useContextManager } from '@/hooks/useContextManager';
 import { ContextIndicator } from '@/components/chat/context-indicator';
-import type { CompactionEvent } from '@/lib/context-manager';
 
 // Local components, hooks and utils
-import { ChatMobileHeader, UsageModal, ExportModal, ChatMessageList, ChatSidePanel } from './components';
+import { UsageModal, ExportModal, ChatMessageList, ChatSidePanel } from './components';
 import { stripThinkingForModelContext, parseSSEEvents, downloadTextFile } from './utils';
-import type { StreamEvent } from './utils';
 
 // Types
-interface Message {
+type Message = ChatMessage;
+
+interface StoredToolCall extends ToolCall {
+  result?: { content?: string; isError?: boolean } | string | null;
+}
+
+interface StoredMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  images?: string[];
-  isStreaming?: boolean;
-  toolCalls?: ToolCall[];
-  toolResults?: ToolResult[];
   model?: string;
+  tool_calls?: StoredToolCall[];
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
@@ -45,11 +47,11 @@ interface Message {
   estimated_cost_usd?: number | null;
 }
 
-interface MCPTool {
-  server: string;
-  name: string;
-  description?: string;
-  inputSchema?: Record<string, unknown>;
+interface ChatSessionDetail {
+  id: string;
+  title: string;
+  model?: string;
+  messages?: StoredMessage[];
 }
 
 type OpenAIContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
@@ -59,77 +61,185 @@ type OpenAIMessage =
   | { role: 'tool'; tool_call_id: string; name?: string; content: string };
 
 export default function ChatPage() {
-  // Session state
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [currentSessionTitle, setCurrentSessionTitle] = useState('New Chat');
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sessionsAvailable, setSessionsAvailable] = useState(true);
+  const {
+    currentSessionId,
+    currentSessionTitle,
+    messages,
+    input,
+    isLoading,
+    error,
+    streamingStartTime,
+    elapsedSeconds,
+    queuedContext,
+    runningModel,
+    modelName,
+    selectedModel,
+    availableModels,
+    pageLoading,
+    copiedIndex,
+    isMobile,
+    toolPanelOpen,
+    activePanel,
+    mcpEnabled,
+    artifactsEnabled,
+    mcpServers,
+    mcpSettingsOpen,
+    mcpTools,
+    executingTools,
+    toolResultsMap,
+    systemPrompt,
+    chatSettingsOpen,
+    deepResearch,
+    researchProgress,
+    researchSources,
+    sessionUsage,
+    usageDetailsOpen,
+    exportOpen,
+    messageSearchOpen,
+    bookmarkedMessages,
+    userScrolledUp,
+  } = useAppStore((state) => ({
+    currentSessionId: state.currentSessionId,
+    currentSessionTitle: state.currentSessionTitle,
+    messages: state.messages,
+    input: state.input,
+    isLoading: state.isLoading,
+    error: state.error,
+    streamingStartTime: state.streamingStartTime,
+    elapsedSeconds: state.elapsedSeconds,
+    queuedContext: state.queuedContext,
+    runningModel: state.runningModel,
+    modelName: state.modelName,
+    selectedModel: state.selectedModel,
+    availableModels: state.availableModels,
+    pageLoading: state.pageLoading,
+    copiedIndex: state.copiedIndex,
+    isMobile: state.isMobile,
+    toolPanelOpen: state.toolPanelOpen,
+    activePanel: state.activePanel,
+    mcpEnabled: state.mcpEnabled,
+    artifactsEnabled: state.artifactsEnabled,
+    mcpServers: state.mcpServers,
+    mcpSettingsOpen: state.mcpSettingsOpen,
+    mcpTools: state.mcpTools,
+    executingTools: state.executingTools,
+    toolResultsMap: state.toolResultsMap,
+    systemPrompt: state.systemPrompt,
+    chatSettingsOpen: state.chatSettingsOpen,
+    deepResearch: state.deepResearch,
+    researchProgress: state.researchProgress,
+    researchSources: state.researchSources,
+    sessionUsage: state.sessionUsage,
+    usageDetailsOpen: state.usageDetailsOpen,
+    exportOpen: state.exportOpen,
+    messageSearchOpen: state.messageSearchOpen,
+    bookmarkedMessages: state.bookmarkedMessages,
+    userScrolledUp: state.userScrolledUp,
+  }), shallow);
 
-  // Message state
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    setSessions,
+    updateSessions,
+    setCurrentSessionId,
+    setCurrentSessionTitle,
+    setSessionsLoading,
+    setSessionsAvailable,
+    setMessages,
+    updateMessages,
+    setInput,
+    setIsLoading,
+    setError,
+    setStreamingStartTime,
+    setElapsedSeconds,
+    setQueuedContext,
+    setRunningModel,
+    setModelName,
+    setSelectedModel,
+    setAvailableModels,
+    setPageLoading,
+    setCopiedIndex,
+    setSidebarCollapsed,
+    setIsMobile,
+    setToolPanelOpen,
+    setActivePanel,
+    setMcpEnabled,
+    setArtifactsEnabled,
+    setMcpServers,
+    setMcpSettingsOpen,
+    setMcpTools,
+    updateExecutingTools,
+    setToolResultsMap,
+    updateToolResultsMap,
+    setSystemPrompt,
+    setChatSettingsOpen,
+    setDeepResearch,
+    setResearchProgress,
+    setResearchSources,
+    setSessionUsage,
+    setUsageDetailsOpen,
+    setExportOpen,
+    setMessageSearchOpen,
+    updateBookmarkedMessages,
+    setTitleDraft,
+    setUserScrolledUp,
+  } = useAppStore((state) => ({
+    setSessions: state.setSessions,
+    updateSessions: state.updateSessions,
+    setCurrentSessionId: state.setCurrentSessionId,
+    setCurrentSessionTitle: state.setCurrentSessionTitle,
+    setSessionsLoading: state.setSessionsLoading,
+    setSessionsAvailable: state.setSessionsAvailable,
+    setMessages: state.setMessages,
+    updateMessages: state.updateMessages,
+    setInput: state.setInput,
+    setIsLoading: state.setIsLoading,
+    setError: state.setError,
+    setStreamingStartTime: state.setStreamingStartTime,
+    setElapsedSeconds: state.setElapsedSeconds,
+    setQueuedContext: state.setQueuedContext,
+    setRunningModel: state.setRunningModel,
+    setModelName: state.setModelName,
+    setSelectedModel: state.setSelectedModel,
+    setAvailableModels: state.setAvailableModels,
+    setPageLoading: state.setPageLoading,
+    setCopiedIndex: state.setCopiedIndex,
+    setSidebarCollapsed: state.setSidebarCollapsed,
+    setIsMobile: state.setIsMobile,
+    setToolPanelOpen: state.setToolPanelOpen,
+    setActivePanel: state.setActivePanel,
+    setMcpEnabled: state.setMcpEnabled,
+    setArtifactsEnabled: state.setArtifactsEnabled,
+    setMcpServers: state.setMcpServers,
+    setMcpSettingsOpen: state.setMcpSettingsOpen,
+    setMcpTools: state.setMcpTools,
+    updateExecutingTools: state.updateExecutingTools,
+    setToolResultsMap: state.setToolResultsMap,
+    updateToolResultsMap: state.updateToolResultsMap,
+    setSystemPrompt: state.setSystemPrompt,
+    setChatSettingsOpen: state.setChatSettingsOpen,
+    setDeepResearch: state.setDeepResearch,
+    setResearchProgress: state.setResearchProgress,
+    setResearchSources: state.setResearchSources,
+    setSessionUsage: state.setSessionUsage,
+    setUsageDetailsOpen: state.setUsageDetailsOpen,
+    setExportOpen: state.setExportOpen,
+    setMessageSearchOpen: state.setMessageSearchOpen,
+    updateBookmarkedMessages: state.updateBookmarkedMessages,
+    setTitleDraft: state.setTitleDraft,
+    setUserScrolledUp: state.setUserScrolledUp,
+  }), shallow);
 
-  // Timer state
-  const [streamingStartTime, setStreamingStartTime] = useState<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [queuedContext, setQueuedContext] = useState('');
-
-  // Model state
-  const [runningModel, setRunningModel] = useState<string | null>(null);
-  const [modelName, setModelName] = useState('');
-  const [selectedModel, setSelectedModel] = useState('');
-  const [availableModels, setAvailableModels] = useState<Array<{ id: string; root?: string; max_model_len?: number }>>([]);
-  const [pageLoading, setPageLoading] = useState(true);
-
-  // UI state
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [toolPanelOpen, setToolPanelOpen] = useState(true);
-  const [activePanel, setActivePanel] = useState<'tools' | 'artifacts'>('tools');
-  const [sessionArtifacts, setSessionArtifacts] = useState<Artifact[]>([]);
-  const [historyDropdownOpen, setHistoryDropdownOpen] = useState(false);
-
-  // MCP state
-  const [mcpEnabled, setMcpEnabled] = useState(false);
-  const [artifactsEnabled, setArtifactsEnabled] = useState(false);
-  const [mcpServers, setMcpServers] = useState<MCPServerConfig[]>([]);
-  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
-  const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
-  const [executingTools, setExecutingTools] = useState<Set<string>>(new Set());
-  const [toolResultsMap, setToolResultsMap] = useState<Map<string, ToolResult>>(new Map());
-
-  // Chat settings
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
-
-  // Deep Research
-  const [deepResearch, setDeepResearch] = useState<DeepResearchSettings>({
-    enabled: false, numSources: 5, autoSummarize: true, includeCitations: true, searchDepth: 'normal',
-  });
-  const [researchProgress, setResearchProgress] = useState<ResearchProgress | null>(null);
-  const [researchSources, setResearchSources] = useState<ResearchSource[]>([]);
-
-  // Usage state
-  const [sessionUsage, setSessionUsage] = useState<{ prompt_tokens: number; completion_tokens: number; total_tokens: number; estimated_cost_usd?: number | null } | null>(null);
-  const [usageDetailsOpen, setUsageDetailsOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
   const usageRefreshTimerRef = useRef<number | null>(null);
-
-  // Other UI state
-  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
-  const [bookmarkedMessages, setBookmarkedMessages] = useState<Set<string>>(new Set());
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
+  const loadingSessionRef = useRef(false);
+  const activeSessionRef = useRef<string | null>(null);
+  const searchParams = useSearchParams();
+  const sessionFromUrl = searchParams.get('session');
+  const newChatFromUrl = searchParams.get('new') === '1';
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [userScrolledUp, setUserScrolledUp] = useState(false);
 
   // Context management
   const maxContext = useMemo(() => {
@@ -139,10 +249,10 @@ export default function ChatPage() {
 
   const contextMessages = useMemo(() => messages.map(m => ({ role: m.role, content: m.content })), [messages]);
 
-  const handleContextCompact = useCallback((newMessages: Array<{ role: string; content: string }>, event: CompactionEvent) => {
+  const handleContextCompact = useCallback((newMessages: Array<{ role: string; content: string }>) => {
     const compactedIds = new Set(newMessages.map((m, i) => messages[messages.length - newMessages.length + i]?.id).filter(Boolean));
-    setMessages(prev => prev.filter(m => compactedIds.has(m.id) || prev.indexOf(m) >= prev.length - newMessages.length));
-  }, [messages]);
+    updateMessages(prev => prev.filter(m => compactedIds.has(m.id) || prev.indexOf(m) >= prev.length - newMessages.length));
+  }, [messages, updateMessages]);
 
   const contextManager = useContextManager({
     messages: contextMessages, maxContext, systemPrompt,
@@ -150,92 +260,157 @@ export default function ChatPage() {
   });
 
   // Computed values
-  const hasToolActivity = messages.some(m => m.toolCalls?.length) || executingTools.size > 0 || researchProgress !== null;
-  const hasArtifacts = sessionArtifacts.length > 0;
-  const hasSidePanelContent = hasToolActivity || hasArtifacts;
   const allToolCalls = messages.flatMap(m => (m.toolCalls || []).map(tc => ({ ...tc, messageId: m.id, model: m.model })));
-
-  // Effects
-  useEffect(() => {
-    const checkMobile = () => { const mobile = window.innerWidth < 768; setIsMobile(mobile); if (mobile) setSidebarCollapsed(true); };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  useEffect(() => {
-    const restored = loadState();
-    if (restored.input) setInput(restored.input);
-    if (restored.mcpEnabled) setMcpEnabled(restored.mcpEnabled);
-    if (restored.artifactsEnabled) setArtifactsEnabled(restored.artifactsEnabled);
-    if (restored.systemPrompt) setSystemPrompt(restored.systemPrompt);
-    if (restored.selectedModel) setSelectedModel(restored.selectedModel);
-    try {
-      const dr = localStorage.getItem('vllm-studio-deep-research');
-      if (dr) setDeepResearch(JSON.parse(dr));
-    } catch {}
-  }, []);
-
-  useEffect(() => { debouncedSave({ mcpEnabled, artifactsEnabled, systemPrompt, selectedModel }, 1000); }, [mcpEnabled, artifactsEnabled, systemPrompt, selectedModel]);
-  useEffect(() => { loadStatus(); loadSessions(); loadMCPServers(); loadAvailableModels(); }, []);
-
-  useEffect(() => { if (!userScrolledUp) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, userScrolledUp]);
-  useEffect(() => { if (mcpEnabled) loadMCPTools(); else setMcpTools([]); }, [mcpEnabled]);
-
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-    if (isLoading && streamingStartTime) {
-      intervalId = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - streamingStartTime) / 1000)), 1000);
-    } else if (!isLoading) {
-      const timeoutId = setTimeout(() => { if (!isLoading) { setStreamingStartTime(null); setElapsedSeconds(0); } }, 3000);
-      return () => clearTimeout(timeoutId);
-    }
-    return () => { if (intervalId) clearInterval(intervalId); };
-  }, [isLoading, streamingStartTime]);
-
-  useEffect(() => {
-    if (!artifactsEnabled || !messages.length) { setSessionArtifacts([]); return; }
+  const latestAssistantMessage = useMemo(() => [...messages].reverse().find(m => m.role === 'assistant'), [messages]);
+  const thinkingState = useMemo(() => {
+    if (!latestAssistantMessage?.content) return { content: null, isComplete: true };
+    const { thinkingContent, isThinkingComplete } = splitThinking(latestAssistantMessage.content);
+    return { content: thinkingContent, isComplete: isThinkingComplete };
+  }, [latestAssistantMessage?.content]);
+  const thinkingActive = Boolean(isLoading && thinkingState.content);
+  const activityItems = useMemo(() => {
+    const items: Array<
+      | { type: 'thinking'; id: string; content: string; isComplete: boolean; isStreaming: boolean }
+      | { type: 'tool'; id: string; toolCall: ToolCall & { messageId: string; model?: string } }
+    > = [];
+    messages.forEach((msg) => {
+      if (msg.role !== 'assistant' || !msg.content) return;
+      const { thinkingContent, isThinkingComplete } = splitThinking(msg.content);
+      if (thinkingContent) {
+        items.push({
+          type: 'thinking',
+          id: `thinking-${msg.id}`,
+          content: thinkingContent,
+          isComplete: isThinkingComplete,
+          isStreaming: Boolean(msg.isStreaming),
+        });
+      }
+      msg.toolCalls?.forEach((toolCall) => {
+        items.push({
+          type: 'tool',
+          id: `tool-${msg.id}-${toolCall.id}`,
+          toolCall: { ...toolCall, messageId: msg.id, model: msg.model },
+        });
+      });
+    });
+    return items;
+  }, [messages]);
+  const sessionArtifacts = useMemo(() => {
+    if (!artifactsEnabled || !messages.length) return [];
     const artifacts: Artifact[] = [];
     messages.forEach(msg => {
-      if (msg.role === 'assistant' && msg.content) {
+      if (msg.role === 'assistant' && msg.content && !msg.isStreaming) {
         const { artifacts: extracted } = extractArtifacts(msg.content);
         extracted.forEach(a => artifacts.push({ ...a, message_id: msg.id, session_id: currentSessionId || undefined }));
       }
     });
-    setSessionArtifacts(artifacts);
-    if (artifacts.length > 0 && sessionArtifacts.length === 0) setActivePanel('artifacts');
-  }, [messages, artifactsEnabled, currentSessionId]);
+    return artifacts;
+  }, [artifactsEnabled, currentSessionId, messages]);
+  const hasArtifacts = sessionArtifacts.length > 0;
+  const hasToolActivity = messages.some(m => m.toolCalls?.length) || executingTools.size > 0 || researchProgress !== null || thinkingActive;
+  const hasSidePanelContent = hasToolActivity || hasArtifacts;
 
-  // Load functions
-  const loadAvailableModels = async () => { try { const res = await api.getOpenAIModels(); setAvailableModels((res.data || []).map((m: any) => ({ id: m.id, root: m.root, max_model_len: m.max_model_len }))); } catch { setAvailableModels([]); } };
-  const loadMCPServers = async () => { try { const servers = await api.getMCPServers(); setMcpServers(servers.map((s: any) => ({ ...s, args: s.args || [], env: s.env || {}, enabled: s.enabled ?? true }))); } catch {} };
-  const loadMCPTools = async () => { try { const response = await api.getMCPTools(); setMcpTools(response.tools || []); } catch { setMcpTools([]); } };
+  const loadAvailableModels = useCallback(async () => {
+    try {
+      const res = await api.getOpenAIModels();
+      setAvailableModels((res.data || []).map((m) => ({ id: m.id, root: m.root, max_model_len: m.max_model_len })));
+    } catch {
+      setAvailableModels([]);
+    }
+  }, [setAvailableModels]);
 
-  const loadStatus = async () => {
+  const loadMCPServers = useCallback(async () => {
+    try {
+      const servers = await api.getMCPServers();
+      setMcpServers(servers.map((s) => ({ ...s, args: s.args || [], env: s.env || {}, enabled: s.enabled ?? true })));
+    } catch {}
+  }, [setMcpServers]);
+
+  const loadMCPTools = useCallback(async () => {
+    try {
+      const response = await api.getMCPTools();
+      setMcpTools(response.tools || []);
+    } catch {
+      setMcpTools([]);
+    }
+  }, [setMcpTools]);
+
+  const loadStatus = useCallback(async () => {
     try {
       const status = await api.getStatus();
       if (status.process) {
         const modelId = status.process.served_model_name || status.process.model_path || 'default';
-        setRunningModel(modelId); setModelName(status.process.model_path?.split('/').pop() || 'Model'); setSelectedModel(prev => prev || modelId);
+        setRunningModel(modelId);
+        setModelName(status.process.model_path?.split('/').pop() || 'Model');
+        setSelectedModel(selectedModel || modelId);
       }
     } catch {} finally { setPageLoading(false); }
-  };
+  }, [selectedModel, setRunningModel, setModelName, setSelectedModel, setPageLoading]);
 
-  const loadSessions = async () => {
-    try { const data = await api.getChatSessions(); setSessions(data.sessions); setSessionsAvailable(true); if (currentSessionId) { const found = data.sessions.find((s: any) => s.id === currentSessionId); if (found?.title) setCurrentSessionTitle(found.title); } } catch { setSessions([]); setSessionsAvailable(false); } finally { setSessionsLoading(false); }
-  };
-
-  const loadSession = async (sessionId: string) => {
+  const loadSessions = useCallback(async () => {
     try {
-      const { session } = await api.getChatSession(sessionId);
-      setCurrentSessionId(session.id); setCurrentSessionTitle(session.title); setTitleDraft(session.title);
+      const data = await api.getChatSessions();
+      setSessions(data.sessions);
+      setSessionsAvailable(true);
+      if (currentSessionId) {
+        const found = data.sessions.find((s) => s.id === currentSessionId);
+        if (found?.title) setCurrentSessionTitle(found.title);
+      }
+    } catch {
+      setSessions([]);
+      setSessionsAvailable(false);
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, [currentSessionId, setCurrentSessionTitle, setSessions, setSessionsAvailable, setSessionsLoading]);
+
+  // Session helpers
+
+  const refreshUsage = useCallback(async (sessionId: string) => {
+    if (!sessionId) return;
+    if (usageRefreshTimerRef.current) window.clearTimeout(usageRefreshTimerRef.current);
+    usageRefreshTimerRef.current = window.setTimeout(async () => {
+      try {
+        const usage = await api.getChatUsage(sessionId);
+        setSessionUsage({
+          prompt_tokens: usage.prompt_tokens,
+          completion_tokens: usage.completion_tokens,
+          total_tokens: usage.total_tokens,
+          estimated_cost_usd: usage.estimated_cost_usd ?? null,
+        });
+      } catch {}
+    }, 500);
+  }, [setSessionUsage]);
+
+  const loadSession = useCallback(async (sessionId: string) => {
+    if (!sessionId || loadingSessionRef.current) return;
+    loadingSessionRef.current = true;
+    try {
+      const { session } = await api.getChatSession(sessionId) as { session: ChatSessionDetail };
+      if (activeSessionRef.current && activeSessionRef.current !== session.id) return;
+      setCurrentSessionId(session.id);
+      setCurrentSessionTitle(session.title);
+      setTitleDraft(session.title);
       if (session.model) setSelectedModel(session.model);
-      const msgs: Message[] = (session.messages || []).map((m: any) => {
+      const msgs: Message[] = (session.messages || []).map((m) => {
         const toolCalls = m.tool_calls || [];
         // Extract tool results from embedded tc.result (how they're stored in DB)
         const toolResults = toolCalls
-          .filter((tc: any) => tc.result)
-          .map((tc: any) => ({ tool_call_id: tc.id, content: tc.result.content || tc.result, isError: tc.result.isError }));
+          .filter((tc) => tc.result)
+          .map((tc) => {
+            const rawResult = tc.result;
+            const content = typeof rawResult === 'string'
+              ? rawResult
+              : rawResult && typeof rawResult === 'object' && 'content' in rawResult
+                ? String(rawResult.content ?? '')
+                : rawResult != null
+                  ? JSON.stringify(rawResult)
+                  : '';
+            const isError = rawResult && typeof rawResult === 'object' && 'isError' in rawResult
+              ? Boolean((rawResult as { isError?: boolean }).isError)
+              : undefined;
+            return { tool_call_id: tc.id, content, isError };
+          });
         return {
           id: m.id, role: m.role, content: m.content, model: m.model,
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
@@ -246,18 +421,79 @@ export default function ChatPage() {
           estimated_cost_usd: m.estimated_cost_usd,
         };
       });
-      setMessages(msgs); setToolResultsMap(new Map()); refreshUsage(session.id); setSidebarCollapsed(isMobile);
-    } catch { console.log('Failed to load session'); }
-  };
+      setMessages(msgs);
+      setToolResultsMap(new Map());
+      refreshUsage(session.id);
+      setSidebarCollapsed(isMobile);
+    } catch {
+      console.log('Failed to load session');
+    } finally {
+      loadingSessionRef.current = false;
+    }
+  }, [isMobile, refreshUsage, setCurrentSessionId, setCurrentSessionTitle, setMessages, setSelectedModel, setSidebarCollapsed, setTitleDraft, setToolResultsMap]);
 
-  const createSession = () => { setCurrentSessionId(null); setCurrentSessionTitle('New Chat'); setTitleDraft(''); setMessages([]); setToolResultsMap(new Map()); setSessionUsage(null); setResearchSources([]); setSidebarCollapsed(isMobile); };
-  const deleteSession = async (sessionId: string) => { try { await api.deleteChatSession(sessionId); setSessions(prev => prev.filter(s => s.id !== sessionId)); if (currentSessionId === sessionId) createSession(); } catch {} };
+  // Effects
+  useEffect(() => {
+    const checkMobile = () => { const mobile = window.innerWidth < 768; setIsMobile(mobile); if (mobile) setSidebarCollapsed(true); };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [setIsMobile, setSidebarCollapsed]);
 
-  const refreshUsage = async (sessionId: string) => {
-    if (!sessionId) return;
-    if (usageRefreshTimerRef.current) window.clearTimeout(usageRefreshTimerRef.current);
-    usageRefreshTimerRef.current = window.setTimeout(async () => { try { const usage = await api.getChatUsage(sessionId); setSessionUsage({ prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens, total_tokens: usage.total_tokens, estimated_cost_usd: usage.estimated_cost_usd ?? null }); } catch {} }, 500);
-  };
+  useEffect(() => { debouncedSave({ mcpEnabled, artifactsEnabled, systemPrompt, selectedModel }, 1000); }, [mcpEnabled, artifactsEnabled, systemPrompt, selectedModel]);
+  useEffect(() => { loadStatus(); loadSessions(); loadMCPServers(); loadAvailableModels(); }, [loadAvailableModels, loadMCPServers, loadSessions, loadStatus]);
+
+  useEffect(() => {
+    if (newChatFromUrl) {
+      activeSessionRef.current = null;
+      setCurrentSessionId(null);
+      setCurrentSessionTitle('New Chat');
+      setTitleDraft('New Chat');
+      setMessages([]);
+      setToolResultsMap(new Map());
+      updateExecutingTools(() => new Set());
+      setResearchProgress(null);
+      setResearchSources([]);
+      setSessionUsage(null);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!sessionFromUrl) return;
+
+    if (activeSessionRef.current !== sessionFromUrl) {
+      activeSessionRef.current = sessionFromUrl;
+      setMessages([]);
+      setToolResultsMap(new Map());
+      updateExecutingTools(() => new Set());
+      setResearchProgress(null);
+      setResearchSources([]);
+      setSessionUsage(null);
+      setError(null);
+      setIsLoading(false);
+      loadSession(sessionFromUrl);
+    }
+  }, [loadSession, newChatFromUrl, sessionFromUrl, setCurrentSessionId, setCurrentSessionTitle, setError, setIsLoading, setMessages, setResearchProgress, setResearchSources, setSessionUsage, setTitleDraft, setToolResultsMap, updateExecutingTools]);
+
+  useEffect(() => { if (!userScrolledUp) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, userScrolledUp]);
+  useEffect(() => { if (mcpEnabled) loadMCPTools(); else setMcpTools([]); }, [loadMCPTools, mcpEnabled, setMcpTools]);
+  useEffect(() => {
+    if (sessionArtifacts.length > 0 && activePanel === 'tools' && !hasToolActivity) {
+      setActivePanel('artifacts');
+    }
+  }, [activePanel, hasToolActivity, sessionArtifacts.length, setActivePanel]);
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    if (isLoading && streamingStartTime) {
+      intervalId = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - streamingStartTime) / 1000)), 1000);
+    } else if (!isLoading) {
+      const timeoutId = setTimeout(() => { if (!isLoading) { setStreamingStartTime(null); setElapsedSeconds(0); } }, 3000);
+      return () => clearTimeout(timeoutId);
+    }
+    return () => { if (intervalId) clearInterval(intervalId); };
+  }, [isLoading, setElapsedSeconds, setStreamingStartTime, streamingStartTime]);
 
   const handleScroll = () => { const container = messagesContainerRef.current; if (!container) return; const { scrollTop, scrollHeight, clientHeight } = container; setUserScrolledUp(scrollHeight - scrollTop - clientHeight >= 100); };
 
@@ -291,17 +527,20 @@ export default function ChatPage() {
   // Send message
   const sendMessage = async (attachments?: Attachment[]) => {
     const hasText = input.trim().length > 0; const hasAttachments = attachments?.length; const activeModelId = (selectedModel || runningModel || '').trim();
-    if ((!hasText && !hasAttachments) || !activeModelId || isLoading) return;
+    if ((!hasText && !hasAttachments) || !activeModelId || isLoading || loadingSessionRef.current) return;
     const userContent = input.trim(); const imageAttachments = attachments?.filter(a => a.type === 'image' && a.base64) || [];
     const userMessage: Message = { id: Date.now().toString(), role: 'user', content: userContent || (imageAttachments.length ? '[Image]' : '...'), images: imageAttachments.map(a => a.base64!), model: activeModelId };
-    setMessages(prev => [...prev, userMessage]); setInput(''); setIsLoading(true); setStreamingStartTime(Date.now()); setElapsedSeconds(0); setError(null);
+    updateMessages(prev => [...prev, userMessage]); setInput(''); setIsLoading(true); setStreamingStartTime(Date.now()); setElapsedSeconds(0); setError(null);
     abortControllerRef.current = new AbortController();
-    let conversationMessages = buildAPIMessages([...messages, userMessage]); let sessionId = currentSessionId; let finalAssistantContent = '';
-    const bumpSessionUpdatedAt = () => { if (!sessionId) return; setSessions(prev => { const existing = prev.find(s => s.id === sessionId); const updated = existing ? { ...existing, updated_at: new Date().toISOString() } : undefined; return updated ? [updated, ...prev.filter(s => s.id !== sessionId)] : prev; }); };
+    const conversationMessages = buildAPIMessages([...messages, userMessage]);
+    let sessionId = currentSessionId || sessionFromUrl || activeSessionRef.current || null;
+    if (sessionFromUrl && !currentSessionId) setCurrentSessionId(sessionFromUrl);
+    let finalAssistantContent = '';
+    const bumpSessionUpdatedAt = () => { if (!sessionId) return; updateSessions(prev => { const existing = prev.find(s => s.id === sessionId); const updated = existing ? { ...existing, updated_at: new Date().toISOString() } : undefined; return updated ? [updated, ...prev.filter(s => s.id !== sessionId)] : prev; }); };
 
     try {
-      if (!sessionId) { try { const { session } = await api.createChatSession({ title: 'New Chat', model: activeModelId || undefined }); sessionId = session.id; setCurrentSessionId(sessionId); setSessions(prev => [session, ...prev]); setSessionsAvailable(true); } catch {} }
-      if (sessionId) { try { const persisted = await api.addChatMessage(sessionId, { id: userMessage.id, role: 'user', content: userContent, model: activeModelId }); setMessages(prev => prev.map(m => m.id === persisted.id ? { ...m, ...persisted } : m)); bumpSessionUpdatedAt(); refreshUsage(sessionId); } catch {} }
+      if (!sessionId) { try { const { session } = await api.createChatSession({ title: 'New Chat', model: activeModelId || undefined }); sessionId = session.id; setCurrentSessionId(sessionId); updateSessions(prev => [session, ...prev]); setSessionsAvailable(true); } catch {} }
+      if (sessionId) { try { const persisted = await api.addChatMessage(sessionId, { id: userMessage.id, role: 'user', content: userContent, model: activeModelId }); updateMessages(prev => prev.map(m => m.id === persisted.id ? { ...m, ...persisted } : m)); bumpSessionUpdatedAt(); refreshUsage(sessionId); } catch {} }
 
       let iteration = 0; const MAX_ITERATIONS = 25; const cachedToolResultsBySignature = new Map<string, Omit<ToolResult, 'tool_call_id'>>();
       while (iteration < MAX_ITERATIONS) {
@@ -312,42 +551,69 @@ export default function ChatPage() {
         if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         const reader = response.body?.getReader(); if (!reader) throw new Error('No response body');
         const assistantMsgId = (Date.now() + iteration).toString();
-        setMessages(prev => [...prev, { id: assistantMsgId, role: 'assistant', content: '', isStreaming: true, model: activeModelId }]);
+        updateMessages(prev => [...prev, { id: assistantMsgId, role: 'assistant', content: '', isStreaming: true, model: activeModelId }]);
         let iterationContent = ''; let toolCalls: ToolCall[] = [];
+        let pendingContent = ''; let pendingToolCalls: ToolCall[] | null = null; let frameId: number | null = null;
+        const flushAssistantUpdate = (force = false) => {
+          const applyUpdate = () => {
+            frameId = null;
+            if (!pendingContent && !pendingToolCalls) return;
+            updateMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: pendingContent || iterationContent, toolCalls: pendingToolCalls ?? m.toolCalls } : m));
+            pendingContent = '';
+            pendingToolCalls = null;
+          };
+          if (force) { if (frameId !== null) window.cancelAnimationFrame(frameId); applyUpdate(); return; }
+          if (frameId === null) frameId = window.requestAnimationFrame(applyUpdate);
+        };
         for await (const event of parseSSEEvents(reader)) {
-          if (event.type === 'text' && event.content) { iterationContent += event.content; setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: iterationContent } : m)); }
-          else if (event.type === 'tool_calls' && event.tool_calls) { toolCalls = event.tool_calls as ToolCall[]; setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, toolCalls } : m)); }
+          if (event.type === 'text' && event.content) { iterationContent += event.content; pendingContent = iterationContent; flushAssistantUpdate(); }
+          else if (event.type === 'tool_calls' && event.tool_calls) { toolCalls = event.tool_calls as ToolCall[]; pendingToolCalls = toolCalls; flushAssistantUpdate(true); }
           else if (event.type === 'error') { throw new Error(event.error || 'Stream error'); }
         }
+        flushAssistantUpdate(true);
         if (!toolCalls.length) {
-          finalAssistantContent = iterationContent; setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, isStreaming: false } : m));
-          if (sessionId) { try { const persisted = await api.addChatMessage(sessionId, { id: assistantMsgId, role: 'assistant', content: iterationContent, model: activeModelId }); setMessages(prev => prev.map(m => m.id === persisted.id ? { ...m, ...persisted } : m)); bumpSessionUpdatedAt(); refreshUsage(sessionId); } catch {} }
+          finalAssistantContent = iterationContent; updateMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, isStreaming: false } : m));
+          if (sessionId) { try { const persisted = await api.addChatMessage(sessionId, { id: assistantMsgId, role: 'assistant', content: iterationContent, model: activeModelId }); updateMessages(prev => prev.map(m => m.id === persisted.id ? { ...m, ...persisted } : m)); bumpSessionUpdatedAt(); refreshUsage(sessionId); } catch {} }
           break;
         }
         const toolResults: ToolResult[] = []; const toolNameByCallId = new Map<string, string>();
         for (const tc of toolCalls) {
           const signature = `${tc.function?.name}:${tc.function?.arguments}`; toolNameByCallId.set(tc.id, tc.function.name);
-          if (cachedToolResultsBySignature.has(signature)) { const cached = cachedToolResultsBySignature.get(signature)!; toolResults.push({ tool_call_id: tc.id, ...cached }); setToolResultsMap(prev => new Map(prev).set(tc.id, { tool_call_id: tc.id, ...cached })); continue; }
-          setExecutingTools(prev => new Set(prev).add(tc.id)); const result = await executeMCPTool(tc); cachedToolResultsBySignature.set(signature, { content: result.content, isError: result.isError }); toolResults.push(result); setToolResultsMap(prev => new Map(prev).set(tc.id, result)); setExecutingTools(prev => { const next = new Set(prev); next.delete(tc.id); return next; });
+          if (cachedToolResultsBySignature.has(signature)) { const cached = cachedToolResultsBySignature.get(signature)!; toolResults.push({ tool_call_id: tc.id, ...cached }); updateToolResultsMap(prev => { const next = new Map(prev); next.set(tc.id, { tool_call_id: tc.id, ...cached }); return next; }); continue; }
+          updateExecutingTools(prev => { const next = new Set(prev); next.add(tc.id); return next; }); const result = await executeMCPTool(tc); cachedToolResultsBySignature.set(signature, { content: result.content, isError: result.isError }); toolResults.push(result); updateToolResultsMap(prev => { const next = new Map(prev); next.set(tc.id, result); return next; }); updateExecutingTools(prev => { const next = new Set(prev); next.delete(tc.id); return next; });
         }
-        setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, toolResults, isStreaming: false } : m));
+        updateMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, toolResults, isStreaming: false } : m));
         if (sessionId) { try { await api.addChatMessage(sessionId, { id: assistantMsgId, role: 'assistant', content: iterationContent, model: activeModelId, tool_calls: toolCalls.map(tc => ({ ...tc, result: toolResults.find(r => r.tool_call_id === tc.id) || null })) }); bumpSessionUpdatedAt(); refreshUsage(sessionId); } catch {} }
         const cleanedContent = stripThinkingForModelContext(iterationContent);
         conversationMessages.push({ role: 'assistant', content: cleanedContent || null, tool_calls: toolCalls.map(tc => ({ id: tc.id, type: 'function', function: { name: tc.function.name, arguments: tc.function.arguments } })) });
         toolResults.forEach(r => conversationMessages.push({ role: 'tool', tool_call_id: r.tool_call_id, name: toolNameByCallId.get(r.tool_call_id), content: r.content }));
       }
-      if (!currentSessionId && sessionId && finalAssistantContent.trim()) { try { const res = await fetch('/api/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: activeModelId, user: userContent, assistant: finalAssistantContent }) }); if (res.ok) { const data = await res.json(); if (data.title) { await api.updateChatSession(sessionId, { title: data.title }); setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: data.title } : s)); setCurrentSessionTitle(data.title); setTitleDraft(data.title); } } } catch {} }
+      if (!currentSessionId && sessionId && finalAssistantContent.trim()) { try { const res = await fetch('/api/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: activeModelId, user: userContent, assistant: finalAssistantContent }) }); if (res.ok) { const data = await res.json(); if (data.title) { await api.updateChatSession(sessionId, { title: data.title }); updateSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: data.title } : s)); setCurrentSessionTitle(data.title); setTitleDraft(data.title); } } } catch {} }
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') { setMessages(prev => { const last = prev[prev.length - 1]; return last?.role === 'assistant' ? prev.map(m => m.id === last.id ? { ...m, isStreaming: false } : m) : prev; }); }
-      else { setError(err instanceof Error ? err.message : 'Failed to send message'); setMessages(prev => prev[prev.length - 1]?.role === 'assistant' && !prev[prev.length - 1]?.content ? prev.slice(0, -1) : prev); }
+      if (err instanceof Error && err.name === 'AbortError') { updateMessages(prev => { const last = prev[prev.length - 1]; return last?.role === 'assistant' ? prev.map(m => m.id === last.id ? { ...m, isStreaming: false } : m) : prev; }); }
+      else { setError(err instanceof Error ? err.message : 'Failed to send message'); updateMessages(prev => prev[prev.length - 1]?.role === 'assistant' && !prev[prev.length - 1]?.content ? prev.slice(0, -1) : prev); }
     } finally { setIsLoading(false); abortControllerRef.current = null; }
   };
 
   const stopGeneration = () => abortControllerRef.current?.abort();
   const copyToClipboard = (text: string, index: number) => { navigator.clipboard.writeText(text); setCopiedIndex(index); setTimeout(() => setCopiedIndex(null), 2000); };
-  const forkAtMessage = async (messageId: string) => { if (!currentSessionId) return; try { const { session } = await api.forkChatSession(currentSessionId, { message_id: messageId, model: selectedModel || undefined }); setSessions(prev => [session, ...prev]); await loadSession(session.id); } catch {} };
-  const toggleBookmark = (messageId: string) => { setBookmarkedMessages(prev => { const next = new Set(prev); next.has(messageId) ? next.delete(messageId) : next.add(messageId); return next; }); };
-  const copyLastResponse = () => { const last = [...messages].reverse().find(m => m.role === 'assistant'); if (last) copyToClipboard(last.content, messages.indexOf(last)); };
+  const forkAtMessage = async (messageId: string) => { if (!currentSessionId) return; try { const { session } = await api.forkChatSession(currentSessionId, { message_id: messageId, model: selectedModel || undefined }); updateSessions(prev => [session, ...prev]); await loadSession(session.id); } catch {} };
+  const toggleBookmark = (messageId: string) => {
+    updateBookmarkedMessages(prev => {
+      const next = new Set(prev);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  };
+  const copyLastResponse = () => {
+    const last = [...messages].reverse().find(m => m.role === 'assistant');
+    if (!last) return;
+    copyToClipboard(last.content, messages.indexOf(last));
+  };
 
   // Export functions
   const buildChatExport = () => ({ title: currentSessionTitle || 'Chat', session_id: currentSessionId, model: selectedModel || runningModel || null, messages: messages.map(m => ({ id: m.id, role: m.role, model: m.model ?? null, content: m.content, tool_calls: m.toolCalls ?? null, tool_results: m.toolResults ?? null })), session_usage: sessionUsage });
@@ -388,7 +654,7 @@ export default function ChatPage() {
                           {currentSessionId && <button onClick={() => forkAtMessage(messages[messages.length - 1].id)} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-[var(--accent)] text-[#8a8580]"><GitBranch className="h-3.5 w-3.5" /><span className="text-xs">Fork</span></button>}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-[#6a6560]">
-                          <ContextIndicator stats={contextManager.stats} config={contextManager.config} onCompact={contextManager.compact} onUpdateConfig={contextManager.updateConfig} isWarning={contextManager.isWarning} isCritical={contextManager.isCritical} canSendMessage={contextManager.canSendMessage} utilizationLevel={contextManager.utilizationLevel} />
+                          <ContextIndicator stats={contextManager.stats} config={contextManager.config} onCompact={contextManager.compact} onUpdateConfig={contextManager.updateConfig} isWarning={contextManager.isWarning} canSendMessage={contextManager.canSendMessage} utilizationLevel={contextManager.utilizationLevel} />
                           {sessionUsage && (<><span className="text-[#4a4540]">•</span><div className="flex items-center gap-1 cursor-pointer hover:text-[#9a9590]" onClick={() => setUsageDetailsOpen(true)}><BarChart3 className="h-3 w-3" /><span>{sessionUsage.total_tokens.toLocaleString()} total</span>{sessionUsage.estimated_cost_usd != null && <span className="text-[#8a8580]">(${sessionUsage.estimated_cost_usd.toFixed(4)})</span>}</div></>)}
                         </div>
                       </div>
@@ -398,14 +664,14 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {!isMobile && hasSidePanelContent && !toolPanelOpen && <button onClick={() => setToolPanelOpen(true)} className="absolute right-3 top-3 p-1.5 bg-[var(--card)] border border-[var(--border)] rounded hover:bg-[var(--accent)] z-10" title="Show tools"><PanelRightOpen className="h-4 w-4 text-[#9a9590]" />{executingTools.size > 0 && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[var(--success)] rounded-full text-[9px] text-white font-medium">{executingTools.size}</span>}</button>}
+              {!isMobile && hasSidePanelContent && !toolPanelOpen && <button onClick={() => setToolPanelOpen(true)} className="absolute right-3 top-3 p-1.5 bg-[var(--card)] border border-[var(--border)] rounded hover:bg-[var(--accent)] z-10" title="Show tools"><PanelRightOpen className="h-4 w-4 text-[#9a9590]" />{(executingTools.size > 0 || thinkingActive) && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[var(--success)] rounded-full text-[9px] text-white font-medium">{executingTools.size || '•'}</span>}</button>}
 
               <div className="flex-shrink-0 pb-0 md:pb-3">
-                <ToolBelt value={input} onChange={setInput} onSubmit={sendMessage} onStop={stopGeneration} disabled={!((selectedModel || runningModel || '').trim())} isLoading={isLoading} modelName={selectedModel || modelName} placeholder={(selectedModel || runningModel) ? 'Message...' : 'Select a model in Settings'} mcpEnabled={mcpEnabled} onMcpToggle={() => setMcpEnabled(!mcpEnabled)} mcpServers={mcpServers.map(s => ({ name: s.name, enabled: s.enabled }))} artifactsEnabled={artifactsEnabled} onArtifactsToggle={() => setArtifactsEnabled(!artifactsEnabled)} onOpenMcpSettings={() => setMcpSettingsOpen(true)} onOpenChatSettings={() => setChatSettingsOpen(true)} hasSystemPrompt={systemPrompt.trim().length > 0} deepResearchEnabled={deepResearch.enabled} onDeepResearchToggle={() => { setDeepResearch(p => ({ ...p, enabled: !p.enabled })); if (!deepResearch.enabled && !mcpEnabled) setMcpEnabled(true); }} elapsedSeconds={elapsedSeconds} queuedContext={queuedContext} onQueuedContextChange={setQueuedContext} />
+                <ToolBelt value={input} onChange={setInput} onSubmit={sendMessage} onStop={stopGeneration} disabled={!((selectedModel || runningModel || '').trim())} isLoading={isLoading} placeholder={(selectedModel || runningModel) ? 'Message...' : 'Select a model in Settings'} mcpEnabled={mcpEnabled} onMcpToggle={() => setMcpEnabled(!mcpEnabled)} artifactsEnabled={artifactsEnabled} onArtifactsToggle={() => setArtifactsEnabled(!artifactsEnabled)} onOpenMcpSettings={() => setMcpSettingsOpen(true)} onOpenChatSettings={() => setChatSettingsOpen(true)} hasSystemPrompt={systemPrompt.trim().length > 0} deepResearchEnabled={deepResearch.enabled} onDeepResearchToggle={() => { const nextEnabled = !deepResearch.enabled; setDeepResearch({ ...deepResearch, enabled: nextEnabled }); if (nextEnabled && !mcpEnabled) setMcpEnabled(true); }} elapsedSeconds={elapsedSeconds} queuedContext={queuedContext} onQueuedContextChange={setQueuedContext} />
               </div>
             </div>
 
-            {!isMobile && hasSidePanelContent && toolPanelOpen && <ChatSidePanel isOpen={toolPanelOpen} onClose={() => setToolPanelOpen(false)} activePanel={activePanel} onSetActivePanel={setActivePanel} allToolCalls={allToolCalls} toolResultsMap={toolResultsMap} executingTools={executingTools} sessionArtifacts={sessionArtifacts} researchProgress={researchProgress} researchSources={researchSources} />}
+            {!isMobile && hasSidePanelContent && toolPanelOpen && <ChatSidePanel isOpen={toolPanelOpen} onClose={() => setToolPanelOpen(false)} activePanel={activePanel} onSetActivePanel={setActivePanel} allToolCalls={allToolCalls} toolResultsMap={toolResultsMap} executingTools={executingTools} sessionArtifacts={sessionArtifacts} researchProgress={researchProgress} researchSources={researchSources} thinkingContent={thinkingState.content} thinkingActive={thinkingActive} thinkingComplete={thinkingState.isComplete} activityItems={activityItems} />}
           </div>
         </div>
       </div>
@@ -413,7 +679,7 @@ export default function ChatPage() {
       <UsageModal isOpen={usageDetailsOpen} onClose={() => setUsageDetailsOpen(false)} sessionUsage={sessionUsage} messages={messages} selectedModel={selectedModel} />
       <ExportModal isOpen={exportOpen} onClose={() => setExportOpen(false)} onExportMarkdown={exportAsMarkdown} onExportJson={exportAsJson} />
       <MCPSettingsModal isOpen={mcpSettingsOpen} onClose={() => setMcpSettingsOpen(false)} servers={mcpServers} onServersChange={setMcpServers} />
-      <ChatSettingsModal isOpen={chatSettingsOpen} onClose={() => setChatSettingsOpen(false)} systemPrompt={systemPrompt} onSystemPromptChange={setSystemPrompt} availableModels={availableModels} selectedModel={selectedModel} onSelectedModelChange={async (modelId) => { setSelectedModel((modelId || '').trim()); if (currentSessionId) { try { await api.updateChatSession(currentSessionId, { model: modelId || undefined }); setSessions(p => p.map(s => s.id === currentSessionId ? { ...s, model: modelId } : s)); } catch {} } }} onForkModels={async (modelIds) => { if (!currentSessionId) return; for (const m of modelIds) { try { const { session } = await api.forkChatSession(currentSessionId, { model: m }); setSessions(p => [session, ...p]); } catch {} } await loadSessions(); }} deepResearch={deepResearch} onDeepResearchChange={s => { setDeepResearch(s); localStorage.setItem('vllm-studio-deep-research', JSON.stringify(s)); if (s.enabled && !mcpEnabled) setMcpEnabled(true); }} />
+      <ChatSettingsModal isOpen={chatSettingsOpen} onClose={() => setChatSettingsOpen(false)} systemPrompt={systemPrompt} onSystemPromptChange={setSystemPrompt} availableModels={availableModels} selectedModel={selectedModel} onSelectedModelChange={async (modelId) => { setSelectedModel((modelId || '').trim()); if (currentSessionId) { try { await api.updateChatSession(currentSessionId, { model: modelId || undefined }); updateSessions(p => p.map(s => s.id === currentSessionId ? { ...s, model: modelId } : s)); } catch {} } }} onForkModels={async (modelIds) => { if (!currentSessionId) return; for (const m of modelIds) { try { const { session } = await api.forkChatSession(currentSessionId, { model: m }); updateSessions(p => [session, ...p]); } catch {} } await loadSessions(); }} deepResearch={deepResearch} onDeepResearchChange={s => { setDeepResearch(s); localStorage.setItem('vllm-studio-deep-research', JSON.stringify(s)); if (s.enabled && !mcpEnabled) setMcpEnabled(true); }} />
     </>
   );
 }

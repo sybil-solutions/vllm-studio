@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Search,
   Square,
-  Trash2,
   X,
 } from 'lucide-react';
 import api from '@/lib/api';
@@ -84,10 +83,7 @@ function RecipesContent() {
 
   const loadRecipes = useCallback(async () => {
     try {
-      const [recipesData, statusData] = await Promise.all([
-        api.getRecipes().catch(() => ({ recipes: [] as RecipeWithStatus[] })),
-        api.getStatus().catch(() => ({ running: false })),
-      ]);
+      const recipesData = await api.getRecipes().catch(() => ({ recipes: [] as RecipeWithStatus[] }));
       const recipesList = recipesData.recipes || [];
       setRecipes(recipesList);
       const running = recipesList.find((r) => r.status === 'running')?.id || null;
@@ -514,7 +510,7 @@ function RecipesContent() {
           <div className="bg-[#1b1b1b] border border-[#363432] rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Delete Recipe</h3>
             <p className="text-sm text-[#9a9088] mb-6">
-              Are you sure you want to delete "{recipes.find(r => r.id === deleteConfirm)?.name}"?
+              Are you sure you want to delete &quot;{recipes.find(r => r.id === deleteConfirm)?.name}&quot;?
             </p>
             <div className="flex gap-3 justify-end">
               <button

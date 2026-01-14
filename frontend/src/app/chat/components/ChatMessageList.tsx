@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Copy, Check, GitBranch, Sparkles } from 'lucide-react';
 import { MessageRenderer } from '@/components/chat';
 import { ToolCallCard } from '@/components/chat/tool-call-card';
@@ -146,11 +147,14 @@ function UserMessage({ message, index, copiedIndex, onCopy }: UserMessageProps) 
       {message.images && message.images.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-3">
           {message.images.map((base64, i) => (
-            <img
+            <Image
               key={i}
               src={`data:image/jpeg;base64,${base64}`}
               alt=""
-              className="max-w-[140px] max-h-[140px] rounded-xl border border-[#363432]"
+              width={140}
+              height={140}
+              className="max-w-[140px] max-h-[140px] rounded-xl border border-[#363432] h-auto w-auto"
+              unoptimized
             />
           ))}
         </div>

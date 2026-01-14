@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bookmark, BookmarkCheck, ThumbsUp, ThumbsDown, Copy, Check, MoreVertical } from 'lucide-react';
+import { Bookmark, BookmarkCheck, ThumbsUp, ThumbsDown, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MessageActionsProps {
@@ -20,7 +20,6 @@ export function MessageActions({ content, messageId, onBookmark, onReact }: Mess
   const [copied, setCopied] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [reaction, setReaction] = useState<Reaction | null>(null);
-  const [showMenu, setShowMenu] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);

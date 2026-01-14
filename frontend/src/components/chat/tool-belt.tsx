@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import {
   Paperclip,
   Image as ImageIcon,
@@ -18,7 +19,6 @@ import {
   SlidersHorizontal,
   Brain,
   Clock,
-  Plus,
   Loader2,
 } from 'lucide-react';
 
@@ -45,12 +45,10 @@ interface ToolBeltProps {
   disabled?: boolean;
   isLoading?: boolean;
   placeholder?: string;
-  modelName?: string;
   onStop?: () => void;
   // MCP & Artifacts toggles
   mcpEnabled?: boolean;
   onMcpToggle?: () => void;
-  mcpServers?: MCPServer[];
   artifactsEnabled?: boolean;
   onArtifactsToggle?: () => void;
   onOpenMcpSettings?: () => void;
@@ -74,11 +72,9 @@ export function ToolBelt({
   disabled,
   isLoading,
   placeholder = 'Message...',
-  modelName,
   onStop,
   mcpEnabled = false,
   onMcpToggle,
-  mcpServers = [],
   artifactsEnabled = false,
   onArtifactsToggle,
   onOpenMcpSettings,
@@ -262,6 +258,7 @@ export function ToolBelt({
   };
 
   const handleSubmit = () => {
+    if (isLoading) return;
     if ((!value.trim() && attachments.length === 0) || disabled) return;
     onSubmit(attachments.length > 0 ? [...attachments] : undefined);
     setAttachments([]);
@@ -288,10 +285,13 @@ export function ToolBelt({
                 {attachment.type === 'image' ? (
                   <div className="flex items-center gap-2">
                     {attachment.url && (
-                      <img
+                      <Image
                         src={attachment.url}
                         alt={attachment.name}
+                        width={40}
+                        height={40}
                         className="w-10 h-10 rounded object-cover"
+                        unoptimized
                       />
                     )}
                     <div className="text-xs">

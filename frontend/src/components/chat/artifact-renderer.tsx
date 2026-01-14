@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Code,
   Eye,
@@ -9,7 +9,6 @@ import {
   Palette,
   Maximize2,
   Minimize2,
-  X,
   Download,
   Share2,
   Copy,
@@ -52,11 +51,10 @@ const SVG_TEMPLATE = (svgCode: string) => `
 
 interface ArtifactRendererProps {
   artifact: Artifact;
-  onRun?: () => void;
 }
 
-export function ArtifactRenderer({ artifact, onRun }: ArtifactRendererProps) {
-  const [showPreview, setShowPreview] = useState(true);
+export function ArtifactRenderer({ artifact }: ArtifactRendererProps) {
+  const showPreview = true;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -93,7 +91,7 @@ export function ArtifactRenderer({ artifact, onRun }: ArtifactRendererProps) {
           title: artifact.title || 'Code Artifact',
           text: artifact.code,
         });
-      } catch (e) {
+      } catch {
         // User cancelled or share failed
         handleCopy(); // Fallback to copy
       }
@@ -131,7 +129,7 @@ export function ArtifactRenderer({ artifact, onRun }: ArtifactRendererProps) {
   }, [artifact.type]);
 
   // Toolbar buttons for SVG artifacts
-  const SvgToolbarButtons = ({ inFooter = false }: { inFooter?: boolean }) => (
+  const renderSvgToolbarButtons = (inFooter = false) => (
     <div className={`flex items-center gap-0.5 ${inFooter ? 'justify-center' : ''}`}>
       <button
         onClick={handleCopy}
@@ -217,7 +215,7 @@ export function ArtifactRenderer({ artifact, onRun }: ArtifactRendererProps) {
             </div>
 
             {/* Show controls in header only when NOT fullscreen */}
-            {!isFullscreen && <SvgToolbarButtons />}
+            {!isFullscreen && renderSvgToolbarButtons()}
 
             {/* In fullscreen, just show minimize button in header */}
             {isFullscreen && (
@@ -249,7 +247,7 @@ export function ArtifactRenderer({ artifact, onRun }: ArtifactRendererProps) {
           {/* Footer controls - only in fullscreen mode */}
           {isFullscreen && (
             <div className="flex-shrink-0 px-3 py-3 bg-[var(--accent)] border-t border-[var(--border)]">
-              <SvgToolbarButtons inFooter />
+              {renderSvgToolbarButtons(true)}
             </div>
           )}
         </div>

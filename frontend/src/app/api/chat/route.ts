@@ -92,11 +92,11 @@ export async function POST(req: NextRequest) {
     console.log(`[CHAT] ip=${client.ip} | country=${client.country} | model=${model || 'default'} | messages=${messages?.length || 0} | tools=${tools?.length || 0}`);
 
     // Debug: Log message roles to verify tool results are included
-    const msgRoles = messages?.map((m: any) => `${m.role}${m.tool_call_id ? `(${m.tool_call_id.slice(0,8)})` : m.tool_calls ? `[${m.tool_calls.length} calls]` : ''}`).join(', ');
+    const msgRoles = messages?.map((m: { role?: string; tool_call_id?: string; tool_calls?: unknown[] }) => `${m.role}${m.tool_call_id ? `(${m.tool_call_id.slice(0,8)})` : m.tool_calls ? `[${m.tool_calls.length} calls]` : ''}`).join(', ');
     console.log(`[CHAT DEBUG] Message roles: ${msgRoles}`);
 
     // Check if we have tool results in this request (indicates multi-turn tool calling)
-    const toolMessages = messages?.filter((m: any) => m.role === 'tool') || [];
+    const toolMessages = messages?.filter((m: { role?: string }) => m.role === 'tool') || [];
     if (toolMessages.length > 0) {
       console.log(`[CHAT DEBUG] Found ${toolMessages.length} tool result messages:`);
       for (const tm of toolMessages) {

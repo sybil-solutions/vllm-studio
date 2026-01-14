@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
-import type { ChatSession } from '@/lib/types';
+import { useAppStore } from '@/store';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -36,17 +36,26 @@ interface AppSidebarProps {
 
 export function AppSidebar({ children }: AppSidebarProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const getIsMobile = () => (typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  const getInitialCollapsed = () => {
+    if (typeof window === 'undefined') return false;
+    const mobile = window.innerWidth < 768;
+    if (mobile) return true;
+    const saved = localStorage.getItem('app-sidebar-collapsed');
+    return saved === 'true';
+  };
+  const [collapsed, setCollapsed] = useState(getInitialCollapsed);
+  const [isMobile, setIsMobile] = useState(getIsMobile);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [status, setStatus] = useState<{ online: boolean; inferenceOnline: boolean; model?: string }>({
     online: false,
     inferenceOnline: false,
   });
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [chatHistoryOpen, setChatHistoryOpen] = useState(true);
   const loadingSessionsRef = useRef(false);
   const router = useRouter();
+  const chatSessions = useAppStore((state) => state.sessions);
+  const setSessions = useAppStore((state) => state.setSessions);
 
   // Detect mobile
   useEffect(() => {
@@ -57,20 +66,9 @@ export function AppSidebar({ children }: AppSidebarProps) {
         setCollapsed(true);
       }
     };
-    checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  // Load collapsed state from localStorage
-  useEffect(() => {
-    if (!isMobile) {
-      const saved = localStorage.getItem('app-sidebar-collapsed');
-      if (saved !== null) {
-        setCollapsed(saved === 'true');
-      }
-    }
-  }, [isMobile]);
 
   // Save collapsed state
   const toggleCollapsed = () => {
@@ -112,25 +110,21 @@ export function AppSidebar({ children }: AppSidebarProps) {
     };
   }, []);
 
-  // Close mobile menu on navigation
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
   // Load chat sessions once when on chat page
   useEffect(() => {
     if (pathname === '/chat' && !loadingSessionsRef.current) {
       loadingSessionsRef.current = true;
       api.getChatSessions()
-        .then(result => setChatSessions(result.sessions || []))
-        .catch(() => setChatSessions([]))
+        .then(result => setSessions(result.sessions || []))
+        .catch(() => setSessions([]))
         .finally(() => {
           loadingSessionsRef.current = false;
         });
     }
-  }, [pathname]);
+  }, [pathname, setSessions]);
 
   const createNewChat = () => {
+    setMobileOpen(false);
     router.push('/chat?new=1');
   };
 
@@ -174,6 +168,7 @@ export function AppSidebar({ children }: AppSidebarProps) {
               <div key={item.href}>
                 <Link
                   href={item.href}
+                  onClick={() => { if (isMobile) setMobileOpen(false); }}
                   className={`
                     flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors
                     ${isActive
@@ -217,6 +212,7 @@ export function AppSidebar({ children }: AppSidebarProps) {
                               <Link
                                 key={session.id}
                                 href={`/chat?session=${session.id}`}
+                                onClick={() => { if (isMobile) setMobileOpen(false); }}
                                 className="block px-3 py-2 text-sm text-[#e0e0e0] hover:text-white truncate"
                               >
                                 {session.title}

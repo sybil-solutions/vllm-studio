@@ -36,34 +36,23 @@ export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
   const isChatPage = pathname === '/chat';
-  const [isMobile, setIsMobile] = useState(false);
-
-  // Detect mobile
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [apiKeyOpen, setApiKeyOpen] = useState(false);
   const [apiKeyValue, setApiKeyValue] = useState('');
-  const [apiKeySet, setApiKeySet] = useState(false);
+  const [apiKeySet, setApiKeySet] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem('vllmstudio_api_key') || '';
+      return Boolean(stored);
+    } catch {
+      return false;
+    }
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [status, setStatus] = useState<{ online: boolean; inferenceOnline: boolean; model?: string }>({
     online: false,
     inferenceOnline: false,
   });
-
-  useEffect(() => {
-    try {
-      const k = window.localStorage.getItem('vllmstudio_api_key') || '';
-      setApiKeySet(Boolean(k));
-    } catch {
-      setApiKeySet(false);
-    }
-  }, []);
 
   useEffect(() => {
     const checkStatus = async () => {

@@ -27,7 +27,6 @@ interface ContextIndicatorProps {
   onCompact: (strategy?: CompactionStrategy) => void;
   onUpdateConfig: (updates: Partial<ContextConfig>) => void;
   isWarning: boolean;
-  isCritical: boolean;
   canSendMessage: boolean;
   utilizationLevel: 'low' | 'medium' | 'high' | 'critical';
 }
@@ -45,7 +44,6 @@ export function ContextIndicator({
   onCompact,
   onUpdateConfig,
   isWarning,
-  isCritical,
   canSendMessage,
   utilizationLevel,
 }: ContextIndicatorProps) {

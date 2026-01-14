@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Search, Globe, FileText, CheckCircle, XCircle, Loader2, ExternalLink, BookOpen, Brain, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Search, Globe, CheckCircle, XCircle, Loader2, ExternalLink, BookOpen, Brain, Sparkles } from 'lucide-react';
 
 export interface ResearchSource {
   title: string;

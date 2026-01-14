@@ -7,40 +7,25 @@ import { motion, AnimatePresence } from 'framer-motion';
 type Theme = 'light' | 'dark' | 'system';
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>('dark');
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
+  const getStoredTheme = () => {
+    if (typeof window === 'undefined') return 'dark';
+    return (localStorage.getItem('theme') as Theme | null) || 'system';
+  };
+
+  const getSystemTheme = () => {
+    if (typeof window === 'undefined') return 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  };
+
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
+    const stored = getStoredTheme();
+    const systemTheme = getSystemTheme();
+    return stored === 'system' ? systemTheme : stored;
+  });
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    // Load saved theme preference
-    const saved = localStorage.getItem('theme') as Theme | null;
-    if (saved) {
-      setTheme(saved);
-    }
-
-    // Determine initial resolved theme
-    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    const initialTheme = saved === 'system' ? systemTheme : (saved || systemTheme);
-    setResolvedTheme(initialTheme);
-    applyTheme(initialTheme);
-  }, []);
-
-  useEffect(() => {
-    // Listen for system theme changes
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (theme === 'system') {
-        const newTheme = e.matches ? 'dark' : 'light';
-        setResolvedTheme(newTheme);
-        applyTheme(newTheme);
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
-
-  const applyTheme = (newTheme: 'light' | 'dark') => {
+  function applyTheme(newTheme: 'light' | 'dark') {
     const root = document.documentElement;
 
     if (newTheme === 'dark') {
@@ -88,7 +73,26 @@ export function ThemeToggle() {
       root.style.setProperty('--success', '#16a34a');
       root.style.setProperty('--warning', '#ca8a04');
     }
-  };
+  }
+
+  useEffect(() => {
+    applyTheme(resolvedTheme);
+  }, [resolvedTheme]);
+
+  useEffect(() => {
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (theme === 'system') {
+        const newTheme = e.matches ? 'dark' : 'light';
+        setResolvedTheme(newTheme);
+        applyTheme(newTheme);
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [theme]);
 
   const changeTheme = (newTheme: Theme) => {
     setTheme(newTheme);

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Copy, Check, Play, Code2, Maximize2, Minimize2 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { CodeSandbox } from './code-sandbox';
 import { ArtifactRenderer, getArtifactType } from './artifact-renderer';
 
@@ -11,7 +11,6 @@ interface EnhancedCodeBlockProps {
   children: string;
   className?: string;
   artifactsEnabled?: boolean;
-  isStreaming?: boolean;
   language?: string;
 }
 
@@ -19,7 +18,6 @@ export function EnhancedCodeBlock({
   children,
   className,
   artifactsEnabled,
-  isStreaming,
   language
 }: EnhancedCodeBlockProps) {
   const [copied, setCopied] = useState(false);

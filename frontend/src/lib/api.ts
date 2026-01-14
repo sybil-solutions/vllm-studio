@@ -187,11 +187,11 @@ class APIClient {
     return { sessions: Array.isArray(data) ? data : [] };
   }
 
-  async getChatSession(id: string): Promise<{ session: any }> {
+  async getChatSession(id: string): Promise<{ session: unknown }> {
     return this.request(`/chats/${id}`);
   }
 
-  async createChatSession(data: { title?: string; model?: string }): Promise<{ session: any }> {
+  async createChatSession(data: { title?: string; model?: string }): Promise<{ session: unknown }> {
     return this.request('/chats', { method: 'POST', body: JSON.stringify(data) });
   }
 
@@ -203,11 +203,11 @@ class APIClient {
     return this.request(`/chats/${id}`, { method: 'DELETE' });
   }
 
-  async forkChatSession(id: string, data: { message_id?: string; model?: string; title?: string }): Promise<{ session: any }> {
+  async forkChatSession(id: string, data: { message_id?: string; model?: string; title?: string }): Promise<{ session: unknown }> {
     return this.request(`/chats/${id}/fork`, { method: 'POST', body: JSON.stringify(data) });
   }
 
-  async addChatMessage(sessionId: string, message: any): Promise<any> {
+  async addChatMessage(sessionId: string, message: unknown): Promise<unknown> {
     return this.request(`/chats/${sessionId}/messages`, { method: 'POST', body: JSON.stringify(message) });
   }
 
@@ -219,11 +219,11 @@ class APIClient {
     return this.request('/mcp/servers');
   }
 
-  async getMCPTools(): Promise<{ tools: Array<{ name: string; description?: string; input_schema?: any; server: string }> }> {
+  async getMCPTools(): Promise<{ tools: Array<{ name: string; description?: string; input_schema?: unknown; server: string }> }> {
     return this.request('/mcp/tools');
   }
 
-  async callMCPTool(server: string, tool: string, args: Record<string, unknown>): Promise<{ result: any }> {
+  async callMCPTool(server: string, tool: string, args: Record<string, unknown>): Promise<{ result: unknown }> {
     return this.request(`/mcp/tools/${server}/${tool}`, { method: 'POST', body: JSON.stringify(args) });
   }
 
@@ -235,7 +235,7 @@ class APIClient {
     return this.request('/v1/tokens/count', { method: 'POST', body: JSON.stringify(data) });
   }
 
-  async getLogSessions(): Promise<{ sessions: any[] }> {
+  async getLogSessions(): Promise<{ sessions: unknown[] }> {
     return this.request('/logs');
   }
 
@@ -257,27 +257,27 @@ class APIClient {
     return this.request('/v1/studio/models');
   }
 
-  async getGPUs(): Promise<{ gpus: any[] }> {
+  async getGPUs(): Promise<{ gpus: unknown[] }> {
     return this.request('/gpus');
   }
 
-  async calculateVRAM(data: any): Promise<any> {
+  async calculateVRAM(data: unknown): Promise<unknown> {
     return this.request('/vram-calculator', { method: 'POST', body: JSON.stringify(data) });
   }
 
-  async getMetrics(): Promise<any> {
+  async getMetrics(): Promise<unknown> {
     return this.request('/v1/metrics/vllm');
   }
 
-  async switchModel(recipeId: string, force = true): Promise<any> {
+  async switchModel(recipeId: string, force = true): Promise<{ success: boolean; pid?: number; message: string }> {
     return this.launch(recipeId, force);
   }
 
-  async addMCPServer(server: any): Promise<void> {
+  async addMCPServer(server: unknown): Promise<void> {
     return this.request('/mcp/servers', { method: 'POST', body: JSON.stringify(server) });
   }
 
-  async updateMCPServer(name: string, server: any): Promise<void> {
+  async updateMCPServer(name: string, server: unknown): Promise<void> {
     return this.request(`/mcp/servers/${name}`, { method: 'PUT', body: JSON.stringify(server) });
   }
 
@@ -289,7 +289,7 @@ class APIClient {
     return this.evict(force);
   }
 
-  async exportRecipes(): Promise<{ content: any }> {
+  async exportRecipes(): Promise<{ content: unknown }> {
     const { recipes } = await this.getRecipes();
     return { content: { recipes } };
   }

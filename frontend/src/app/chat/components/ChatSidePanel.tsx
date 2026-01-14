@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Wrench, Layers, Loader2, Check } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { X, Wrench, Layers, Loader2, Check, ChevronDown } from 'lucide-react';
 import { ArtifactPanel } from '@/components/chat';
 import type { ToolCall, ToolResult, Artifact } from '@/lib/types';
 import type { ResearchProgress, ResearchSource } from '@/components/chat/research-progress';
@@ -21,6 +22,9 @@ interface ChatSidePanelProps {
   sessionArtifacts: Artifact[];
   researchProgress: ResearchProgress | null;
   researchSources: ResearchSource[];
+  thinkingContent: string | null;
+  thinkingActive: boolean;
+  thinkingComplete: boolean;
 }
 
 export function ChatSidePanel({
@@ -34,6 +38,9 @@ export function ChatSidePanel({
   sessionArtifacts,
   researchProgress,
   researchSources,
+  thinkingContent,
+  thinkingActive,
+  thinkingComplete,
 }: ChatSidePanelProps) {
   if (!isOpen) return null;
 
@@ -50,7 +57,7 @@ export function ChatSidePanel({
           >
             <Wrench className="h-3 w-3" />
             Tools
-            {executingTools.size > 0 && (
+            {(executingTools.size > 0 || thinkingActive) && (
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute h-full w-full rounded-full bg-[var(--success)] opacity-75" />
                 <span className="relative h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
@@ -87,10 +94,13 @@ export function ChatSidePanel({
             executingTools={executingTools}
             researchProgress={researchProgress}
             researchSources={researchSources}
+            thinkingContent={thinkingContent}
+            thinkingActive={thinkingActive}
+            thinkingComplete={thinkingComplete}
           />
         )}
         {activePanel === 'artifacts' && (
-          <ArtifactPanel artifacts={sessionArtifacts} isOpen={true} onClose={() => onSetActivePanel('tools')} />
+          <ArtifactPanel artifacts={sessionArtifacts} isOpen={true} />
         )}
       </div>
     </div>
@@ -104,6 +114,9 @@ interface ToolsPanelProps {
   executingTools: Set<string>;
   researchProgress: ResearchProgress | null;
   researchSources: ResearchSource[];
+  thinkingContent: string | null;
+  thinkingActive: boolean;
+  thinkingComplete: boolean;
 }
 
 function ToolsPanel({
@@ -112,10 +125,92 @@ function ToolsPanel({
   executingTools,
   researchProgress,
   researchSources,
+  thinkingContent,
+  thinkingActive,
+  thinkingComplete,
 }: ToolsPanelProps) {
+  const [thinkingOpen, setThinkingOpen] = useState(true);
+  const [toolsOpen, setToolsOpen] = useState(true);
+  const [sourcesOpen, setSourcesOpen] = useState(true);
+
+  const showThinking = Boolean(thinkingContent || thinkingActive);
+  const thinkingLabel = thinkingComplete ? 'Thinking' : 'Thinking...';
+  const toolCount = allToolCalls.length;
+
+  const toolItems = useMemo(() => allToolCalls.map((tc) => {
+    const result = toolResultsMap.get(tc.id);
+    const isExecuting = executingTools.has(tc.id);
+    let args: Record<string, unknown> = {};
+    try {
+      args = JSON.parse(tc.function.arguments || '{}');
+    } catch {}
+    const mainArg = args.query || args.url || args.text || Object.values(args)[0];
+    const parts = tc.function.name.split('__');
+    const toolName = parts.length > 1 ? parts.slice(1).join('__') : tc.function.name;
+
+    return (
+      <div
+        key={tc.id}
+        className={`px-3 py-2 border-b border-[var(--border)] ${isExecuting ? 'bg-[var(--warning)]/5' : ''}`}
+      >
+        <div className="flex items-center gap-2">
+          {isExecuting ? (
+            <Loader2 className="h-3 w-3 text-[var(--warning)] animate-spin" />
+          ) : result ? (
+            result.isError ? (
+              <X className="h-3 w-3 text-[var(--error)]" />
+            ) : (
+              <Check className="h-3 w-3 text-[var(--success)]" />
+            )
+          ) : (
+            <Wrench className="h-3 w-3 text-[#9a9590]" />
+          )}
+          <span className="text-xs font-medium truncate">{toolName}</span>
+        </div>
+        {mainArg != null && (
+          <p className="text-[11px] text-[#9a9590] mt-1 line-clamp-2 pl-5">{String(mainArg as string | number | boolean).slice(0, 80)}</p>
+        )}
+        {result && !isExecuting && (
+          <p
+            className={`text-[11px] font-mono line-clamp-3 mt-1.5 pl-5 ${
+              result.isError ? 'text-[var(--error)]' : 'text-[#9a9590]'
+            }`}
+          >
+            {result.content.slice(0, 150)}
+          </p>
+        )}
+      </div>
+    );
+  }), [allToolCalls, executingTools, toolResultsMap]);
+
   return (
     <>
-      {/* Research progress */}
+      {showThinking && (
+        <div className="border-b border-[var(--border)]">
+          <button
+            onClick={() => setThinkingOpen(!thinkingOpen)}
+            className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-[#b0a8a0] bg-[var(--accent)]/40"
+          >
+            <span className="flex items-center gap-2">
+              <span className="uppercase tracking-wider">{thinkingLabel}</span>
+              {thinkingActive && (
+                <span className="flex items-center gap-1">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute h-full w-full rounded-full bg-[var(--warning)] opacity-75" />
+                    <span className="relative h-1.5 w-1.5 rounded-full bg-[var(--warning)]" />
+                  </span>
+                  <span className="text-[10px] text-[#9a9590]">working</span>
+                </span>
+              )}
+            </span>
+            <ChevronDown className={`h-3 w-3 transition-transform ${thinkingOpen ? '' : '-rotate-90'}`} />
+          </button>
+          <div className={`px-3 py-2 text-[11px] text-[#9a9590] whitespace-pre-wrap break-words transition-all duration-200 ${thinkingOpen ? 'max-h-[60vh] overflow-y-auto opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+            {thinkingContent || 'Thinking…'}
+          </div>
+        </div>
+      )}
+
       {researchProgress && (
         <div className="px-3 py-2 border-b border-[var(--border)] bg-blue-500/5">
           <div className="flex items-center gap-2">
@@ -125,77 +220,49 @@ function ToolsPanel({
         </div>
       )}
 
-      {/* Tool calls */}
-      {allToolCalls.map((tc) => {
-        const result = toolResultsMap.get(tc.id);
-        const isExecuting = executingTools.has(tc.id);
-        let args: Record<string, unknown> = {};
-        try {
-          args = JSON.parse(tc.function.arguments || '{}');
-        } catch {}
-        const mainArg = args.query || args.url || args.text || Object.values(args)[0];
-        const parts = tc.function.name.split('__');
-        const toolName = parts.length > 1 ? parts.slice(1).join('__') : tc.function.name;
+      <div className="border-b border-[var(--border)]">
+        <button
+          onClick={() => setToolsOpen(!toolsOpen)}
+          className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-[#b0a8a0] bg-[var(--accent)]/40"
+        >
+          <span className="uppercase tracking-wider">Tool Calls</span>
+          <span className="flex items-center gap-2">
+            <span className="text-[10px] text-[#9a9590]">{toolCount}</span>
+            <ChevronDown className={`h-3 w-3 transition-transform ${toolsOpen ? '' : '-rotate-90'}`} />
+          </span>
+        </button>
+        <div className={`transition-all duration-200 ${toolsOpen ? 'max-h-[60vh] overflow-y-auto opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+          {toolItems}
+          {toolItems.length === 0 && !researchProgress && !researchSources.length && !thinkingActive && !thinkingContent && (
+            <div className="px-3 py-6 text-center text-xs text-[#9a9590]">No tool activity yet</div>
+          )}
+        </div>
+      </div>
 
-        return (
-          <div
-            key={tc.id}
-            className={`px-3 py-2 border-b border-[var(--border)] ${isExecuting ? 'bg-[var(--warning)]/5' : ''}`}
-          >
-            <div className="flex items-center gap-2">
-              {isExecuting ? (
-                <Loader2 className="h-3 w-3 text-[var(--warning)] animate-spin" />
-              ) : result ? (
-                result.isError ? (
-                  <X className="h-3 w-3 text-[var(--error)]" />
-                ) : (
-                  <Check className="h-3 w-3 text-[var(--success)]" />
-                )
-              ) : (
-                <Wrench className="h-3 w-3 text-[#9a9590]" />
-              )}
-              <span className="text-xs font-medium truncate">{toolName}</span>
-            </div>
-            {mainArg != null && (
-              <p className="text-[11px] text-[#9a9590] mt-1 line-clamp-2 pl-5">{String(mainArg as string | number | boolean).slice(0, 80)}</p>
-            )}
-            {result && !isExecuting && (
-              <p
-                className={`text-[11px] font-mono line-clamp-3 mt-1.5 pl-5 ${
-                  result.isError ? 'text-[var(--error)]' : 'text-[#9a9590]'
-                }`}
-              >
-                {result.content.slice(0, 150)}
-              </p>
-            )}
-          </div>
-        );
-      })}
-
-      {/* Research sources */}
       {researchSources.length > 0 && (
-        <>
-          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-[#9a9590] bg-[var(--accent)]/50 border-b border-[var(--border)]">
-            Sources
+        <div className="border-b border-[var(--border)]">
+          <button
+            onClick={() => setSourcesOpen(!sourcesOpen)}
+            className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-[#b0a8a0] bg-[var(--accent)]/40"
+          >
+            <span className="uppercase tracking-wider">Sources</span>
+            <ChevronDown className={`h-3 w-3 transition-transform ${sourcesOpen ? '' : '-rotate-90'}`} />
+          </button>
+          <div className={`transition-all duration-200 ${sourcesOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+            {researchSources.map((source, i) => (
+              <a
+                key={i}
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block px-3 py-2 border-b border-[var(--border)] hover:bg-[var(--accent)]"
+              >
+                <div className="text-xs line-clamp-1">{source.title}</div>
+                <div className="text-[10px] text-[#9a9590] truncate">{source.url}</div>
+              </a>
+            ))}
           </div>
-          {researchSources.map((source, i) => (
-            <a
-              key={i}
-              href={source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-3 py-2 border-b border-[var(--border)] hover:bg-[var(--accent)]"
-            >
-              <div className="text-xs line-clamp-1">{source.title}</div>
-              <div className="text-[10px] text-[#9a9590] truncate">{source.url}</div>
-            </a>
-          ))}
-        </>
-      )}
-
-      {/* Empty state */}
-      {!allToolCalls.length && !researchProgress && !researchSources.length && (
-        <div className="px-3 py-6 text-center text-xs text-[#9a9590]">No tool activity yet</div>
+        </div>
       )}
     </>
   );

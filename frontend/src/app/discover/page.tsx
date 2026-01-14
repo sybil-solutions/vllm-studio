@@ -125,11 +125,11 @@ export default function DiscoverPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const getTaskBadgeColor = (tag?: string) => {
+  const getTaskBadgeColor = () => {
     return 'bg-[var(--highlight-bg)] text-[var(--accent-purple)]';
   };
 
-  const getLibraryBadgeColor = (lib?: string) => {
+  const getLibraryBadgeColor = () => {
     return 'bg-[var(--highlight-bg)] text-[var(--accent-purple)]';
   };
 

@@ -6,7 +6,6 @@ import {
   Globe,
   Plus,
   Trash2,
-  Check,
   AlertCircle,
   Server,
   Terminal,

@@ -8,7 +8,6 @@ import {
   FileCode,
   Palette,
   Maximize2,
-  Minimize2,
   X,
   Download,
   Copy,
@@ -17,8 +16,6 @@ import {
   ZoomOut,
   Move,
   RotateCcw,
-  ChevronDown,
-  ChevronUp,
   Play,
   Square,
   RefreshCw,
@@ -34,7 +31,6 @@ import type { Artifact } from '@/lib/types';
 interface ArtifactViewerProps {
   artifact: Artifact;
   isActive?: boolean;
-  onClose?: () => void;
 }
 
 // SVG template - wraps SVG in proper HTML document for iframe rendering
@@ -218,14 +214,14 @@ const HTML_TEMPLATE = (code: string) => {
 `;
 };
 
-export function ArtifactViewer({ artifact, isActive = true, onClose }: ArtifactViewerProps) {
+export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [copied, setCopied] = useState(false);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [isRunning, setIsRunning] = useState(true);
+  const [isRunning, setIsRunning] = useState(isActive);
   const [error, setError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -267,12 +263,12 @@ export function ArtifactViewer({ artifact, isActive = true, onClose }: ArtifactV
     }
   }, []);
 
-  // Auto-run on mount and when artifact changes
   useEffect(() => {
-    if (isActive) {
-      runArtifact();
+    if (!isActive || !isRunning) return;
+    if (iframeRef.current) {
+      iframeRef.current.srcdoc = getSrcDoc();
     }
-  }, [isActive, artifact.id, runArtifact]);
+  }, [isActive, isRunning, getSrcDoc]);
 
   // Listen for iframe errors
   useEffect(() => {
@@ -359,7 +355,7 @@ export function ArtifactViewer({ artifact, isActive = true, onClose }: ArtifactV
                <Code className="h-3.5 w-3.5" />;
 
   // Main viewer content
-  const ViewerContent = ({ inModal = false, onClose: viewerOnClose }: { inModal?: boolean; onClose?: () => void }) => (
+  const renderViewerContent = ({ inModal = false, onClose: viewerOnClose }: { inModal?: boolean; onClose?: () => void }) => (
     <div className={`flex flex-col ${inModal ? 'h-full' : ''}`}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-[var(--accent)] border-b border-[var(--border)] flex-shrink-0">
@@ -471,7 +467,7 @@ export function ArtifactViewer({ artifact, isActive = true, onClose }: ArtifactV
     <>
       {/* Inline viewer */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden bg-[var(--card)]">
-        <ViewerContent />
+        {renderViewerContent({})}
       </div>
 
       {/* Fullscreen modal */}
@@ -479,7 +475,7 @@ export function ArtifactViewer({ artifact, isActive = true, onClose }: ArtifactV
         <>
           <div className="fixed inset-0 z-[100] bg-black/80" onClick={() => setIsFullscreen(false)} />
           <div className="fixed inset-3 md:inset-6 z-[101] bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden flex flex-col">
-            <ViewerContent inModal onClose={() => setIsFullscreen(false)} />
+            {renderViewerContent({ inModal: true, onClose: () => setIsFullscreen(false) })}
           </div>
         </>
       )}
@@ -493,22 +489,17 @@ export function ArtifactViewer({ artifact, isActive = true, onClose }: ArtifactV
 
 interface ArtifactPanelProps {
   artifacts: Artifact[];
-  onClose: () => void;
   isOpen: boolean;
 }
 
-export function ArtifactPanel({ artifacts, onClose, isOpen }: ArtifactPanelProps) {
+export function ArtifactPanel({ artifacts, isOpen }: ArtifactPanelProps) {
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const latestArtifactId = artifacts.length > 0 ? artifacts[artifacts.length - 1].id : null;
+  const activeArtifactId = selectedArtifactId && artifacts.some(a => a.id === selectedArtifactId)
+    ? selectedArtifactId
+    : latestArtifactId;
 
-  // Auto-select latest artifact when artifacts change
-  useEffect(() => {
-    if (artifacts.length > 0) {
-      // Select the most recent artifact
-      setSelectedArtifactId(artifacts[artifacts.length - 1].id);
-    }
-  }, [artifacts.length]);
-
-  const selectedArtifact = artifacts.find(a => a.id === selectedArtifactId);
+  const selectedArtifact = artifacts.find(a => a.id === activeArtifactId);
 
   const getIcon = (type: Artifact['type']) => {
     switch (type) {
@@ -535,7 +526,7 @@ export function ArtifactPanel({ artifacts, onClose, isOpen }: ArtifactPanelProps
       {/* Artifact selector dropdown */}
       <div className="px-3 py-2 border-b border-[var(--border)] flex-shrink-0">
         <select
-          value={selectedArtifactId || ''}
+          value={activeArtifactId || ''}
           onChange={(e) => setSelectedArtifactId(e.target.value)}
           className="w-full text-xs bg-[var(--accent)] border border-[var(--border)] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--link)]"
         >
@@ -555,7 +546,7 @@ export function ArtifactPanel({ artifacts, onClose, isOpen }: ArtifactPanelProps
               key={artifact.id}
               onClick={() => setSelectedArtifactId(artifact.id)}
               className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] whitespace-nowrap transition-colors flex-shrink-0 ${
-                artifact.id === selectedArtifactId
+                artifact.id === activeArtifactId
                   ? 'bg-[var(--link)]/20 text-[var(--link)]'
                   : 'bg-[var(--accent)] text-[#9a9590] hover:text-[var(--foreground)]'
               }`}
@@ -570,7 +561,7 @@ export function ArtifactPanel({ artifacts, onClose, isOpen }: ArtifactPanelProps
       {/* Selected artifact viewer */}
       <div className="flex-1 overflow-auto p-2 min-h-0">
         {selectedArtifact && (
-          <ArtifactViewer artifact={selectedArtifact} isActive />
+          <ArtifactViewer key={selectedArtifact.id} artifact={selectedArtifact} isActive />
         )}
       </div>
     </div>

@@ -57,7 +57,7 @@ export function useSSE(
     maxReconnectAttempts = Infinity,
   } = options;
 
-  const connect = useCallback(() => {
+  const connect = useCallback(function connect() {
     if (!enabled || !url || eventSourceRef.current) return;
 
     try {

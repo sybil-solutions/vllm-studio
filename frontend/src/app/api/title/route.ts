@@ -105,11 +105,11 @@ Title:`,
       return NextResponse.json({ title: 'New Chat' });
     }
 
-    const data = (await response.json().catch(() => null)) as any;
+    const data = (await response.json().catch(() => null)) as { choices?: Array<{ message?: { content?: string } }> } | null;
     const rawContent = data?.choices?.[0]?.message?.content ?? '';
-    
+
     const title = cleanTitle(rawContent);
-    
+
     console.log('Title generation:', { raw: rawContent.slice(0, 100), cleaned: title });
 
     return NextResponse.json({ title: title || 'New Chat' });

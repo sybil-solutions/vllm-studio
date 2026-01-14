@@ -1,6 +1,10 @@
 const BOX_TAGS_PATTERN = /<\|(?:begin|end)_of_box\|>/g;
 const stripBoxTags = (text: string) => (text ? text.replace(BOX_TAGS_PATTERN, '') : text);
 
+export function stripThinkTagsKeepText(text: string): string {
+  return text?.replace(/<\/?think(?:ing)?>/gi, '') || '';
+}
+
 export function normalizeAssistantMarkdownForRender(content: string): string {
   if (!content) return '';
   let text = stripBoxTags(content);
@@ -20,12 +24,21 @@ export function normalizeAssistantMarkdownForRender(content: string): string {
 
   const isFenceCloser = (line: string) => /^\s*```\s*$/.test(line) || /^\s*``\s*$/.test(line);
   const isFenceOpener = (line: string) => /^\s*```/.test(line);
+  const isHeading = (line: string) => /^#{1,6}\s+/.test(line);
+  const isTableDivider = (line: string) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+  const isTableRow = (line: string) => {
+    const pipeCount = (line.match(/\|/g) || []).length;
+    if (pipeCount < 2) return false;
+    return !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+  };
+
+  let inFence = false;
 
   while (i < lines.length) {
     const raw = lines[i];
     const trimmed = raw.trim();
 
-    if (/^mermaidgraph\b/i.test(trimmed)) {
+    if (!inFence && /^mermaidgraph\b/i.test(trimmed)) {
       const rest = trimmed.replace(/^mermaidgraph\b/i, '').trim();
       out.push('```mermaid');
       if (rest) out.push(`graph ${rest}`);
@@ -48,8 +61,43 @@ export function normalizeAssistantMarkdownForRender(content: string): string {
 
     if (/^\s*``\s*$/.test(raw)) {
       out.push('```');
+      inFence = !inFence;
       i++;
       continue;
+    }
+
+    if (isFenceCloser(raw) && inFence) {
+      inFence = false;
+      out.push(raw);
+      i++;
+      continue;
+    }
+
+    if (isFenceOpener(raw)) {
+      inFence = true;
+      out.push(raw);
+      i++;
+      continue;
+    }
+
+    if (!inFence) {
+      if (trimmed && isHeading(trimmed)) {
+        const prev = out[out.length - 1]?.trim() ?? '';
+        if (prev) out.push('');
+      }
+
+      if (trimmed && (isTableRow(trimmed) || isTableDivider(trimmed))) {
+        const prev = out[out.length - 1]?.trim() ?? '';
+        if (prev && !(isTableRow(prev) || isTableDivider(prev))) {
+          out.push('');
+        }
+        let tableLine = trimmed;
+        if (!tableLine.startsWith('|')) tableLine = `| ${tableLine}`;
+        if (!tableLine.endsWith('|')) tableLine = `${tableLine} |`;
+        out.push(tableLine);
+        i++;
+        continue;
+      }
     }
 
     out.push(raw);

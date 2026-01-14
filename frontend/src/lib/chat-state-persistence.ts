@@ -111,7 +111,7 @@ export function saveInputDraft(input: string): void {
     state.input = input;
     state.lastUpdated = Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
+  } catch {
     // Ignore - this is best effort
   }
 }

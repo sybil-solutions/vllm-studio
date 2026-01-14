@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Play, Square, X, Check, Activity, ChevronRight, Settings } from 'lucide-react';
+import { Search, X, Check, Activity, ChevronRight, Settings } from 'lucide-react';
 
 const ELECTRICITY_PRICE_PLN = 1.20;
 import { useRouter } from 'next/navigation';

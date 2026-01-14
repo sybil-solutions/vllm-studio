@@ -21,7 +21,6 @@ export function MessageSearch({ messages, onResultClick }: MessageSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(0);
 
   const filteredMessages = useMemo(() => {
     let results = messages;

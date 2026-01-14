@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, RefreshCw, Trash2, Download, ChevronRight, ChevronLeft, Menu } from 'lucide-react';
 import api from '@/lib/api';
 import type { LogSession } from '@/lib/types';
@@ -21,11 +21,11 @@ export default function LogsPage() {
 
   useEffect(() => {
     loadSessions();
-  }, []);
+  }, [loadSessions]);
 
   useEffect(() => {
     if (selectedSession) loadLogContent(selectedSession);
-  }, [selectedSession]);
+  }, [loadLogContent, selectedSession]);
 
   useEffect(() => {
     if (autoRefresh && selectedSession) {
@@ -35,7 +35,7 @@ export default function LogsPage() {
       intervalRef.current = null;
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [autoRefresh, selectedSession]);
+  }, [autoRefresh, loadLogContent, selectedSession]);
 
   useEffect(() => {
     if (autoScroll && logRef.current) {
@@ -43,7 +43,7 @@ export default function LogsPage() {
     }
   }, [logContent, autoScroll]);
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       const data = await api.getLogSessions();
       setSessions(data.sessions || []);
@@ -53,9 +53,9 @@ export default function LogsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedSession]);
 
-  const loadLogContent = async (sessionId: string, silent = false) => {
+  const loadLogContent = useCallback(async (sessionId: string, silent = false) => {
     if (!silent) setLoadingContent(true);
     try {
       const data = await api.getLogContent(sessionId, 2000);
@@ -66,7 +66,7 @@ export default function LogsPage() {
     } finally {
       if (!silent) setLoadingContent(false);
     }
-  };
+  }, []);
 
   const deleteSession = async (sessionId: string) => {
     if (!confirm('Delete this log session?')) return;

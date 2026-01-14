@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
+import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChevronDown, ChevronRight, Brain, Copy, Check, AlertCircle, Play } from 'lucide-react';
+import { ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
 import mermaid from 'mermaid';
-import { CodeSandbox } from './code-sandbox';
 import { ArtifactRenderer, extractArtifacts, getArtifactType } from './artifact-renderer';
 import { EnhancedCodeBlock } from './enhanced-code-block';
 import { TypingIndicator, StreamingCursor } from './typing-indicator';
 import { MessageActions } from './message-actions';
 import type { Artifact } from '@/lib/types';
 import { normalizeAssistantMarkdownForRender } from '@/lib/chat-markdown';
+import { stripThinkTagsKeepText } from '@/lib/chat-markdown';
 
 // Initialize mermaid with dark theme
 mermaid.initialize({
@@ -274,11 +275,20 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
     const { text: contentWithoutArtifacts, artifacts: extractedArtifacts } = extractArtifacts(normalizedContent);
 
     const split = splitThinking(contentWithoutArtifacts);
+    let visibleContent = split.mainContent;
+    let updatedThinking = split.thinkingContent;
+
+    if (!visibleContent.trim() && updatedThinking) {
+      const fallback = stripThinkTagsKeepText(contentWithoutArtifacts).trim();
+      if (fallback) {
+        visibleContent = fallback;
+        updatedThinking = null;
+      }
+    }
 
     // If the model placed renderable code fences inside <think>, surface them as artifacts
     // so users can still preview them without expanding the thinking panel.
     const additionalArtifacts: Artifact[] = [];
-    let updatedThinking = split.thinkingContent;
     if (artifactsEnabled && updatedThinking) {
       const fenceRegex = /```([a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/g;
       const keptChunks: string[] = [];
@@ -292,7 +302,7 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
         const canPreview = artifactType && ['html', 'react', 'javascript', 'svg'].includes(artifactType);
         if (artifactType && canPreview) {
           additionalArtifacts.push({
-            id: `think-artifact-${additionalArtifacts.length}-${Date.now()}`,
+            id: `think-artifact-${artifactType}-${additionalArtifacts.length}-${code.length}`,
             type: artifactType,
             title: lang ? `${lang} (from thinking)` : 'Artifact (from thinking)',
             code,
@@ -310,7 +320,7 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
 
     return {
       thinkingContent: updatedThinking,
-      mainContent: split.mainContent,
+      mainContent: visibleContent,
       isThinkingComplete: split.isThinkingComplete,
       artifacts: [...extractedArtifacts, ...additionalArtifacts],
     };
@@ -378,13 +388,13 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
               return <li className="leading-relaxed text-[#e8e4dd]">{children}</li>;
             },
             h1({ children }) {
-              return <h1 className="text-xl font-semibold mb-3 mt-4 first:mt-0 text-[#e8e4dd]">{children}</h1>;
+              return <h1 className="text-2xl font-semibold mb-3 mt-6 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h1>;
             },
             h2({ children }) {
-              return <h2 className="text-lg font-semibold mb-2 mt-4 first:mt-0 text-[#e8e4dd]">{children}</h2>;
+              return <h2 className="text-xl font-semibold mb-3 mt-5 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h2>;
             },
             h3({ children }) {
-              return <h3 className="text-base font-semibold mb-2 mt-3 first:mt-0 text-[#e8e4dd]">{children}</h3>;
+              return <h3 className="text-lg font-semibold mb-2 mt-4 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h3>;
             },
             blockquote({ children }) {
               return (
@@ -411,35 +421,43 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
             table({ children }) {
               return (
                 <div className="my-3 overflow-x-auto">
-                  <table className="min-w-full border border-[var(--border)] rounded-lg overflow-hidden">
+                  <table className="w-full table-auto border-collapse border border-[var(--border)] rounded-lg overflow-hidden">
                     {children}
                   </table>
                 </div>
               );
             },
             thead({ children }) {
-              return <thead className="bg-[var(--accent)]">{children}</thead>;
+              return <thead className="bg-[var(--accent)] text-left">{children}</thead>;
+            },
+            tbody({ children }) {
+              return <tbody className="divide-y divide-[var(--border)]">{children}</tbody>;
             },
             th({ children }) {
               return (
-                <th className="px-4 py-2 text-left text-xs font-medium text-[#d8d4cd] uppercase tracking-wider border-b border-[var(--border)]">
+                <th className="px-4 py-2 text-left text-xs font-medium text-[#d8d4cd] uppercase tracking-wider">
                   {children}
                 </th>
               );
             },
             td({ children }) {
               return (
-                <td className="px-4 py-2 text-sm border-b border-[var(--border)]">
+                <td className="px-4 py-2 text-sm text-[#e8e4dd] align-top">
                   {children}
                 </td>
               );
             },
             img({ src, alt }) {
+              if (!src) return null;
               return (
-                <img
+                <Image
                   src={src}
                   alt={alt || ''}
-                  className="max-w-full rounded-lg my-3"
+                  width={0}
+                  height={0}
+                  sizes="100vw"
+                  className="max-w-full rounded-lg my-3 h-auto w-full"
+                  unoptimized
                 />
               );
             },
