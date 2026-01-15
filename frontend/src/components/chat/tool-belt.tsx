@@ -294,23 +294,23 @@ export function ToolBelt({
                         unoptimized
                       />
                     )}
-                    <div className="text-xs">
+                    <div className="text-sm md:text-xs">
                       <p className="font-medium truncate max-w-[100px]">{attachment.name}</p>
                       <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
                     </div>
                   </div>
                 ) : attachment.type === 'audio' ? (
                   <div className="flex items-center gap-2">
-                    <Mic className="h-4 w-4 text-[var(--success)]" />
-                    <div className="text-xs">
+                    <Mic className="h-5 w-5 md:h-4 md:w-4 text-[var(--success)]" />
+                    <div className="text-sm md:text-xs">
                       <p className="font-medium">{attachment.name}</p>
                       <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
                     </div>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-[#9a9590]" />
-                    <div className="text-xs">
+                    <FileText className="h-5 w-5 md:h-4 md:w-4 text-[#9a9590]" />
+                    <div className="text-sm md:text-xs">
                       <p className="font-medium truncate max-w-[100px]">{attachment.name}</p>
                       <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
                     </div>
@@ -329,17 +329,17 @@ export function ToolBelt({
 
         {/* Recording Indicator */}
         {isRecording && (
-          <div className="flex items-center gap-3 mb-3 px-3 py-2 bg-[var(--error)]/10 border border-[var(--error)]/20 rounded-lg">
-            <div className="w-2 h-2 rounded-full bg-[var(--error)] animate-pulse" />
-            <span className="text-sm text-[var(--error)]">Recording</span>
-            <span className="text-sm font-mono text-[#9a9590]">
+          <div className="flex items-center gap-3 mb-3 px-4 py-3 md:px-3 md:py-2 bg-[var(--error)]/10 border border-[var(--error)]/20 rounded-lg">
+            <div className="w-2.5 h-2.5 md:w-2 md:h-2 rounded-full bg-[var(--error)] animate-pulse" />
+            <span className="text-base md:text-sm text-[var(--error)]">Recording</span>
+            <span className="text-base md:text-sm font-mono text-[#9a9590]">
               {formatDuration(recordingDuration)}
             </span>
             <button
               onClick={stopRecording}
-              className="ml-auto flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-[var(--error)] text-white hover:opacity-90"
+              className="ml-auto flex items-center gap-2 px-4 py-2 md:px-3 md:py-1.5 text-base md:text-sm rounded-lg bg-[var(--error)] text-white hover:opacity-90"
             >
-              <StopCircle className="h-4 w-4" />
+              <StopCircle className="h-5 w-5 md:h-4 md:w-4" />
               Stop
             </button>
           </div>
@@ -347,21 +347,21 @@ export function ToolBelt({
 
         {/* Transcribing Indicator */}
         {isTranscribing && (
-          <div className="flex items-center gap-3 mb-3 px-3 py-2 bg-[var(--link)]/10 border border-[var(--link)]/20 rounded-lg">
-            <Loader2 className="h-4 w-4 text-[var(--link)] animate-spin" />
-            <span className="text-sm text-[var(--link)]">Transcribing audio...</span>
+          <div className="flex items-center gap-3 mb-3 px-4 py-3 md:px-3 md:py-2 bg-[var(--link)]/10 border border-[var(--link)]/20 rounded-lg">
+            <Loader2 className="h-5 w-5 md:h-4 md:w-4 text-[var(--link)] animate-spin" />
+            <span className="text-base md:text-sm text-[var(--link)]">Transcribing audio...</span>
           </div>
         )}
 
         {/* Transcription Error */}
         {transcriptionError && (
-          <div className="flex items-center gap-3 mb-3 px-3 py-2 bg-[var(--error)]/10 border border-[var(--error)]/20 rounded-lg">
-            <span className="text-sm text-[var(--error)]">{transcriptionError}</span>
+          <div className="flex items-center gap-3 mb-3 px-4 py-3 md:px-3 md:py-2 bg-[var(--error)]/10 border border-[var(--error)]/20 rounded-lg">
+            <span className="text-base md:text-sm text-[var(--error)]">{transcriptionError}</span>
             <button
               onClick={() => setTranscriptionError(null)}
-              className="ml-auto p-1 hover:bg-[var(--error)]/20 rounded"
+              className="ml-auto p-1.5 md:p-1 hover:bg-[var(--error)]/20 rounded"
             >
-              <X className="h-3.5 w-3.5 text-[var(--error)]" />
+              <X className="h-4 w-4 md:h-3.5 md:w-3.5 text-[var(--error)]" />
             </button>
           </div>
         )}
@@ -386,9 +386,9 @@ export function ToolBelt({
             <div className="flex items-center gap-0.5">
               {/* Streaming Timer - shows in toolbar when loading */}
               {isLoading && elapsedSeconds !== undefined && (
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 mr-1">
-                  <Clock className="h-3.5 w-3.5 text-blue-400 animate-pulse" />
-                  <span className="text-xs font-mono text-blue-400">
+                <div className="flex items-center gap-2 px-3 py-1.5 md:px-2 md:py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 mr-1">
+                  <Clock className="h-4 w-4 md:h-3.5 md:w-3.5 text-blue-400 animate-pulse" />
+                  <span className="text-sm md:text-xs font-mono text-blue-400">
                     {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, '0')}
                   </span>
                 </div>
@@ -405,10 +405,10 @@ export function ToolBelt({
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled}
-                className="p-2 md:p-1.5 rounded hover:bg-[var(--accent)] transition-colors disabled:opacity-50"
+                className="p-2.5 md:p-1.5 rounded hover:bg-[var(--accent)] transition-colors disabled:opacity-50"
                 title="Attach file"
               >
-                <Paperclip className="h-4 w-4 md:h-3.5 md:w-3.5 text-[#9a9590]" />
+                <Paperclip className="h-5 w-5 md:h-3.5 md:w-3.5 text-[#9a9590]" />
               </button>
 
               {/* Image Upload */}
@@ -423,10 +423,10 @@ export function ToolBelt({
               <button
                 onClick={() => imageInputRef.current?.click()}
                 disabled={disabled}
-                className="p-2 md:p-1.5 rounded hover:bg-[var(--accent)] transition-colors disabled:opacity-50"
+                className="p-2.5 md:p-1.5 rounded hover:bg-[var(--accent)] transition-colors disabled:opacity-50"
                 title="Attach image"
               >
-                <ImageIcon className="h-4 w-4 md:h-3.5 md:w-3.5 text-[#9a9590]" />
+                <ImageIcon className="h-5 w-5 md:h-3.5 md:w-3.5 text-[#9a9590]" />
               </button>
 
               {/* Audio Recording / Speech-to-Text */}
@@ -473,30 +473,30 @@ export function ToolBelt({
               <button
                 onClick={onMcpToggle}
                 disabled={disabled}
-                className={`flex items-center gap-1.5 px-2 py-1.5 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
+                className={`flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
                   mcpEnabled
                     ? 'bg-purple-500/10 text-purple-400 dark:text-purple-300'
                     : 'hover:bg-[var(--accent)] text-[#9a9590]'
                 }`}
                 title={mcpEnabled ? 'Disable web search & tools' : 'Enable web search & tools'}
               >
-                <Globe className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                <span className="text-xs hidden sm:inline">Tools</span>
+                <Globe className="h-5 w-5 md:h-3.5 md:w-3.5" />
+                <span className="text-sm md:text-xs hidden sm:inline">Tools</span>
               </button>
 
               {/* Preview Toggle */}
               <button
                 onClick={onArtifactsToggle}
                 disabled={disabled}
-                className={`flex items-center gap-1.5 px-2 py-1.5 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
+                className={`flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
                   artifactsEnabled
                     ? 'bg-purple-500/10 text-purple-400 dark:text-purple-300'
                     : 'hover:bg-[var(--accent)] text-[#9a9590]'
                 }`}
                 title={artifactsEnabled ? 'Disable code preview' : 'Enable code preview & sandbox'}
               >
-                <Code className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                <span className="text-xs hidden sm:inline">Preview</span>
+                <Code className="h-5 w-5 md:h-3.5 md:w-3.5" />
+                <span className="text-sm md:text-xs hidden sm:inline">Preview</span>
               </button>
 
               {/* Research Toggle */}
@@ -504,15 +504,15 @@ export function ToolBelt({
                 <button
                   onClick={onDeepResearchToggle}
                   disabled={disabled}
-                  className={`flex items-center gap-1.5 px-2 py-1.5 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
+                  className={`flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 ${
                     deepResearchEnabled
                       ? 'bg-purple-500/10 text-purple-400 dark:text-purple-300'
                       : 'hover:bg-[var(--accent)] text-[#9a9590]'
                   }`}
                   title={deepResearchEnabled ? 'Deep Research enabled' : 'Enable Deep Research mode'}
                 >
-                  <Brain className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                  <span className="text-xs hidden sm:inline">Research</span>
+                  <Brain className="h-5 w-5 md:h-3.5 md:w-3.5" />
+                  <span className="text-sm md:text-xs hidden sm:inline">Research</span>
                 </button>
               )}
 
@@ -530,11 +530,11 @@ export function ToolBelt({
               <button
                 onClick={onOpenChatSettings}
                 disabled={disabled}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all disabled:opacity-50 hover:bg-[var(--accent)] text-[#9a9590]"
+                className="flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 rounded-lg transition-all disabled:opacity-50 hover:bg-[var(--accent)] text-[#9a9590]"
                 title={hasSystemPrompt ? 'System prompt active' : 'Configure system prompt'}
               >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                <span className="text-xs hidden sm:inline">System</span>
+                <SlidersHorizontal className="h-5 w-5 md:h-3.5 md:w-3.5" />
+                <span className="text-sm md:text-xs hidden sm:inline">System</span>
               </button>
             </div>
 
@@ -542,19 +542,19 @@ export function ToolBelt({
               {isLoading ? (
                 <button
                   onClick={onStop}
-                  className="p-2.5 md:p-2 rounded-lg bg-[var(--error)] text-white hover:opacity-90 transition-all active:scale-95"
+                  className="p-3 md:p-2 rounded-lg bg-[var(--error)] text-white hover:opacity-90 transition-all active:scale-95"
                   title="Stop"
                 >
-                  <StopCircle className="h-4 w-4" />
+                  <StopCircle className="h-5 w-5 md:h-4 md:w-4" />
                 </button>
               ) : (
                 <button
                   onClick={handleSubmit}
                   disabled={(!value.trim() && attachments.length === 0) || disabled}
-                  className="p-2.5 md:p-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] hover:opacity-90 transition-all active:scale-95 disabled:opacity-30 disabled:active:scale-100"
+                  className="p-3 md:p-2 rounded-lg bg-[var(--foreground)] text-[var(--background)] hover:opacity-90 transition-all active:scale-95 disabled:opacity-30 disabled:active:scale-100"
                   title="Send"
                 >
-                  <Send className="h-4 w-4" />
+                  <Send className="h-5 w-5 md:h-4 md:w-4" />
                 </button>
               )}
             </div>

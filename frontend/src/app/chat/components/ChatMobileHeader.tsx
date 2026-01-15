@@ -35,25 +35,25 @@ export function ChatMobileHeader({
       className="relative z-40 bg-[var(--card)] border-b border-[var(--border)] flex-shrink-0"
       style={{ paddingTop: 'env(safe-area-inset-top, 0)' }}
     >
-      <div className="flex items-center justify-between gap-2 px-2 py-1.5 w-full">
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+      <div className="flex items-center justify-between gap-2 px-3 py-2.5 w-full">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {/* Logo */}
           <Link
             href="/"
-            className="p-1.5 -ml-1 rounded-lg hover:bg-[var(--accent)] transition-colors flex-shrink-0"
+            className="p-2 -ml-1 rounded-lg hover:bg-[var(--accent)] transition-colors flex-shrink-0"
           >
-            <Layers className="h-5 w-5 text-[#9a9590]" />
+            <Layers className="h-6 w-6 text-[#9a9590]" />
           </Link>
 
           {/* Recent Chats Dropdown */}
           <div className="relative flex-1 min-w-0">
             <button
               onClick={() => setRecentChatsOpen(!recentChatsOpen)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-[var(--accent)] transition-colors w-full min-w-0"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--accent)] transition-colors w-full min-w-0"
             >
-              <span className="text-sm font-medium truncate">{currentSessionTitle || 'New Chat'}</span>
+              <span className="text-base font-medium truncate">{currentSessionTitle || 'New Chat'}</span>
               <ChevronDown
-                className={`h-4 w-4 text-[#9a9590] flex-shrink-0 transition-transform ${recentChatsOpen ? 'rotate-180' : ''}`}
+                className={`h-5 w-5 text-[#9a9590] flex-shrink-0 transition-transform ${recentChatsOpen ? 'rotate-180' : ''}`}
               />
             </button>
 
@@ -63,15 +63,15 @@ export function ChatMobileHeader({
                 <div className="fixed inset-0 z-40" onClick={() => setRecentChatsOpen(false)} />
                 <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg z-50 max-h-[60vh] overflow-hidden flex flex-col">
                   {/* Search */}
-                  <div className="p-2 border-b border-[var(--border)]">
+                  <div className="p-3 border-b border-[var(--border)]">
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9a9590]" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[#9a9590]" />
                       <input
                         type="text"
                         value={chatSearchQuery}
                         onChange={(e) => setChatSearchQuery(e.target.value)}
                         placeholder="Search chats..."
-                        className="w-full pl-8 pr-3 py-1.5 text-sm bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none"
+                        className="w-full pl-10 pr-3 py-2.5 text-base bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none"
                       />
                     </div>
                   </div>
@@ -82,9 +82,9 @@ export function ChatMobileHeader({
                       onNewSession();
                       setRecentChatsOpen(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--accent)] transition-colors text-sm font-medium border-b border-[var(--border)]"
+                    className="flex items-center gap-2 px-4 py-3 hover:bg-[var(--accent)] transition-colors text-base font-medium border-b border-[var(--border)]"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-5 w-5" />
                     New Chat
                   </button>
 
@@ -98,18 +98,18 @@ export function ChatMobileHeader({
                           setRecentChatsOpen(false);
                           setChatSearchQuery('');
                         }}
-                        className={`w-full px-3 py-2 text-left hover:bg-[var(--accent)] transition-colors ${
+                        className={`w-full px-4 py-3 text-left hover:bg-[var(--accent)] transition-colors ${
                           currentSessionId === session.id ? 'bg-[var(--accent)]' : ''
                         }`}
                       >
-                        <div className="text-sm truncate">{session.title}</div>
-                        <div className="text-xs text-[#9a9590] truncate">
+                        <div className="text-base truncate">{session.title}</div>
+                        <div className="text-sm text-[#9a9590] truncate">
                           {session.model?.split('/').pop()} • {new Date(session.updated_at).toLocaleDateString()}
                         </div>
                       </button>
                     ))}
                     {filteredSessions.length === 0 && (
-                      <div className="px-3 py-4 text-sm text-[#9a9590] text-center">No chats found</div>
+                      <div className="px-4 py-5 text-base text-[#9a9590] text-center">No chats found</div>
                     )}
                     {!chatSearchQuery && sessions.length > 5 && (
                       <button
@@ -117,7 +117,7 @@ export function ChatMobileHeader({
                           onOpenSidebar();
                           setRecentChatsOpen(false);
                         }}
-                        className="w-full px-3 py-2 text-sm text-[#9a9590] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
+                        className="w-full px-4 py-3 text-base text-[#9a9590] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
                       >
                         View all {sessions.length} chats →
                       </button>
@@ -129,14 +129,14 @@ export function ChatMobileHeader({
           </div>
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <ThemeToggle />
           <button
             onClick={onOpenSidebar}
-            className="p-1.5 rounded hover:bg-[var(--accent)] transition-colors"
+            className="p-2 rounded hover:bg-[var(--accent)] transition-colors"
             title="Open sidebar"
           >
-            <Menu className="h-5 w-5 text-[#9a9590]" />
+            <Menu className="h-6 w-6 text-[#9a9590]" />
           </button>
         </div>
       </div>

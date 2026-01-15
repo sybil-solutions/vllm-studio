@@ -705,8 +705,8 @@ function ChatPageContent() {
             )}
 
             <div className="flex-1 flex flex-col overflow-hidden relative">
-              <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden">
-                <div className="pb-0 md:pb-4">
+              <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col">
+                <div className="pb-0 md:pb-4 flex-1 flex flex-col">
                   <ChatMessageList messages={messages} selectedModel={selectedModel || runningModel || undefined} modelName={modelName} currentSessionId={currentSessionId} artifactsEnabled={artifactsEnabled} isMobile={isMobile} isLoading={isLoading} error={error} copiedIndex={copiedIndex} toolResultsMap={toolResultsMap} executingTools={executingTools} onCopy={copyToClipboard} onFork={forkAtMessage} />
 
                   {isMobile && researchProgress && <ResearchProgressIndicator progress={researchProgress} onCancel={() => setResearchProgress(null)} />}
@@ -715,14 +715,14 @@ function ChatPageContent() {
                   {messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && !isLoading && (
                     <div className="max-w-4xl mx-auto px-4 md:px-6">
                       <div className="mt-4 pt-3 border-t border-(--border) flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-1">
-                          <button onClick={copyLastResponse} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-(--accent) text-[#8a8580]">{copiedIndex === messages.length - 1 ? <Check className="h-3.5 w-3.5 text-(--success)" /> : <Copy className="h-3.5 w-3.5" />}<span className="text-xs">Copy</span></button>
-                          <button onClick={() => toggleBookmark(messages[messages.length - 1].id)} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-(--accent) text-[#8a8580]">{bookmarkedMessages.has(messages[messages.length - 1].id) ? <BookmarkCheck className="h-3.5 w-3.5 text-(--link)" /> : <Bookmark className="h-3.5 w-3.5" />}<span className="text-xs">Bookmark</span></button>
-                          {currentSessionId && <button onClick={() => forkAtMessage(messages[messages.length - 1].id)} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-(--accent) text-[#8a8580]"><GitBranch className="h-3.5 w-3.5" /><span className="text-xs">Fork</span></button>}
+                        <div className="flex items-center gap-2">
+                          <button onClick={copyLastResponse} className="flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 rounded hover:bg-(--accent) text-[#8a8580]">{copiedIndex === messages.length - 1 ? <Check className="h-4 w-4 md:h-3.5 md:w-3.5 text-(--success)" /> : <Copy className="h-4 w-4 md:h-3.5 md:w-3.5" />}<span className="text-sm md:text-xs">Copy</span></button>
+                          <button onClick={() => toggleBookmark(messages[messages.length - 1].id)} className="flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 rounded hover:bg-(--accent) text-[#8a8580]">{bookmarkedMessages.has(messages[messages.length - 1].id) ? <BookmarkCheck className="h-4 w-4 md:h-3.5 md:w-3.5 text-(--link)" /> : <Bookmark className="h-4 w-4 md:h-3.5 md:w-3.5" />}<span className="text-sm md:text-xs">Bookmark</span></button>
+                          {currentSessionId && <button onClick={() => forkAtMessage(messages[messages.length - 1].id)} className="flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 rounded hover:bg-(--accent) text-[#8a8580]"><GitBranch className="h-4 w-4 md:h-3.5 md:w-3.5" /><span className="text-sm md:text-xs">Fork</span></button>}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-[#6a6560]">
+                        <div className="flex items-center gap-2 text-sm md:text-xs text-[#6a6560]">
                           <ContextIndicator stats={contextManager.stats} config={contextManager.config} onCompact={contextManager.compact} onUpdateConfig={contextManager.updateConfig} isWarning={contextManager.isWarning} canSendMessage={contextManager.canSendMessage} utilizationLevel={contextManager.utilizationLevel} />
-                          {sessionUsage && (<><span className="text-[#4a4540]">•</span><div className="flex items-center gap-1 cursor-pointer hover:text-[#9a9590]" onClick={() => setUsageDetailsOpen(true)}><BarChart3 className="h-3 w-3" /><span>{sessionUsage.total_tokens.toLocaleString()} total</span>{sessionUsage.estimated_cost_usd != null && <span className="text-[#8a8580]">(${sessionUsage.estimated_cost_usd.toFixed(4)})</span>}</div></>)}
+                          {sessionUsage && (<><span className="text-[#4a4540]">•</span><div className="flex items-center gap-1.5 cursor-pointer hover:text-[#9a9590]" onClick={() => setUsageDetailsOpen(true)}><BarChart3 className="h-4 w-4 md:h-3 md:w-3" /><span>{sessionUsage.total_tokens.toLocaleString()} total</span>{sessionUsage.estimated_cost_usd != null && <span className="text-[#8a8580]">(${sessionUsage.estimated_cost_usd.toFixed(4)})</span>}</div></>)}
                         </div>
                       </div>
                     </div>

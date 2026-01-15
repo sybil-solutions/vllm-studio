@@ -221,7 +221,10 @@ async def proxy_huggingface_models(
     }
     hf_sort = sort_mapping.get(sort, "trendingScore")
 
-    params = {"limit": limit, "full": "false", "sort": hf_sort}
+    # Increase limit to allow more results (HF API supports up to 1000)
+    effective_limit = min(limit, 1000)
+    
+    params = {"limit": effective_limit, "full": "false", "sort": hf_sort}
     if search:
         params["search"] = search
     if filter:

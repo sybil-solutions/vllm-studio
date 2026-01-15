@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { Copy, Check, GitBranch, Sparkles } from 'lucide-react';
+import { Copy, Check, GitBranch, Sparkles, MessageSquare, Zap, Lightbulb } from 'lucide-react';
 import { MessageRenderer } from '@/components/chat';
 import { ToolCallCard } from '@/components/chat/tool-call-card';
 import type { ToolResult, ToolCall } from '@/lib/types';
@@ -53,11 +53,17 @@ export function ChatMessageList({
 }: ChatMessageListProps) {
   if (messages.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center px-4 py-8">
-          <h2 className="text-base font-medium mb-2">Start a conversation</h2>
-          <p className="text-sm text-[#9a9590] max-w-xs mx-auto">
-            {selectedModel ? 'Send a message to begin chatting.' : 'Select a model in Settings to get started.'}
+      <div className="flex items-center justify-center w-full flex-1 px-4">
+        <div className="text-center w-full max-w-md">
+          {/* Cute animated dots */}
+          <div className="flex justify-center gap-1.5 mb-4">
+            <div className="w-2 h-2 rounded-full bg-[#9a9590]/40 animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}></div>
+            <div className="w-2 h-2 rounded-full bg-[#9a9590]/50 animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1.4s' }}></div>
+            <div className="w-2 h-2 rounded-full bg-[#9a9590]/40 animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1.4s' }}></div>
+          </div>
+          
+          <p className="text-sm text-[#8a8580] mb-0.5">
+            {selectedModel ? "What's on your mind?" : "Choose a model to begin"}
           </p>
         </div>
       </div>
@@ -111,15 +117,15 @@ export function ChatMessageList({
       )}
 
       {isLoading && messages[messages.length - 1]?.role === 'assistant' && messages[messages.length - 1]?.content && (
-        <div className="flex items-center gap-2 text-xs text-[#9a9590]">
-          <span className="inline-flex h-2 w-2 rounded-full bg-[var(--warning)] animate-pulse" />
+        <div className="flex items-center gap-2 text-sm md:text-xs text-[#9a9590]">
+          <span className="inline-flex h-2.5 w-2.5 md:h-2 md:w-2 rounded-full bg-[var(--warning)] animate-pulse" />
           <span>Model is working…</span>
         </div>
       )}
 
       {/* Error message */}
       {error && (
-        <div className="px-3 py-2 bg-[#c97a6b]/10 border border-[#c97a6b]/20 rounded-lg text-xs text-[#c97a6b]">
+        <div className="px-4 py-3 md:px-3 md:py-2 bg-[#c97a6b]/10 border border-[#c97a6b]/20 rounded-lg text-sm md:text-xs text-[#c97a6b]">
           {error}
         </div>
       )}
@@ -138,16 +144,16 @@ interface UserMessageProps {
 function UserMessage({ message, index, copiedIndex, onCopy }: UserMessageProps) {
   return (
     <div className="group">
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-xs font-medium text-[#8a8580]">You</span>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-sm md:text-xs font-medium text-[#8a8580]">You</span>
         <button
           onClick={() => onCopy(message.content, index)}
-          className="p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
+          className="p-1.5 md:p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
         >
           {copiedIndex === index ? (
-            <Check className="h-3 w-3 text-[#7d9a6a]" />
+            <Check className="h-4 w-4 md:h-3 md:w-3 text-[#7d9a6a]" />
           ) : (
-            <Copy className="h-3 w-3 text-[#6a6560]" />
+            <Copy className="h-4 w-4 md:h-3 md:w-3 text-[#6a6560]" />
           )}
         </button>
       </div>
@@ -166,7 +172,7 @@ function UserMessage({ message, index, copiedIndex, onCopy }: UserMessageProps) 
           ))}
         </div>
       )}
-      <p className="text-[15px] text-[#e8e4dd] whitespace-pre-wrap break-words">{message.content}</p>
+      <p className="text-base md:text-[15px] text-[#e8e4dd] whitespace-pre-wrap break-words">{message.content}</p>
     </div>
   );
 }
@@ -205,36 +211,36 @@ function AssistantMessage({
 
   return (
     <div className="group">
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-xs font-medium text-[#9a8570]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-sm md:text-xs font-medium text-[#9a8570]">
           {message.model?.split('/').pop() || selectedModel?.split('/').pop() || modelName || 'Assistant'}
         </span>
         {totalTokens > 0 && (
-          <span className="text-[10px] text-[#6a6560] font-mono">
+          <span className="text-xs md:text-[10px] text-[#6a6560] font-mono">
             {totalTokens.toLocaleString()} tok
           </span>
         )}
         {currentSessionId && (
           <button
             onClick={() => onFork(message.id)}
-            className="p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
+            className="p-1.5 md:p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
             title="Fork"
           >
-            <GitBranch className="h-3 w-3 text-[#6a6560]" />
+            <GitBranch className="h-4 w-4 md:h-3 md:w-3 text-[#6a6560]" />
           </button>
         )}
         <button
           onClick={() => onCopy(message.content, index)}
-          className="p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
+          className="p-1.5 md:p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
         >
           {copiedIndex === index ? (
-            <Check className="h-3 w-3 text-[#7d9a6a]" />
+            <Check className="h-4 w-4 md:h-3 md:w-3 text-[#7d9a6a]" />
           ) : (
-            <Copy className="h-3 w-3 text-[#6a6560]" />
+            <Copy className="h-4 w-4 md:h-3 md:w-3 text-[#6a6560]" />
           )}
         </button>
       </div>
-      <div className="text-[15px] text-[#e8e4dd] overflow-hidden break-words">
+      <div className="text-base md:text-[15px] text-[#e8e4dd] overflow-hidden break-words">
         <MessageRenderer
           content={message.content}
           isStreaming={message.isStreaming}

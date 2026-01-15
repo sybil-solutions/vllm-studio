@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-import { X, Wrench, Layers, Loader2, Check } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { X, Loader2, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { ArtifactPanel } from '@/components/chat';
 import type { ToolCall, ToolResult, Artifact } from '@/lib/types';
 import type { ResearchProgress, ResearchSource } from '@/components/chat/research-progress';
@@ -62,47 +62,58 @@ export function ChatSidePanel({
 
   return (
     <div className="w-80 flex-shrink-0 border-l border-[var(--border)] bg-[var(--background)] flex flex-col overflow-hidden">
-      {/* Header with tabs */}
-      <div className="flex items-center justify-between px-2 py-1.5 border-b border-[var(--border)]">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onSetActivePanel('tools')}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
-              activePanel === 'tools' ? 'bg-[var(--accent)]' : 'text-[#9a9590] hover:bg-[var(--accent)]/50'
-            }`}
+      {/* Header with elegant tabs */}
+      <div className="border-b border-[var(--border)] bg-[var(--background)]">
+        <div className="flex items-center justify-between px-2 py-1">
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => onSetActivePanel('tools')}
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                activePanel === 'tools'
+                  ? 'text-[#e8e4dd] bg-[var(--accent)]/30'
+                  : 'text-[#9a9590] hover:text-[#b0a8a0] hover:bg-[var(--accent)]/10'
+              }`}
+            >
+              <span>Tools</span>
+              {(executingTools.size > 0 || thinkingActive) && (
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute h-full w-full rounded-full bg-[var(--success)] opacity-75" />
+                  <span className="relative h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+                </span>
+              )}
+              {allToolCalls.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/50">
+                  {allToolCalls.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => onSetActivePanel('artifacts')}
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                activePanel === 'artifacts'
+                  ? 'text-[#e8e4dd] bg-[var(--accent)]/30'
+                  : 'text-[#9a9590] hover:text-[#b0a8a0] hover:bg-[var(--accent)]/10'
+              }`}
+            >
+              <span>Artifacts</span>
+              {sessionArtifacts.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/50">
+                  {sessionArtifacts.length}
+                </span>
+              )}
+            </button>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-1.5 rounded hover:bg-[var(--accent)]/20 transition-colors"
           >
-            <Wrench className="h-3 w-3" />
-            Tools
-            {(executingTools.size > 0 || thinkingActive) && (
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute h-full w-full rounded-full bg-[var(--success)] opacity-75" />
-                <span className="relative h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
-              </span>
-            )}
-            {allToolCalls.length > 0 && (
-              <span className="text-[10px] bg-[var(--background)] px-1 rounded">{allToolCalls.length}</span>
-            )}
-          </button>
-          <button
-            onClick={() => onSetActivePanel('artifacts')}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
-              activePanel === 'artifacts' ? 'bg-[var(--accent)]' : 'text-[#9a9590] hover:bg-[var(--accent)]/50'
-            }`}
-          >
-            <Layers className="h-3 w-3" />
-            Artifacts
-            {sessionArtifacts.length > 0 && (
-              <span className="text-[10px] bg-[var(--background)] px-1 rounded">{sessionArtifacts.length}</span>
-            )}
+            <X className="h-3.5 w-3.5 text-[#9a9590] hover:text-[#b0a8a0]" />
           </button>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-[var(--accent)]">
-          <X className="h-3.5 w-3.5 text-[#9a9590]" />
-        </button>
       </div>
 
       {/* Panel content */}
-      <div className="flex-1 overflow-y-auto text-sm">
+      <div className="flex-1 min-h-0 overflow-y-auto text-sm">
         {activePanel === 'tools' && (
           <ToolsPanel
             allToolCalls={allToolCalls}
@@ -146,97 +157,207 @@ function ToolsPanel({
   activityItems,
 }: ToolsPanelProps) {
   const toolCount = allToolCalls.length;
+  // Default to all items expanded for better UX
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(
+    new Set(activityItems.map((item) => item.id))
+  );
 
-  const activityRows = useMemo(() => activityItems.map((item) => {
-    if (item.type === 'thinking') {
-      const label = item.isComplete ? 'Thinking' : 'Thinking...';
-      return (
-        <div key={item.id} className="px-3 py-2 border-b border-[var(--border)]">
-          <div className="flex items-center gap-2 text-xs font-medium text-[#b0a8a0]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--warning)]" />
-            <span className="uppercase tracking-wider">{label}</span>
-            {item.isStreaming && (
-              <span className="flex items-center gap-1 text-[10px] text-[#9a9590]">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute h-full w-full rounded-full bg-[var(--warning)] opacity-75" />
-                  <span className="relative h-1.5 w-1.5 rounded-full bg-[var(--warning)]" />
-                </span>
-                working
-              </span>
+  // Auto-expand new items when they're added
+  useEffect(() => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      activityItems.forEach((item) => {
+        if (!next.has(item.id)) {
+          next.add(item.id);
+        }
+      });
+      return next;
+    });
+  }, [activityItems]);
+
+  const toggleItem = (id: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const activityRows = useMemo(() => {
+    return activityItems.map((item, index) => {
+      const isExpanded = expandedItems.has(item.id);
+      const isLast = index === activityItems.length - 1;
+      const isFirst = index === 0;
+      
+      if (item.type === 'thinking') {
+        // Extract first few words for preview
+        const preview = item.content.trim().split(/\s+/).slice(0, 8).join(' ');
+        const label = preview ? `thought: ${preview}${item.content.trim().split(/\s+/).length > 8 ? '...' : ''}` : 'thought:';
+        return (
+          <div 
+            key={item.id} 
+            className="group relative transition-all"
+          >
+            {/* Sequence connector line */}
+            <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-[var(--border)]/20 via-[var(--border)]/30 to-transparent" />
+            {!isLast && (
+              <div className="absolute left-6 top-[44px] bottom-0 w-px bg-[var(--border)]/20" />
             )}
+            
+            <div className="relative border-b border-[var(--border)]/30 last:border-b-0">
+              <button
+                onClick={() => toggleItem(item.id)}
+                className="w-full px-4 py-3 pl-8 flex items-center gap-3 text-left hover:bg-[var(--accent)]/5 transition-all duration-150"
+              >
+                {/* Sequence dot */}
+                <div className="absolute left-5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[var(--accent)]/40 border-2 border-[var(--background)] z-10 group-hover:bg-[var(--accent)]/60 transition-colors" />
+                
+                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-[var(--accent)]/10 group-hover:bg-[var(--accent)]/20 transition-colors">
+                  {isExpanded ? (
+                    <ChevronDown className="h-3 w-3 text-[#b0a8a0]" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 text-[#b0a8a0]" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-[#d0c8c0]">{label}</span>
+                    {item.isStreaming && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute h-full w-full rounded-full bg-[var(--warning)] opacity-75" />
+                        <span className="relative h-2 w-2 rounded-full bg-[var(--warning)]" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+              {isExpanded && (
+                <div className="px-4 pb-3 pl-12">
+                  <div className="text-xs text-[#b0a8a0] leading-relaxed whitespace-pre-wrap break-words overflow-x-auto">
+                    {item.content}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="mt-2 pl-4 border-l border-[var(--border)] text-[11px] text-[#9a9590] whitespace-pre-wrap break-words">
-            {item.content}
+        );
+      }
+
+      const tc = item.toolCall;
+      const result = toolResultsMap.get(tc.id);
+      const isExecuting = executingTools.has(tc.id);
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(tc.function.arguments || '{}');
+      } catch {}
+      const mainArg = args.query || args.url || args.text || Object.values(args)[0];
+      const parts = tc.function.name.split('__');
+      const toolName = parts.length > 1 ? parts.slice(1).join('__') : tc.function.name;
+
+      return (
+        <div 
+          key={item.id} 
+          className={`group relative transition-all ${
+            isExecuting ? 'bg-[var(--warning)]/5' : ''
+          }`}
+        >
+          {/* Sequence connector line */}
+          <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-[var(--border)]/20 via-[var(--border)]/30 to-transparent" />
+          {!isLast && (
+            <div className="absolute left-6 top-[44px] bottom-0 w-px bg-[var(--border)]/20" />
+          )}
+          
+          <div className="relative border-b border-[var(--border)]/30 last:border-b-0">
+            <button
+              onClick={() => toggleItem(item.id)}
+              className="w-full px-4 py-3 pl-8 flex items-center gap-3 text-left hover:bg-[var(--accent)]/5 transition-all duration-150"
+            >
+              {/* Sequence dot */}
+              <div className={`absolute left-5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-[var(--background)] z-10 transition-colors ${
+                isExecuting 
+                  ? 'bg-[var(--warning)]/60 group-hover:bg-[var(--warning)]/80' 
+                  : result 
+                    ? result.isError 
+                      ? 'bg-[var(--error)]/60 group-hover:bg-[var(--error)]/80'
+                      : 'bg-[var(--success)]/60 group-hover:bg-[var(--success)]/80'
+                    : 'bg-[var(--accent)]/40 group-hover:bg-[var(--accent)]/60'
+              }`} />
+              
+              <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-[var(--accent)]/10 group-hover:bg-[var(--accent)]/20 transition-colors">
+                {isExecuting ? (
+                  <Loader2 className="h-3 w-3 text-[var(--warning)] animate-spin" />
+                ) : result ? (
+                  result.isError ? (
+                    <X className="h-3 w-3 text-[var(--error)]" />
+                  ) : (
+                    <Check className="h-3 w-3 text-[var(--success)]" />
+                  )
+                ) : (
+                  isExpanded ? (
+                    <ChevronDown className="h-3 w-3 text-[#b0a8a0]" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 text-[#b0a8a0]" />
+                  )
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-[#d0c8c0] truncate">{toolName}</div>
+                {mainArg != null && !isExpanded && (
+                  <div className="text-xs text-[#9a9590] truncate mt-0.5">{String(mainArg as string | number | boolean)}</div>
+                )}
+              </div>
+            </button>
+            {isExpanded && (
+              <div className="px-4 pb-3 pl-12 space-y-2">
+                {mainArg != null && (
+                  <div className="rounded-lg bg-[var(--accent)]/5 p-3 border border-[var(--border)]/20">
+                    <div className="text-xs text-[#b0a8a0] break-words">{String(mainArg as string | number | boolean)}</div>
+                  </div>
+                )}
+                {result && !isExecuting && (
+                  <div className={`rounded-lg p-3 border ${
+                    result.isError 
+                      ? 'bg-[var(--error)]/10 border-[var(--error)]/30' 
+                      : 'bg-[var(--accent)]/5 border-[var(--border)]/20'
+                  }`}>
+                    <div className={`text-xs font-mono leading-relaxed whitespace-pre-wrap break-words max-h-96 overflow-y-auto ${
+                      result.isError ? 'text-[var(--error)]' : 'text-[#b0a8a0]'
+                    }`}>
+                      {result.content}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       );
-    }
-
-    const tc = item.toolCall;
-    const result = toolResultsMap.get(tc.id);
-    const isExecuting = executingTools.has(tc.id);
-    let args: Record<string, unknown> = {};
-    try {
-      args = JSON.parse(tc.function.arguments || '{}');
-    } catch {}
-    const mainArg = args.query || args.url || args.text || Object.values(args)[0];
-    const parts = tc.function.name.split('__');
-    const toolName = parts.length > 1 ? parts.slice(1).join('__') : tc.function.name;
-
-    return (
-      <div
-        key={item.id}
-        className={`px-3 py-2 border-b border-[var(--border)] ${isExecuting ? 'bg-[var(--warning)]/5' : ''}`}
-      >
-        <div className="flex items-center gap-2 text-xs font-medium text-[#b0a8a0]">
-          {isExecuting ? (
-            <Loader2 className="h-3 w-3 text-[var(--warning)] animate-spin" />
-          ) : result ? (
-            result.isError ? (
-              <X className="h-3 w-3 text-[var(--error)]" />
-            ) : (
-              <Check className="h-3 w-3 text-[var(--success)]" />
-            )
-          ) : (
-            <Wrench className="h-3 w-3 text-[#9a9590]" />
-          )}
-          <span className="truncate">{toolName}</span>
-        </div>
-        <div className="mt-2 pl-4 border-l border-[var(--border)] text-[11px] text-[#9a9590]">
-          {mainArg != null && (
-            <p className="line-clamp-2">{String(mainArg as string | number | boolean).slice(0, 120)}</p>
-          )}
-          {result && !isExecuting && (
-            <p
-              className={`mt-1.5 font-mono line-clamp-3 ${
-                result.isError ? 'text-[var(--error)]' : 'text-[#9a9590]'
-              }`}
-            >
-              {result.content.slice(0, 200)}
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  }), [activityItems, executingTools, toolResultsMap]);
+    });
+  }, [activityItems, executingTools, toolResultsMap, expandedItems]);
 
   return (
     <>
       {researchProgress && (
-        <div className="px-3 py-2 border-b border-[var(--border)] bg-blue-500/5">
-          <div className="flex items-center gap-2">
+        <div className="px-3 py-2 border-b border-[var(--border)]/50 bg-blue-500/5">
+          <div className="flex items-center gap-2 text-xs text-[#b0a8a0]">
             <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
-            <span className="text-xs">{researchProgress.message || 'Researching...'}</span>
+            <span>{researchProgress.message || 'Researching...'}</span>
           </div>
         </div>
       )}
 
-      <div className="border-b border-[var(--border)]">
-        <div className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-[#b0a8a0] bg-[var(--accent)]/40">
-          <span className="uppercase tracking-wider">Activity</span>
-          <span className="text-[10px] text-[#9a9590]">{toolCount}</span>
+      <div>
+        <div className="px-3 py-2 text-xs font-medium text-[#b0a8a0] border-b border-[var(--border)]/50">
+          <span className="uppercase tracking-wider text-[10px]">Activity</span>
+          {toolCount > 0 && (
+            <span className="ml-2 text-[10px] text-[#9a9590]">({toolCount})</span>
+          )}
         </div>
-        <div>
+        <div className="relative">
           {activityRows}
           {activityRows.length === 0 && !researchProgress && !researchSources.length && !thinkingActive && !thinkingContent && (
             <div className="px-3 py-6 text-center text-xs text-[#9a9590]">No tool activity yet</div>
@@ -245,9 +366,9 @@ function ToolsPanel({
       </div>
 
       {researchSources.length > 0 && (
-        <div className="border-b border-[var(--border)]">
-          <div className="w-full px-3 py-2 text-xs font-medium text-[#b0a8a0] bg-[var(--accent)]/40">
-            <span className="uppercase tracking-wider">Sources</span>
+        <div className="border-t border-[var(--border)]/50">
+          <div className="px-3 py-2 text-xs font-medium text-[#b0a8a0] border-b border-[var(--border)]/50">
+            <span className="uppercase tracking-wider text-[10px]">Sources</span>
           </div>
           <div>
             {researchSources.map((source, i) => (
@@ -256,10 +377,10 @@ function ToolsPanel({
                 href={source.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block px-3 py-2 border-b border-[var(--border)] hover:bg-[var(--accent)]"
+                className="block px-3 py-2 hover:bg-[var(--accent)]/5 transition-colors border-b border-[var(--border)]/30 last:border-b-0"
               >
                 <div className="text-xs line-clamp-1">{source.title}</div>
-                <div className="text-[10px] text-[#9a9590] truncate">{source.url}</div>
+                <div className="text-[10px] text-[#9a9590] truncate mt-0.5">{source.url}</div>
               </a>
             ))}
           </div>

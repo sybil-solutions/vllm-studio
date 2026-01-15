@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search,
   RefreshCw,
@@ -13,7 +13,10 @@ import {
   X,
   Copy,
   Check,
+  CheckCircle2,
 } from 'lucide-react';
+import api from '@/lib/api';
+import type { ModelInfo } from '@/lib/types';
 
 interface HuggingFaceModel {
   _id: string;
@@ -48,16 +51,7 @@ const SORT_OPTIONS = [
   { value: 'modified', label: 'Recently Updated', icon: RefreshCw },
 ];
 
-const LIBRARY_FILTERS = [
-  { value: '', label: 'All Libraries' },
-  { value: 'transformers', label: 'Transformers' },
-  { value: 'pytorch', label: 'PyTorch' },
-  { value: 'safetensors', label: 'Safetensors' },
-  { value: 'gguf', label: 'GGUF' },
-  { value: 'exl2', label: 'EXL2' },
-  { value: 'awq', label: 'AWQ' },
-  { value: 'gptq', label: 'GPTQ' },
-];
+const QUANTIZATION_TAGS = ['awq', 'gptq', 'gguf', 'exl2', 'fp8', 'fp16', 'bf16', 'int8', 'int4', 'w4a16', 'w8a16'];
 
 function formatNumber(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -78,9 +72,36 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+function extractProvider(modelId: string): string {
+  const parts = modelId.split('/');
+  if (parts.length >= 2) {
+    return parts[0];
+  }
+  return 'HuggingFace';
+}
+
+function extractQuantizations(tags: string[]): string[] {
+  const quantizations: string[] = [];
+  const tagLower = tags.map(t => t.toLowerCase());
+  
+  for (const quant of QUANTIZATION_TAGS) {
+    if (tagLower.includes(quant.toLowerCase())) {
+      quantizations.push(quant.toUpperCase());
+    }
+  }
+  
+  return quantizations;
+}
+
+function normalizeModelId(modelId: string): string {
+  return modelId.toLowerCase().replace(/[-_](awq|gptq|gguf|exl2|fp8|fp16|bf16|int8|int4|w4a16|w8a16)[-_]?/gi, '');
+}
+
 export default function DiscoverPage() {
   const [models, setModels] = useState<HuggingFaceModel[]>([]);
+  const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingLocal, setLoadingLocal] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [task, setTask] = useState('text-generation');
@@ -88,8 +109,54 @@ export default function DiscoverPage() {
   const [library, setLibrary] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [providerFilter, setProviderFilter] = useState<string>('');
 
-  const fetchModels = useCallback(async () => {
+  const PAGE_SIZE = 50;
+
+  // Load local models
+  useEffect(() => {
+    let mounted = true;
+    api.getModels()
+      .then((data) => {
+        if (mounted) {
+          setLocalModels(data.models || []);
+          setLoadingLocal(false);
+        }
+      })
+      .catch(() => {
+        if (mounted) setLoadingLocal(false);
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  // Create a map of local model names for quick lookup
+  const localModelMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    localModels.forEach(model => {
+      const normalized = normalizeModelId(model.name);
+      map.set(normalized, true);
+      const pathParts = model.path.split('/');
+      pathParts.forEach(part => {
+        const normalizedPart = normalizeModelId(part);
+        if (normalizedPart) map.set(normalizedPart, true);
+      });
+    });
+    return map;
+  }, [localModels]);
+
+  const isModelLocal = useCallback((modelId: string): boolean => {
+    const normalized = normalizeModelId(modelId);
+    if (localModelMap.has(normalized)) return true;
+    const parts = normalized.split(/[-_/]/);
+    for (const part of parts) {
+      if (part && localModelMap.has(part)) return true;
+    }
+    return false;
+  }, [localModelMap]);
+
+  const fetchModels = useCallback(async (pageNum = 1, append = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -98,14 +165,23 @@ export default function DiscoverPage() {
       if (task) params.set('filter', task);
       if (library) params.set('filter', library);
       params.set('sort', sort);
-      params.set('limit', '50');
+      params.set('limit', String(PAGE_SIZE));
       params.set('full', 'false');
 
-      const baseUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || process.env.VLLM_STUDIO_BACKEND_URL || 'https://api.homelabai.org';
-      const response = await fetch(`${baseUrl}/v1/huggingface/models?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch models');
+      const response = await fetch(`/api/proxy/v1/huggingface/models?${params.toString()}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch models' }));
+        throw new Error(errorData.detail || 'Failed to fetch models');
+      }
       const data = await response.json();
-      setModels(data);
+      
+      if (append) {
+        setModels(prev => [...prev, ...data]);
+      } else {
+        setModels(data);
+      }
+      
+      setHasMore(data.length === PAGE_SIZE);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -114,11 +190,20 @@ export default function DiscoverPage() {
   }, [search, task, sort, library]);
 
   useEffect(() => {
+    setPage(1);
     const debounce = setTimeout(() => {
-      fetchModels();
+      fetchModels(1, false);
     }, 300);
     return () => clearTimeout(debounce);
-  }, [fetchModels]);
+  }, [search, task, sort, library]);
+
+  const loadMore = useCallback(() => {
+    if (!loading && hasMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchModels(nextPage, true);
+    }
+  }, [page, loading, hasMore, fetchModels]);
 
   const copyModelId = (modelId: string) => {
     navigator.clipboard.writeText(modelId);
@@ -126,79 +211,84 @@ export default function DiscoverPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const getTaskBadgeColor = (_task?: string) => {
-    return 'bg-[var(--highlight-bg)] text-[var(--accent-purple)]';
-  };
+  // Extract unique providers from models
+  const providers = useMemo(() => {
+    const providerSet = new Set<string>();
+    models.forEach(model => {
+      providerSet.add(extractProvider(model.modelId));
+    });
+    return Array.from(providerSet).sort();
+  }, [models]);
 
-  const getLibraryBadgeColor = (_library?: string) => {
-    return 'bg-[var(--highlight-bg)] text-[var(--accent-purple)]';
-  };
+  // Filter models by provider
+  const filteredModels = useMemo(() => {
+    if (!providerFilter) return models;
+    return models.filter(model => extractProvider(model.modelId) === providerFilter);
+  }, [models, providerFilter]);
 
   return (
-    <div className="min-h-full bg-[#1b1b1b] text-[#f0ebe3]">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-lg sm:text-xl font-medium">Discover Models</h1>
-            <p className="text-xs sm:text-sm text-[#9a9088] mt-1">
-              Browse models from Hugging Face Hub
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                showFilters ? 'bg-[var(--accent-purple)] text-[#f0ebe3]' : 'bg-[#363432] text-[#9a9088] hover:text-[#f0ebe3]'
-              }`}
-            >
-              <Filter className="h-4 w-4" />
-              <span className="hidden sm:inline">Filters</span>
-            </button>
-            <button
-              onClick={fetchModels}
-              disabled={loading}
-              className="p-2 bg-[#363432] hover:bg-[#4a4846] rounded-lg transition-colors"
-            >
-              <RefreshCw className={`h-4 w-4 text-[#9a9088] ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+    <div className="flex flex-col h-full bg-[var(--background)] text-[var(--foreground)]">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-[var(--border)]" style={{ paddingLeft: '1.5rem', paddingRight: '1.5rem', paddingTop: '1rem', paddingBottom: '1rem' }}>
+        <h1 className="text-xl font-semibold">Discover Models</h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+              showFilters 
+                ? 'bg-[var(--accent-purple)] text-white' 
+                : 'bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+            }`}
+          >
+            <Filter className="h-4 w-4" />
+            <span className="hidden sm:inline">Filters</span>
+          </button>
+          <button
+            onClick={() => fetchModels(1, false)}
+            disabled={loading}
+            className="p-2 hover:bg-[var(--card-hover)] rounded-lg transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 text-[var(--muted-foreground)] ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
+      </div>
 
-        {/* Search & Filters */}
-        <div className="space-y-4 mb-6">
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9a9088]" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search models..."
-              className="w-full pl-10 pr-4 py-2.5 bg-[#1e1e1e] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] placeholder-[#9a9088]/50 focus:outline-none focus:border-[var(--accent-purple)]"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-[#363432] rounded"
-              >
-                <X className="h-3.5 w-3.5 text-[#9a9088]" />
-              </button>
-            )}
+      {/* Content */}
+      <div className="flex-1 overflow-auto">
+        <div style={{ padding: '1.5rem' }}>
+          {/* Toolbar */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)]" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search models..."
+                className="w-full pl-10 pr-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]/50 focus:outline-none focus:border-[var(--accent-purple)]"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-[var(--card-hover)] rounded transition-colors"
+                >
+                  <X className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Filters row */}
+          {/* Filters */}
           {showFilters && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-[#1e1e1e] rounded-lg border border-[#363432]">
-              {/* Task filter */}
-              <div>
-                <label className="block text-xs text-[#9a9088] mb-1.5">Task</label>
-                <div className="relative">
+            <div className="mb-4 p-4 bg-[var(--card)] border border-[var(--border)] rounded-lg">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                {/* Task filter */}
+                <div>
+                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Task</label>
                   <select
                     value={task}
                     onChange={(e) => setTask(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] focus:outline-none focus:border-[var(--accent-purple)] appearance-none cursor-pointer"
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-purple)]"
                   >
                     {TASKS.map((t) => (
                       <option key={t.value} value={t.value}>
@@ -206,37 +296,51 @@ export default function DiscoverPage() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9a9088] pointer-events-none" />
                 </div>
-              </div>
 
-              {/* Library filter */}
-              <div>
-                <label className="block text-xs text-[#9a9088] mb-1.5">Library</label>
-                <div className="relative">
+                {/* Provider filter */}
+                <div>
+                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Provider</label>
                   <select
-                    value={library}
-                    onChange={(e) => setLibrary(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] focus:outline-none focus:border-[var(--accent-purple)] appearance-none cursor-pointer"
+                    value={providerFilter}
+                    onChange={(e) => setProviderFilter(e.target.value)}
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-purple)]"
                   >
-                    {LIBRARY_FILTERS.map((l) => (
-                      <option key={l.value} value={l.value}>
-                        {l.label}
+                    <option value="">All Providers</option>
+                    {providers.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9a9088] pointer-events-none" />
                 </div>
-              </div>
 
-              {/* Sort */}
-              <div>
-                <label className="block text-xs text-[#9a9088] mb-1.5">Sort By</label>
-                <div className="relative">
+                {/* Library filter */}
+                <div>
+                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Library</label>
+                  <select
+                    value={library}
+                    onChange={(e) => setLibrary(e.target.value)}
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-purple)]"
+                  >
+                    <option value="">All Libraries</option>
+                    <option value="transformers">Transformers</option>
+                    <option value="pytorch">PyTorch</option>
+                    <option value="safetensors">Safetensors</option>
+                    <option value="gguf">GGUF</option>
+                    <option value="exl2">EXL2</option>
+                    <option value="awq">AWQ</option>
+                    <option value="gptq">GPTQ</option>
+                  </select>
+                </div>
+
+                {/* Sort */}
+                <div>
+                  <label className="block text-xs text-[var(--muted-foreground)] mb-1.5">Sort By</label>
                   <select
                     value={sort}
                     onChange={(e) => setSort(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] focus:outline-none focus:border-[var(--accent-purple)] appearance-none cursor-pointer"
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-sm text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-purple)]"
                   >
                     {SORT_OPTIONS.map((s) => (
                       <option key={s.value} value={s.value}>
@@ -244,14 +348,13 @@ export default function DiscoverPage() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9a9088] pointer-events-none" />
                 </div>
               </div>
             </div>
           )}
 
           {/* Quick sort chips */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 mb-4">
             {SORT_OPTIONS.map((opt) => {
               const Icon = opt.icon;
               return (
@@ -260,8 +363,8 @@ export default function DiscoverPage() {
                   onClick={() => setSort(opt.value)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
                     sort === opt.value
-                      ? 'bg-[var(--accent-purple)] text-[#f0ebe3]'
-                      : 'bg-[#363432] text-[#9a9088] hover:text-[#f0ebe3]'
+                      ? 'bg-[var(--accent-purple)] text-white'
+                      : 'bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card-hover)]'
                   }`}
                 >
                   <Icon className="h-3 w-3" />
@@ -270,171 +373,164 @@ export default function DiscoverPage() {
               );
             })}
           </div>
-        </div>
 
-        {/* Results */}
-        {error ? (
-          <div className="text-center py-12">
-            <p className="text-[#c97a6b] mb-4">{error}</p>
-            <button
-              onClick={fetchModels}
-              className="px-4 py-2 bg-[#363432] rounded-lg text-[#f0ebe3] hover:bg-[#4a4846]"
-            >
-              Retry
-            </button>
-          </div>
-        ) : loading && models.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-5 w-5 text-[#9a9088] animate-spin" />
-          </div>
-        ) : models.length === 0 ? (
-          <div className="text-center py-12 text-[#9a9088]">
-            <p>No models found</p>
-            <p className="text-sm mt-1">Try adjusting your search or filters</p>
-          </div>
-        ) : (
-          <>
-            <div className="text-xs text-[#9a9088] mb-3">
-              {models.length} models
+          {/* Results */}
+          {error ? (
+            <div className="text-center py-12">
+              <p className="text-[var(--error)] mb-4">{error}</p>
+              <button
+                onClick={() => fetchModels(1, false)}
+                className="px-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] hover:bg-[var(--card-hover)] transition-colors"
+              >
+                Retry
+              </button>
             </div>
-            <div className="grid gap-3 w-full overflow-hidden">
-              {models.map((model) => (
-                <div
-                  key={model._id}
-                  className="bg-[#1e1e1e] rounded-lg p-3 sm:p-4 border border-[#363432] hover:border-[#4a4846] transition-colors w-full overflow-hidden"
-                >
-                  {/* Mobile: stacked layout */}
-                  <div className="sm:hidden w-full">
-                    <div className="flex items-center justify-between gap-2 mb-2 w-full">
-                      <h3 className="text-sm font-medium text-[#f0ebe3] truncate flex-1 min-w-0">
-                        {model.modelId}
-                      </h3>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => copyModelId(model.modelId)}
-                          className="p-1.5 hover:bg-[#363432] rounded transition-colors"
-                          title="Copy model ID"
-                        >
-                          {copiedId === model.modelId ? (
-                            <Check className="h-4 w-4 text-[#7d9a6a]" />
-                          ) : (
-                            <Copy className="h-4 w-4 text-[#9a9088]" />
-                          )}
-                        </button>
-                        <a
-                          href={`https://huggingface.co/${model.modelId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 hover:bg-[#363432] rounded transition-colors"
-                          title="View on Hugging Face"
-                        >
-                          <ExternalLink className="h-4 w-4 text-[#9a9088]" />
-                        </a>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 w-full">
-                      <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
-                        {model.pipeline_tag && (
-                          <span className={`px-2 py-0.5 rounded text-[10px] ${getTaskBadgeColor(model.pipeline_tag)}`}>
-                            {model.pipeline_tag}
-                          </span>
-                        )}
-                        {model.library_name && (
-                          <span className={`px-2 py-0.5 rounded text-[10px] ${getLibraryBadgeColor(model.library_name)}`}>
-                            {model.library_name}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-[#9a9088] shrink-0">
-                        <span className="flex items-center gap-1">
-                          <Download className="h-3 w-3 shrink-0" />
-                          {formatNumber(model.downloads)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Heart className="h-3 w-3 shrink-0" />
-                          {formatNumber(model.likes)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Desktop: row layout */}
-                  <div className="hidden sm:flex sm:items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-medium text-[#f0ebe3] truncate">
-                          {model.modelId}
-                        </h3>
-                        <button
-                          onClick={() => copyModelId(model.modelId)}
-                          className="p-1 hover:bg-[#363432] rounded transition-colors shrink-0"
-                          title="Copy model ID"
-                        >
-                          {copiedId === model.modelId ? (
-                            <Check className="h-3 w-3 text-[#7d9a6a]" />
-                          ) : (
-                            <Copy className="h-3 w-3 text-[#9a9088]" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {model.pipeline_tag && (
-                          <span className={`px-2 py-0.5 rounded text-[10px] ${getTaskBadgeColor(model.pipeline_tag)}`}>
-                            {model.pipeline_tag}
-                          </span>
-                        )}
-                        {model.library_name && (
-                          <span className={`px-2 py-0.5 rounded text-[10px] ${getLibraryBadgeColor(model.library_name)}`}>
-                            {model.library_name}
-                          </span>
-                        )}
-                        {model.tags?.includes('gguf') && (
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-[var(--highlight-bg)] text-[var(--accent-purple)]">
-                            GGUF
-                          </span>
-                        )}
-                        {model.tags?.includes('exl2') && (
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-[var(--highlight-bg)] text-[var(--accent-purple)]">
-                            EXL2
-                          </span>
-                        )}
-                        {model.tags?.includes('awq') && (
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-[var(--highlight-bg)] text-[var(--accent-purple)]">
-                            AWQ
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-[#9a9088] shrink-0">
-                      <div className="flex items-center gap-1" title="Downloads">
-                        <Download className="h-3.5 w-3.5" />
-                        <span>{formatNumber(model.downloads)}</span>
-                      </div>
-                      <div className="flex items-center gap-1" title="Likes">
-                        <Heart className="h-3.5 w-3.5" />
-                        <span>{formatNumber(model.likes)}</span>
-                      </div>
-                      {model.lastModified && (
-                        <span className="text-[#9a9088]/70">
-                          {formatDate(model.lastModified)}
-                        </span>
-                      )}
-                      <a
-                        href={`https://huggingface.co/${model.modelId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 hover:bg-[#363432] rounded transition-colors"
-                        title="View on Hugging Face"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </div>
-                  </div>
+          ) : loading && models.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-[var(--muted-foreground)]">
+              <RefreshCw className="h-5 w-5 animate-spin" />
+            </div>
+          ) : filteredModels.length === 0 ? (
+            <div className="text-center py-12 text-[var(--muted-foreground)]">
+              <p>No models found</p>
+              <p className="text-sm mt-1">Try adjusting your search or filters</p>
+            </div>
+          ) : (
+            <>
+              <div className="text-xs text-[var(--muted-foreground)] mb-3">
+                {filteredModels.length} {filteredModels.length === 1 ? 'model' : 'models'}
+                {providerFilter && ` from ${providerFilter}`}
+              </div>
+              <div className="border border-[var(--border)] rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-[var(--card)] border-b border-[var(--border)]">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">Model</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">Provider</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">Task</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">Quantization</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">Stats</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {filteredModels.map((model, i) => {
+                      const provider = extractProvider(model.modelId);
+                      const quantizations = extractQuantizations(model.tags);
+                      const isLocal = isModelLocal(model.modelId);
+                      
+                      return (
+                        <tr key={model._id} className="hover:bg-[var(--card)]/30 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium text-[var(--foreground)] truncate max-w-xs" title={model.modelId}>
+                                {model.modelId}
+                              </div>
+                              <button
+                                onClick={() => copyModelId(model.modelId)}
+                                className="p-1 hover:bg-[var(--card-hover)] rounded transition-colors shrink-0"
+                                title="Copy model ID"
+                              >
+                                {copiedId === model.modelId ? (
+                                  <Check className="h-3 w-3 text-[var(--success)]" />
+                                ) : (
+                                  <Copy className="h-3 w-3 text-[var(--muted-foreground)]" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-1 bg-[var(--card)] border border-[var(--border)] rounded text-xs text-[var(--foreground)]">
+                              {provider}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {model.pipeline_tag ? (
+                              <span className="px-2 py-1 bg-[var(--card)] border border-[var(--border)] rounded text-xs text-[var(--muted-foreground)]">
+                                {model.pipeline_tag}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-[var(--muted-foreground)]">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {quantizations.length > 0 ? (
+                                quantizations.map((quant) => (
+                                  <span
+                                    key={quant}
+                                    className="px-2 py-1 bg-[var(--warning)]/20 text-[var(--warning)] border border-[var(--warning)]/30 rounded text-xs font-medium"
+                                  >
+                                    {quant}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-[var(--muted-foreground)]">—</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            {isLocal ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-[var(--success)]/20 text-[var(--success)] border border-[var(--success)]/30">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Local
+                              </span>
+                            ) : (
+                              <span className="text-xs text-[var(--muted-foreground)]">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-4 text-xs text-[var(--muted-foreground)]">
+                              <div className="flex items-center gap-1" title="Downloads">
+                                <Download className="h-3.5 w-3.5" />
+                                <span>{formatNumber(model.downloads)}</span>
+                              </div>
+                              <div className="flex items-center gap-1" title="Likes">
+                                <Heart className="h-3.5 w-3.5" />
+                                <span>{formatNumber(model.likes)}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <a
+                              href={`https://huggingface.co/${model.modelId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 hover:bg-[var(--card-hover)] rounded transition-colors inline-block text-[var(--link)] hover:text-[var(--link-hover)]"
+                              title="View on Hugging Face"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Load More */}
+              {hasMore && (
+                <div className="mt-6 text-center">
+                  <button
+                    onClick={loadMore}
+                    disabled={loading}
+                    className="px-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm text-[var(--foreground)] hover:bg-[var(--card-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <span className="flex items-center gap-2">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Loading...
+                      </span>
+                    ) : (
+                      'Load More'
+                    )}
+                  </button>
                 </div>
-              ))}
-            </div>
-          </>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

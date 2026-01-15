@@ -246,6 +246,21 @@ a.nav-link:hover,
   animation: pulse-soft 2s ease-in-out infinite;
 }
 
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1.4s ease-in-out infinite;
+}
+
 /* Slide animations for mobile */
 @keyframes slide-in-left {
   from {
@@ -348,6 +363,23 @@ a.nav-link:hover,
     overflow: hidden;
     position: fixed;
     width: 100%;
+  }
+
+  /* Increase base font size on mobile for better readability */
+  body {
+    font-size: 16px;
+  }
+
+  /* Ensure minimum touch target sizes (44x44px recommended by Apple/Google) */
+  button, a[role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Increase spacing for better readability */
+  .message-content p {
+    font-size: 16px;
+    line-height: 1.6;
   }
 }
 

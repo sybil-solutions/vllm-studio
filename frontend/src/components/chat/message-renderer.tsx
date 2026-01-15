@@ -309,7 +309,7 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
               if (isInline) {
               return (
                 <code
-                  className="px-1.5 py-0.5 rounded bg-[var(--accent)] font-mono text-sm"
+                  className="px-2 py-1 md:px-1.5 md:py-0.5 rounded bg-[var(--accent)] font-mono text-base md:text-sm"
                   {...props}
                 >
                   {codeContent}
@@ -329,25 +329,25 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
               );
             },
             p({ children }) {
-              return <p className="mb-3 last:mb-0 leading-relaxed text-[#e8e4dd]">{children}</p>;
+              return <p className="mb-3 last:mb-0 leading-relaxed text-base md:text-[15px] text-[#e8e4dd]">{children}</p>;
             },
             ul({ children }) {
-              return <ul className="mb-3 pl-4 space-y-1 list-disc">{children}</ul>;
+              return <ul className="mb-3 pl-5 md:pl-4 space-y-1.5 md:space-y-1 list-disc">{children}</ul>;
             },
             ol({ children }) {
-              return <ol className="mb-3 pl-4 space-y-1 list-decimal">{children}</ol>;
+              return <ol className="mb-3 pl-5 md:pl-4 space-y-1.5 md:space-y-1 list-decimal">{children}</ol>;
             },
             li({ children }) {
-              return <li className="leading-relaxed text-[#e8e4dd]">{children}</li>;
+              return <li className="leading-relaxed text-base md:text-[15px] text-[#e8e4dd]">{children}</li>;
             },
             h1({ children }) {
-              return <h1 className="text-2xl font-semibold mb-3 mt-6 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h1>;
+              return <h1 className="text-3xl md:text-2xl font-semibold mb-3 mt-6 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h1>;
             },
             h2({ children }) {
-              return <h2 className="text-xl font-semibold mb-3 mt-5 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h2>;
+              return <h2 className="text-2xl md:text-xl font-semibold mb-3 mt-5 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h2>;
             },
             h3({ children }) {
-              return <h3 className="text-lg font-semibold mb-2 mt-4 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h3>;
+              return <h3 className="text-xl md:text-lg font-semibold mb-2 mt-4 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h3>;
             },
             blockquote({ children }) {
               return (
@@ -388,14 +388,14 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
             },
             th({ children }) {
               return (
-                <th className="px-4 py-2 text-left text-xs font-medium text-[#d8d4cd] uppercase tracking-wider">
+                <th className="px-4 py-2.5 md:py-2 text-left text-sm md:text-xs font-medium text-[#d8d4cd] uppercase tracking-wider">
                   {children}
                 </th>
               );
             },
             td({ children }) {
               return (
-                <td className="px-4 py-2 text-sm text-[#e8e4dd] align-top">
+                <td className="px-4 py-2.5 md:py-2 text-base md:text-sm text-[#e8e4dd] align-top">
                   {children}
                 </td>
               );
