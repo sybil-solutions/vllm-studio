@@ -1,266 +1,269 @@
 'use client';
 
+import { useMemo, useRef, useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Copy, Check, GitBranch, Sparkles, MessageSquare, Zap, Lightbulb } from 'lucide-react';
-import { MessageRenderer } from '@/components/chat';
-import { ToolCallCard } from '@/components/chat/tool-call-card';
-import type { ToolResult, ToolCall } from '@/lib/types';
+import { AlertCircle, Copy, Check, Bookmark, BookmarkCheck, GitBranch } from 'lucide-react';
+import { MessageRenderer, splitThinking } from '@/components/chat/message-renderer';
+import { normalizeAssistantMarkdownForRender } from '@/lib/chat-markdown';
 
-export interface ChatMessage {
+interface Message {
   id: string;
-  role: 'user' | 'assistant';
-  content: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string | null;
+  model?: string | null;
   images?: string[];
+  toolCalls?: Array<{
+    id: string;
+    type: string;
+    function: { name: string; arguments: string };
+  }>;
+  toolResults?: Array<{
+    tool_call_id: string;
+    content: string;
+    isError?: boolean;
+  }>;
   isStreaming?: boolean;
-  toolCalls?: ToolCall[];
-  toolResults?: ToolResult[];
-  model?: string;
-  total_tokens?: number;
-  request_total_input_tokens?: number | null;
-  request_completion_tokens?: number | null;
+  createdAt?: string;
 }
 
+export type ChatMessage = Message;
+
 interface ChatMessageListProps {
-  messages: ChatMessage[];
-  selectedModel?: string;
-  modelName?: string;
-  currentSessionId: string | null;
+  messages: Message[];
+  currentSessionId?: string | null;
+  bookmarkedMessages: Set<string>;
   artifactsEnabled: boolean;
-  isMobile: boolean;
   isLoading: boolean;
   error: string | null;
   copiedIndex: number | null;
-  toolResultsMap: Map<string, ToolResult>;
-  executingTools: Set<string>;
   onCopy: (text: string, index: number) => void;
   onFork: (messageId: string) => void;
+  onToggleBookmark: (messageId: string) => void;
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-1 py-1">
+      <div className="w-2 h-2 rounded-full bg-[var(--success)] animate-bounce" style={{ animationDelay: '0ms' }} />
+      <div className="w-2 h-2 rounded-full bg-[var(--success)] animate-bounce" style={{ animationDelay: '150ms' }} />
+      <div className="w-2 h-2 rounded-full bg-[var(--success)] animate-bounce" style={{ animationDelay: '300ms' }} />
+    </div>
+  );
 }
 
 export function ChatMessageList({
   messages,
-  selectedModel,
-  modelName,
   currentSessionId,
+  bookmarkedMessages,
   artifactsEnabled,
-  isMobile,
   isLoading,
   error,
   copiedIndex,
-  toolResultsMap,
-  executingTools,
   onCopy,
   onFork,
+  onToggleBookmark,
 }: ChatMessageListProps) {
-  if (messages.length === 0) {
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showCopied, setShowCopied] = useState(false);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const normalizedMessages = useMemo(() => {
+    return messages.map((msg) => ({
+      ...msg,
+      content: msg.role === 'assistant' && msg.content
+        ? normalizeAssistantMarkdownForRender(msg.content)
+        : msg.content,
+    }));
+  }, [messages]);
+
+  const visibleMessages = useMemo(() => {
+    return normalizedMessages.filter((msg) => {
+      if (msg.role !== 'assistant') return true;
+      if (msg.isStreaming) return true;
+      const rawContent = msg.content ?? '';
+      if (!rawContent.trim()) return false;
+      const { mainContent } = splitThinking(rawContent);
+      return mainContent.trim().length > 0;
+    });
+  }, [normalizedMessages]);
+
+  const lastAssistantMessage = useMemo(() => {
+    return [...visibleMessages].reverse().find((m) => m.role === 'assistant');
+  }, [visibleMessages]);
+
+  const handleCopy = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      onCopy(text, index);
+      setShowCopied(true);
+      setTimeout(() => setShowCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  if (error) {
     return (
-      <div className="flex items-center justify-center w-full flex-1 px-4">
-        <div className="text-center w-full max-w-md">
-          {/* Cute animated dots */}
-          <div className="flex justify-center gap-1.5 mb-4">
-            <div className="w-2 h-2 rounded-full bg-[#9a9590]/40 animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}></div>
-            <div className="w-2 h-2 rounded-full bg-[#9a9590]/50 animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1.4s' }}></div>
-            <div className="w-2 h-2 rounded-full bg-[#9a9590]/40 animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1.4s' }}></div>
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+        <h3 className="text-lg font-medium text-[#e8e4dd] mb-2">Error Loading Messages</h3>
+        <p className="text-sm text-[#9a9590] max-w-md">{error}</p>
+      </div>
+    );
+  }
+
+  if (messages.length === 0 && !isLoading) {
+    return <div className="flex-1" />;
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col">
+        {visibleMessages.map((message, index) => (
+          <MessageItem
+            key={message.id}
+            message={message}
+            index={index}
+            currentSessionId={currentSessionId || null}
+            artifactsEnabled={artifactsEnabled}
+            onCopy={handleCopy}
+            onFork={onFork}
+            onToggleBookmark={onToggleBookmark}
+            bookmarked={bookmarkedMessages.has(message.id)}
+            showCopied={showCopied && index === copiedIndex}
+          />
+        ))}
+        {isLoading && !lastAssistantMessage && (
+          <div className="max-w-4xl mx-auto w-full px-4 md:px-6 py-3">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)]/40 px-4 py-3">
+              <TypingIndicator />
+            </div>
           </div>
-          
-          <p className="text-sm text-[#8a8580] mb-0.5">
-            {selectedModel ? "What's on your mind?" : "Choose a model to begin"}
-          </p>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+    </div>
+  );
+}
+
+interface MessageItemProps {
+  message: Message;
+  index: number;
+  currentSessionId: string | null;
+  artifactsEnabled: boolean;
+  onCopy: (text: string, index: number) => void;
+  onFork: (messageId: string) => void;
+  onToggleBookmark: (messageId: string) => void;
+  bookmarked: boolean;
+  showCopied: boolean;
+}
+
+function MessageItem({
+  message,
+  index,
+  currentSessionId,
+  artifactsEnabled,
+  onCopy,
+  onFork,
+  onToggleBookmark,
+  bookmarked,
+  showCopied,
+}: MessageItemProps) {
+  const isUser = message.role === 'user';
+  const isAssistant = message.role === 'assistant';
+  const showActions = isAssistant && message.content && !message.isStreaming;
+
+  const content = message.content || '';
+
+  if (isUser) {
+    return (
+      <div id={`message-${message.id}`} className="max-w-4xl mx-auto w-full px-4 md:px-6 py-2">
+        <div className="ml-auto max-w-[75%] md:max-w-[62%] rounded-xl border border-[var(--border)] bg-[var(--card)]/70 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-[#9a9590] mb-1">You</div>
+          {message.images && message.images.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {message.images.map((base64, i) => (
+                <Image
+                  key={i}
+                  src={`data:image/jpeg;base64,${base64}`}
+                  alt=""
+                  width={140}
+                  height={140}
+                  className="max-w-[140px] max-h-[140px] rounded-lg border border-[var(--border)] h-auto w-auto"
+                  unoptimized
+                />
+              ))}
+            </div>
+          )}
+          <div className="prose prose-invert max-w-none">
+            <p className="text-[16px] leading-relaxed text-[#e8e4dd] whitespace-pre-wrap break-words">
+              {content}
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-4xl mx-auto py-6 px-4 md:px-6 space-y-6">
-      {messages.map((message, index) => (
-        <div key={message.id} id={`message-${message.id}`} className="animate-message-appear">
-          {message.role === 'user' ? (
-            <UserMessage
-              message={message}
-              index={index}
-              copiedIndex={copiedIndex}
-              onCopy={onCopy}
-            />
-          ) : (
-            <AssistantMessage
-              message={message}
-              index={index}
-              selectedModel={selectedModel}
-              modelName={modelName}
-              currentSessionId={currentSessionId}
-              artifactsEnabled={artifactsEnabled}
-              isMobile={isMobile}
-              copiedIndex={copiedIndex}
-              toolResultsMap={toolResultsMap}
-              executingTools={executingTools}
-              onCopy={onCopy}
-              onFork={onFork}
-            />
-          )}
-        </div>
-      ))}
-
-      {/* Loading indicator */}
-      {isLoading && messages[messages.length - 1]?.role === 'assistant' && !messages[messages.length - 1]?.content && (
-        <div className="flex gap-3">
-          <div className="w-6 h-6 rounded-full bg-[#7d9a6a]/20 flex items-center justify-center">
-            <Sparkles className="h-3 w-3 text-[#7d9a6a] animate-pulse" />
-          </div>
-          <div className="flex items-center pt-1.5">
-            <div className="flex gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" />
-              <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-[#8b7355] animate-pulse" style={{ animationDelay: '300ms' }} />
+  if (isAssistant) {
+    return (
+      <div id={`message-${message.id}`} className="max-w-4xl mx-auto w-full px-4 md:px-6 py-2">
+        <div className="relative group max-w-[88%] md:max-w-[80%] mr-auto">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-[#9a9590] mb-1">Assistant</div>
+          <MessageRenderer
+            content={content}
+            isStreaming={message.isStreaming}
+            artifactsEnabled={artifactsEnabled}
+            messageId={message.id}
+            showActions={false}
+          />
+          <div
+            className={`absolute right-0 -top-1 opacity-0 group-hover:opacity-100 transition-opacity ${showActions ? '' : 'hidden'}`}
+          >
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => onCopy(content, index)}
+                className="p-1.5 rounded-full border border-transparent hover:border-[var(--border)] text-[#8a8580] hover:text-[#c9a66b]"
+                title="Copy"
+                aria-label="Copy"
+              >
+                {showCopied ? (
+                  <Check className="h-3.5 w-3.5 text-[var(--success)]" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </button>
+              <button
+                onClick={() => onToggleBookmark(message.id)}
+                className="p-1.5 rounded-full border border-transparent hover:border-[var(--border)] text-[#8a8580] hover:text-[#c9a66b]"
+                title="Bookmark"
+                aria-label="Bookmark"
+              >
+                {bookmarked ? (
+                  <BookmarkCheck className="h-3.5 w-3.5 text-[var(--link)]" />
+                ) : (
+                  <Bookmark className="h-3.5 w-3.5" />
+                )}
+              </button>
+              {currentSessionId && (
+                <button
+                  onClick={() => onFork(message.id)}
+                  className="p-1.5 rounded-full border border-transparent hover:border-[var(--border)] text-[#8a8580] hover:text-[#c9a66b]"
+                  title="Fork"
+                  aria-label="Fork"
+                >
+                  <GitBranch className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
-      )}
-
-      {isLoading && messages[messages.length - 1]?.role === 'assistant' && messages[messages.length - 1]?.content && (
-        <div className="flex items-center gap-2 text-sm md:text-xs text-[#9a9590]">
-          <span className="inline-flex h-2.5 w-2.5 md:h-2 md:w-2 rounded-full bg-[var(--warning)] animate-pulse" />
-          <span>Model is working…</span>
-        </div>
-      )}
-
-      {/* Error message */}
-      {error && (
-        <div className="px-4 py-3 md:px-3 md:py-2 bg-[#c97a6b]/10 border border-[#c97a6b]/20 rounded-lg text-sm md:text-xs text-[#c97a6b]">
-          {error}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// User Message Component
-interface UserMessageProps {
-  message: ChatMessage;
-  index: number;
-  copiedIndex: number | null;
-  onCopy: (text: string, index: number) => void;
-}
-
-function UserMessage({ message, index, copiedIndex, onCopy }: UserMessageProps) {
-  return (
-    <div className="group">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-sm md:text-xs font-medium text-[#8a8580]">You</span>
-        <button
-          onClick={() => onCopy(message.content, index)}
-          className="p-1.5 md:p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
-        >
-          {copiedIndex === index ? (
-            <Check className="h-4 w-4 md:h-3 md:w-3 text-[#7d9a6a]" />
-          ) : (
-            <Copy className="h-4 w-4 md:h-3 md:w-3 text-[#6a6560]" />
-          )}
-        </button>
       </div>
-      {message.images && message.images.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {message.images.map((base64, i) => (
-            <Image
-              key={i}
-              src={`data:image/jpeg;base64,${base64}`}
-              alt=""
-              width={140}
-              height={140}
-              className="max-w-[140px] max-h-[140px] rounded-xl border border-[#363432] h-auto w-auto"
-              unoptimized
-            />
-          ))}
-        </div>
-      )}
-      <p className="text-base md:text-[15px] text-[#e8e4dd] whitespace-pre-wrap break-words">{message.content}</p>
-    </div>
-  );
-}
+    );
+  }
 
-// Assistant Message Component
-interface AssistantMessageProps {
-  message: ChatMessage;
-  index: number;
-  selectedModel?: string;
-  modelName?: string;
-  currentSessionId: string | null;
-  artifactsEnabled: boolean;
-  isMobile: boolean;
-  copiedIndex: number | null;
-  toolResultsMap: Map<string, ToolResult>;
-  executingTools: Set<string>;
-  onCopy: (text: string, index: number) => void;
-  onFork: (messageId: string) => void;
-}
-
-function AssistantMessage({
-  message,
-  index,
-  selectedModel,
-  modelName,
-  currentSessionId,
-  artifactsEnabled,
-  isMobile,
-  copiedIndex,
-  toolResultsMap,
-  executingTools,
-  onCopy,
-  onFork,
-}: AssistantMessageProps) {
-  const totalTokens = (message.request_total_input_tokens || 0) + (message.request_completion_tokens || 0) || message.total_tokens || 0;
-
-  return (
-    <div className="group">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-sm md:text-xs font-medium text-[#9a8570]">
-          {message.model?.split('/').pop() || selectedModel?.split('/').pop() || modelName || 'Assistant'}
-        </span>
-        {totalTokens > 0 && (
-          <span className="text-xs md:text-[10px] text-[#6a6560] font-mono">
-            {totalTokens.toLocaleString()} tok
-          </span>
-        )}
-        {currentSessionId && (
-          <button
-            onClick={() => onFork(message.id)}
-            className="p-1.5 md:p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
-            title="Fork"
-          >
-            <GitBranch className="h-4 w-4 md:h-3 md:w-3 text-[#6a6560]" />
-          </button>
-        )}
-        <button
-          onClick={() => onCopy(message.content, index)}
-          className="p-1.5 md:p-1 rounded hover:bg-[#363432] opacity-0 group-hover:opacity-100"
-        >
-          {copiedIndex === index ? (
-            <Check className="h-4 w-4 md:h-3 md:w-3 text-[#7d9a6a]" />
-          ) : (
-            <Copy className="h-4 w-4 md:h-3 md:w-3 text-[#6a6560]" />
-          )}
-        </button>
-      </div>
-      <div className="text-base md:text-[15px] text-[#e8e4dd] overflow-hidden break-words">
-        <MessageRenderer
-          content={message.content}
-          isStreaming={message.isStreaming}
-          artifactsEnabled={artifactsEnabled}
-          messageId={message.id}
-          showActions={true}
-        />
-        {isMobile && message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {message.toolCalls.map((tc) => (
-              <ToolCallCard
-                key={tc.id}
-                toolCall={tc}
-                result={toolResultsMap.get(tc.id)}
-                isExecuting={executingTools.has(tc.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return null;
 }

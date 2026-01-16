@@ -70,8 +70,8 @@ export function ChatSidePanel({
               onClick={() => onSetActivePanel('tools')}
               className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
                 activePanel === 'tools'
-                  ? 'text-[#e8e4dd] bg-[var(--accent)]/30'
-                  : 'text-[#9a9590] hover:text-[#b0a8a0] hover:bg-[var(--accent)]/10'
+                  ? 'text-[#e8e4dd]'
+                  : 'text-[#9a9590] hover:text-[#b0a8a0]'
               }`}
             >
               <span>Tools</span>
@@ -82,7 +82,7 @@ export function ChatSidePanel({
                 </span>
               )}
               {allToolCalls.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/50">
+                <span className="text-[10px] px-1.5 py-0.5">
                   {allToolCalls.length}
                 </span>
               )}
@@ -91,13 +91,13 @@ export function ChatSidePanel({
               onClick={() => onSetActivePanel('artifacts')}
               className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
                 activePanel === 'artifacts'
-                  ? 'text-[#e8e4dd] bg-[var(--accent)]/30'
-                  : 'text-[#9a9590] hover:text-[#b0a8a0] hover:bg-[var(--accent)]/10'
+                  ? 'text-[#e8e4dd]'
+                  : 'text-[#9a9590] hover:text-[#b0a8a0]'
               }`}
             >
               <span>Artifacts</span>
               {sessionArtifacts.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/50">
+                <span className="text-[10px] px-1.5 py-0.5">
                   {sessionArtifacts.length}
                 </span>
               )}
@@ -105,7 +105,7 @@ export function ChatSidePanel({
           </div>
           <button 
             onClick={onClose} 
-            className="p-1.5 rounded hover:bg-[var(--accent)]/20 transition-colors"
+            className="p-1.5 hover:opacity-80 transition-opacity"
           >
             <X className="h-3.5 w-3.5 text-[#9a9590] hover:text-[#b0a8a0]" />
           </button>
@@ -211,12 +211,12 @@ function ToolsPanel({
             <div className="relative border-b border-[var(--border)]/30 last:border-b-0">
               <button
                 onClick={() => toggleItem(item.id)}
-                className="w-full px-4 py-3 pl-8 flex items-center gap-3 text-left hover:bg-[var(--accent)]/5 transition-all duration-150"
+                className="w-full px-4 py-3 pl-8 flex items-center gap-3 text-left transition-all duration-150"
               >
                 {/* Sequence dot */}
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[var(--accent)]/40 border-2 border-[var(--background)] z-10 group-hover:bg-[var(--accent)]/60 transition-colors" />
+                <div className="absolute left-5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[var(--accent)]/40 border-2 border-[var(--background)] z-10 transition-colors" />
                 
-                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-[var(--accent)]/10 group-hover:bg-[var(--accent)]/20 transition-colors">
+                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-[var(--accent)]/10 transition-colors">
                   {isExpanded ? (
                     <ChevronDown className="h-3 w-3 text-[#b0a8a0]" />
                   ) : (
@@ -257,13 +257,12 @@ function ToolsPanel({
       const mainArg = args.query || args.url || args.text || Object.values(args)[0];
       const parts = tc.function.name.split('__');
       const toolName = parts.length > 1 ? parts.slice(1).join('__') : tc.function.name;
+      const hasContent = Boolean((mainArg != null && String(mainArg).trim()) || result?.content?.trim());
 
       return (
         <div 
           key={item.id} 
-          className={`group relative transition-all ${
-            isExecuting ? 'bg-[var(--warning)]/5' : ''
-          }`}
+          className="group relative transition-all"
         >
           {/* Sequence connector line */}
           <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-[var(--border)]/20 via-[var(--border)]/30 to-transparent" />
@@ -274,20 +273,20 @@ function ToolsPanel({
           <div className="relative border-b border-[var(--border)]/30 last:border-b-0">
             <button
               onClick={() => toggleItem(item.id)}
-              className="w-full px-4 py-3 pl-8 flex items-center gap-3 text-left hover:bg-[var(--accent)]/5 transition-all duration-150"
+              className="w-full px-4 py-3 pl-8 flex items-center gap-3 text-left transition-all duration-150"
             >
               {/* Sequence dot */}
               <div className={`absolute left-5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-[var(--background)] z-10 transition-colors ${
                 isExecuting 
-                  ? 'bg-[var(--warning)]/60 group-hover:bg-[var(--warning)]/80' 
+                  ? 'bg-[var(--warning)]/60' 
                   : result 
                     ? result.isError 
-                      ? 'bg-[var(--error)]/60 group-hover:bg-[var(--error)]/80'
-                      : 'bg-[var(--success)]/60 group-hover:bg-[var(--success)]/80'
-                    : 'bg-[var(--accent)]/40 group-hover:bg-[var(--accent)]/60'
+                      ? 'bg-[var(--error)]/60'
+                      : 'bg-[var(--success)]/60'
+                    : 'bg-[var(--accent)]/40'
               }`} />
               
-              <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-[var(--accent)]/10 group-hover:bg-[var(--accent)]/20 transition-colors">
+              <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-[var(--accent)]/10 transition-colors">
                 {isExecuting ? (
                   <Loader2 className="h-3 w-3 text-[var(--warning)] animate-spin" />
                 ) : result ? (
@@ -297,10 +296,14 @@ function ToolsPanel({
                     <Check className="h-3 w-3 text-[var(--success)]" />
                   )
                 ) : (
-                  isExpanded ? (
-                    <ChevronDown className="h-3 w-3 text-[#b0a8a0]" />
+                  hasContent ? (
+                    isExpanded ? (
+                      <ChevronDown className="h-3 w-3 text-[#b0a8a0]" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3 text-[#b0a8a0]" />
+                    )
                   ) : (
-                    <ChevronRight className="h-3 w-3 text-[#b0a8a0]" />
+                    <span className="h-2 w-2 rounded-full border border-[var(--border)]" />
                   )
                 )}
               </div>
@@ -309,26 +312,25 @@ function ToolsPanel({
                 {mainArg != null && !isExpanded && (
                   <div className="text-xs text-[#9a9590] truncate mt-0.5">{String(mainArg as string | number | boolean)}</div>
                 )}
+                {result && !isExpanded && !isExecuting && result.content && (
+                  <div className={`text-[10px] mt-0.5 ${result.isError ? 'text-[var(--error)]/80' : 'text-[#9a9590]'} truncate`}>
+                    {result.content}
+                  </div>
+                )}
               </div>
             </button>
             {isExpanded && (
               <div className="px-4 pb-3 pl-12 space-y-2">
                 {mainArg != null && (
-                  <div className="rounded-lg bg-[var(--accent)]/5 p-3 border border-[var(--border)]/20">
-                    <div className="text-xs text-[#b0a8a0] break-words">{String(mainArg as string | number | boolean)}</div>
+                  <div className="text-xs text-[#b0a8a0] break-words">
+                    {String(mainArg as string | number | boolean)}
                   </div>
                 )}
                 {result && !isExecuting && (
-                  <div className={`rounded-lg p-3 border ${
-                    result.isError 
-                      ? 'bg-[var(--error)]/10 border-[var(--error)]/30' 
-                      : 'bg-[var(--accent)]/5 border-[var(--border)]/20'
+                  <div className={`text-xs font-mono leading-relaxed whitespace-pre-wrap break-words max-h-96 overflow-y-auto ${
+                    result.isError ? 'text-[var(--error)]' : 'text-[#b0a8a0]'
                   }`}>
-                    <div className={`text-xs font-mono leading-relaxed whitespace-pre-wrap break-words max-h-96 overflow-y-auto ${
-                      result.isError ? 'text-[var(--error)]' : 'text-[#b0a8a0]'
-                    }`}>
-                      {result.content}
-                    </div>
+                    {result.content}
                   </div>
                 )}
               </div>
@@ -342,7 +344,7 @@ function ToolsPanel({
   return (
     <>
       {researchProgress && (
-        <div className="px-3 py-2 border-b border-[var(--border)]/50 bg-blue-500/5">
+        <div className="px-3 py-2 border-b border-[var(--border)]/50">
           <div className="flex items-center gap-2 text-xs text-[#b0a8a0]">
             <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
             <span>{researchProgress.message || 'Researching...'}</span>
@@ -377,7 +379,7 @@ function ToolsPanel({
                 href={source.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block px-3 py-2 hover:bg-[var(--accent)]/5 transition-colors border-b border-[var(--border)]/30 last:border-b-0"
+                className="block px-3 py-2 transition-colors border-b border-[var(--border)]/30 last:border-b-0"
               >
                 <div className="text-xs line-clamp-1">{source.title}</div>
                 <div className="text-[10px] text-[#9a9590] truncate mt-0.5">{source.url}</div>

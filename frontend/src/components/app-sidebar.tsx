@@ -36,17 +36,24 @@ interface AppSidebarProps {
 
 export function AppSidebar({ children }: AppSidebarProps) {
   const pathname = usePathname();
-  const getIsMobile = () => (typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-  const getInitialCollapsed = () => {
-    if (typeof window === 'undefined') return false;
-    const mobile = window.innerWidth < 768;
-    if (mobile) return true;
-    const saved = localStorage.getItem('app-sidebar-collapsed');
-    return saved === 'true';
-  };
-  const [collapsed, setCollapsed] = useState(getInitialCollapsed);
-  const [isMobile, setIsMobile] = useState(getIsMobile);
+  // Use consistent defaults for SSR to avoid hydration mismatch
+  const [collapsed, setCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Hydrate state from localStorage after mount
+  useEffect(() => {
+    const mobile = window.innerWidth < 768;
+    setIsMobile(mobile);
+    if (mobile) {
+      setCollapsed(true);
+    } else {
+      const saved = localStorage.getItem('app-sidebar-collapsed');
+      setCollapsed(saved === 'true');
+    }
+    setHydrated(true);
+  }, []);
   const [status, setStatus] = useState<{ online: boolean; inferenceOnline: boolean; model?: string }>({
     online: false,
     inferenceOnline: false,
@@ -200,24 +207,28 @@ export function AppSidebar({ children }: AppSidebarProps) {
                       <>
                         <button
                           onClick={() => setChatHistoryOpen(!chatHistoryOpen)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-[#9a9590] hover:text-[var(--foreground)] text-sm"
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-[#9a9590] hover:text-[#b0a8a0] text-xs font-medium transition-colors"
                         >
-                          <ChevronDown className={`h-4 w-4 transition-transform ${chatHistoryOpen ? '' : '-rotate-90'}`} />
+                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${chatHistoryOpen ? '' : '-rotate-90'}`} />
                           <span>Your chats</span>
                         </button>
 
                         {chatHistoryOpen && (
-                          <div className="space-y-0.5 max-h-96 overflow-y-auto">
-                            {chatSessions.map((session) => (
-                              <Link
-                                key={session.id}
-                                href={`/chat?session=${session.id}`}
-                                onClick={() => { if (isMobile) setMobileOpen(false); }}
-                                className="block px-3 py-2 text-sm text-[#e0e0e0] hover:text-white truncate"
-                              >
-                                {session.title}
-                              </Link>
-                            ))}
+                          <div className="space-y-0.5 max-h-96 overflow-y-auto ml-4">
+                            {chatSessions.map((session) => {
+                              const displayTitle = session.title || 'New Chat';
+                              return (
+                                <Link
+                                  key={session.id}
+                                  href={`/chat?session=${session.id}`}
+                                  onClick={() => { if (isMobile) setMobileOpen(false); }}
+                                  className="block px-3 py-1.5 text-xs text-[#9a9590] hover:text-[#b0a8a0] hover:bg-[var(--accent)]/10 rounded transition-colors truncate"
+                                  title={displayTitle}
+                                >
+                                  {displayTitle}
+                                </Link>
+                              );
+                            })}
                           </div>
                         )}
                       </>
@@ -264,27 +275,27 @@ export function AppSidebar({ children }: AppSidebarProps) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 h-full overflow-y-auto overflow-x-hidden bg-[var(--background)]">
+      <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden bg-[var(--background)]">
         {/* Mobile header */}
         {isMobile && (
-          <div className="sticky top-0 z-30 bg-[var(--card)] border-b border-[var(--border)] px-4 py-3 flex items-center gap-3"
-            style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0))' }}
+          <div className="sticky top-0 z-30 bg-[var(--card)] border-b border-[var(--border)] px-3 py-2 flex items-center gap-2"
+            style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0))' }}
           >
             <button
               onClick={() => setMobileOpen(true)}
               className="p-1 -ml-1 rounded hover:bg-[var(--accent)]"
             >
-              <Layers className="h-5 w-5 text-[var(--link)]" />
+              <Layers className="h-4 w-4 text-[var(--link)]" />
             </button>
-            <span className="font-medium text-sm">
+            <span className="font-medium text-xs">
               {navItems.find(item => item.href === pathname)?.label || 'vLLM Studio'}
             </span>
-            <div className="ml-auto flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
+            <div className="ml-auto flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${
                 status.inferenceOnline ? 'bg-[var(--success)]' : status.online ? 'bg-yellow-500' : 'bg-[var(--error)]'
               }`} />
-              <span className="text-xs text-[#9a9590]">
-                {status.inferenceOnline ? (status.model?.slice(0, 15) || 'Ready') : status.online ? 'No model' : 'Offline'}
+              <span className="text-[11px] text-[#9a9590]">
+                {status.inferenceOnline ? (status.model?.slice(0, 12) || 'Ready') : status.online ? 'No model' : 'Offline'}
               </span>
             </div>
           </div>

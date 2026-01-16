@@ -29,13 +29,14 @@ interface ContextIndicatorProps {
   isWarning: boolean;
   canSendMessage: boolean;
   utilizationLevel: 'low' | 'medium' | 'high' | 'critical';
+  variant?: 'full' | 'icon';
 }
 
 const LEVEL_COLORS = {
-  low: { bar: 'bg-[#7d9a6a]', text: 'text-[#7d9a6a]', bg: 'bg-[#7d9a6a]/10' },
-  medium: { bar: 'bg-[#c9a66b]', text: 'text-[#c9a66b]', bg: 'bg-[#c9a66b]/10' },
-  high: { bar: 'bg-[#c98b6b]', text: 'text-[#c98b6b]', bg: 'bg-[#c98b6b]/10' },
-  critical: { bar: 'bg-[#c97a6b]', text: 'text-[#c97a6b]', bg: 'bg-[#c97a6b]/10' },
+  low: { bar: 'bg-[#7d9a6a]', text: 'text-[#9a9590]', bg: 'bg-transparent' },
+  medium: { bar: 'bg-[#c9a66b]', text: 'text-[#b0a8a0]', bg: 'bg-transparent' },
+  high: { bar: 'bg-[#c98b6b]', text: 'text-[#c98b6b]', bg: 'bg-transparent' },
+  critical: { bar: 'bg-[#c97a6b]', text: 'text-[#c97a6b]', bg: 'bg-transparent' },
 };
 
 export function ContextIndicator({
@@ -46,6 +47,7 @@ export function ContextIndicator({
   isWarning,
   canSendMessage,
   utilizationLevel,
+  variant = 'full',
 }: ContextIndicatorProps) {
   const [showDetails, setShowDetails] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -53,62 +55,95 @@ export function ContextIndicator({
 
   const colors = LEVEL_COLORS[utilizationLevel];
   const percentage = Math.round(stats.utilization * 100);
+  const iconLabel = `Context ${percentage}%${isWarning ? ' (high)' : ''}`;
 
   return (
     <div className="relative">
       {/* Compact indicator */}
-      <button
-        onClick={() => setShowDetails(!showDetails)}
-        className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-colors ${colors.bg} hover:opacity-80`}
-        title={`Context: ${formatTokenCount(stats.currentTokens)} / ${formatTokenCount(stats.maxContext)} tokens (${percentage}%)`}
-      >
-        <Gauge className={`h-3.5 w-3.5 ${colors.text}`} />
-        <div className="w-16 h-1.5 bg-[#363432] rounded-full overflow-hidden">
-          <div
-            className={`h-full ${colors.bar} transition-all duration-300`}
-            style={{ width: `${Math.min(100, percentage)}%` }}
-          />
-        </div>
-        <span className={`text-xs font-mono ${colors.text}`}>
-          {percentage}%
-        </span>
-        {isWarning && (
-          <AlertTriangle className="h-3.5 w-3.5 text-[#c9a66b] animate-pulse" />
-        )}
-        {showDetails ? (
-          <ChevronUp className="h-3 w-3 text-[#9a9088]" />
-        ) : (
-          <ChevronDown className="h-3 w-3 text-[#9a9088]" />
-        )}
-      </button>
+      {variant === 'icon' ? (
+        <button
+          onClick={() => setShowDetails(!showDetails)}
+          className={`relative h-8 w-8 rounded-full border border-[var(--border)]/40 text-[#9a9590] hover:text-[#c9a66b] hover:border-[#c9a66b]/40 transition-colors ${showDetails ? 'text-[#c9a66b]' : ''}`}
+          title={iconLabel}
+          aria-label={iconLabel}
+        >
+          <span className="absolute inset-0 flex items-center justify-center">
+            <Gauge className="h-4 w-4" />
+          </span>
+          <svg className="absolute inset-0" viewBox="0 0 36 36" aria-hidden="true">
+            <path
+              d="M18 4 a 14 14 0 0 1 0 28 a 14 14 0 0 1 0 -28"
+              fill="none"
+              stroke="rgba(138,133,128,0.25)"
+              strokeWidth="2"
+            />
+            <path
+              d="M18 4 a 14 14 0 0 1 0 28 a 14 14 0 0 1 0 -28"
+              fill="none"
+              stroke={utilizationLevel === 'critical' ? '#c97a6b' : utilizationLevel === 'high' ? '#c98b6b' : utilizationLevel === 'medium' ? '#c9a66b' : '#7d9a6a'}
+              strokeWidth="2"
+              strokeDasharray={`${Math.min(100, percentage)} 100`}
+              strokeLinecap="round"
+            />
+          </svg>
+          {isWarning && (
+            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#c9a66b]" />
+          )}
+        </button>
+      ) : (
+        <button
+          onClick={() => setShowDetails(!showDetails)}
+          className="flex items-center gap-3 px-3 py-1.5 rounded-md transition-all hover:bg-[var(--accent)]/10 border border-[var(--border)]/30"
+          title={`Context: ${formatTokenCount(stats.currentTokens)} / ${formatTokenCount(stats.maxContext)} tokens (${percentage}%)`}
+        >
+          <Gauge className={`h-3.5 w-3.5 ${colors.text}`} />
+          <div className="w-16 h-1.5 bg-[var(--border)]/40 rounded-full overflow-hidden">
+            <div
+              className={`h-full ${colors.bar} transition-all duration-300`}
+              style={{ width: `${Math.min(100, percentage)}%` }}
+            />
+          </div>
+          <span className={`text-xs font-mono ${colors.text}`}>
+            {percentage}%
+          </span>
+          {isWarning && (
+            <AlertTriangle className="h-3.5 w-3.5 text-[#c9a66b] animate-pulse ml-1" />
+          )}
+          {showDetails ? (
+            <ChevronUp className="h-3 w-3 text-[#9a9088] ml-1" />
+          ) : (
+            <ChevronDown className="h-3 w-3 text-[#9a9088] ml-1" />
+          )}
+        </button>
+      )}
 
       {/* Details popup */}
       {showDetails && (
-        <div className="absolute bottom-full right-0 mb-2 w-80 bg-[#1e1e1e] border border-[#363432] rounded-lg shadow-xl z-50 overflow-hidden">
+        <div className="absolute bottom-full right-0 mb-2 w-80 bg-[var(--background)] border border-[var(--border)]/50 rounded-lg shadow-xl z-50 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#363432]">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]/30">
             <div className="flex items-center gap-2">
               <Activity className={`h-4 w-4 ${colors.text}`} />
-              <span className="font-medium text-[#f0ebe3]">Context Usage</span>
+              <span className="font-medium text-[#d0c8c0]">Context Usage</span>
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setShowHistory(!showHistory)}
-                className="p-1.5 hover:bg-[#363432] rounded"
+                className="p-1.5 hover:bg-[var(--accent)]/10 rounded transition-colors"
                 title="Compaction history"
               >
                 <History className="h-4 w-4 text-[#9a9088]" />
               </button>
               <button
                 onClick={() => setShowSettings(!showSettings)}
-                className="p-1.5 hover:bg-[#363432] rounded"
+                className="p-1.5 hover:bg-[var(--accent)]/10 rounded transition-colors"
                 title="Settings"
               >
                 <Settings className="h-4 w-4 text-[#9a9088]" />
               </button>
               <button
                 onClick={() => setShowDetails(false)}
-                className="p-1.5 hover:bg-[#363432] rounded"
+                className="p-1.5 hover:bg-[var(--accent)]/10 rounded transition-colors"
               >
                 <X className="h-4 w-4 text-[#9a9088]" />
               </button>
@@ -131,7 +166,7 @@ export function ContextIndicator({
                       {formatTokenCount(stats.currentTokens)} / {formatTokenCount(stats.maxContext)}
                     </span>
                   </div>
-                  <div className="h-3 bg-[#363432] rounded-full overflow-hidden">
+                  <div className="h-3 bg-[var(--border)]/40 rounded-full overflow-hidden">
                     <div
                       className={`h-full ${colors.bar} transition-all duration-300`}
                       style={{ width: `${Math.min(100, percentage)}%` }}
@@ -145,27 +180,27 @@ export function ContextIndicator({
 
                 {/* Breakdown */}
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-[#1b1b1b] p-2 rounded">
+                  <div className="bg-[var(--accent)]/5 p-2 rounded border border-[var(--border)]/20">
                     <div className="text-[#9a9088] text-xs">Messages</div>
-                    <div className="text-[#f0ebe3] font-mono">{stats.messagesCount}</div>
+                    <div className="text-[#d0c8c0] font-mono">{stats.messagesCount}</div>
                   </div>
-                  <div className="bg-[#1b1b1b] p-2 rounded">
+                  <div className="bg-[var(--accent)]/5 p-2 rounded border border-[var(--border)]/20">
                     <div className="text-[#9a9088] text-xs">Conversation</div>
-                    <div className="text-[#f0ebe3] font-mono">{formatTokenCount(stats.conversationTokens)}</div>
+                    <div className="text-[#d0c8c0] font-mono">{formatTokenCount(stats.conversationTokens)}</div>
                   </div>
-                  <div className="bg-[#1b1b1b] p-2 rounded">
+                  <div className="bg-[var(--accent)]/5 p-2 rounded border border-[var(--border)]/20">
                     <div className="text-[#9a9088] text-xs">System prompt</div>
-                    <div className="text-[#f0ebe3] font-mono">{formatTokenCount(stats.systemPromptTokens)}</div>
+                    <div className="text-[#d0c8c0] font-mono">{formatTokenCount(stats.systemPromptTokens)}</div>
                   </div>
-                  <div className="bg-[#1b1b1b] p-2 rounded">
+                  <div className="bg-[var(--accent)]/5 p-2 rounded border border-[var(--border)]/20">
                     <div className="text-[#9a9088] text-xs">Tools</div>
-                    <div className="text-[#f0ebe3] font-mono">{formatTokenCount(stats.toolsTokens)}</div>
+                    <div className="text-[#d0c8c0] font-mono">{formatTokenCount(stats.toolsTokens)}</div>
                   </div>
                 </div>
 
                 {/* Warning message */}
                 {!canSendMessage && (
-                  <div className="flex items-center gap-2 p-2 bg-[#c97a6b]/10 rounded text-sm text-[#c97a6b]">
+                  <div className="flex items-center gap-2 p-2 bg-[var(--error)]/10 rounded text-sm text-[var(--error)] border border-[var(--error)]/20">
                     <AlertTriangle className="h-4 w-4" />
                     Context nearly full. Compact to continue.
                   </div>
@@ -173,18 +208,18 @@ export function ContextIndicator({
 
                 {/* Lifetime stats */}
                 {stats.totalCompactions > 0 && (
-                  <div className="text-xs text-[#9a9088] border-t border-[#363432] pt-3">
+                  <div className="text-xs text-[#9a9088] border-t border-[var(--border)]/30 pt-3">
                     Total compactions: {stats.totalCompactions} ({formatTokenCount(stats.totalTokensCompacted)} tokens freed)
                   </div>
                 )}
               </div>
 
               {/* Actions */}
-              <div className="p-4 border-t border-[#363432] flex gap-2">
+              <div className="p-4 border-t border-[var(--border)]/30 flex gap-2">
                 <button
                   onClick={() => onCompact('sliding_window')}
                   disabled={stats.messagesCount <= config.preserveRecentMessages}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-[#8b7355] text-white rounded-lg hover:bg-[#8b7355]/90 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-[var(--accent)]/20 text-[#d0c8c0] rounded-lg hover:bg-[var(--accent)]/30 disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
                 >
                   <Zap className="h-4 w-4" />
                   Compact
@@ -192,7 +227,7 @@ export function ContextIndicator({
                 <button
                   onClick={() => onCompact('truncate')}
                   disabled={stats.messagesCount <= config.preserveRecentMessages}
-                  className="flex items-center justify-center gap-2 px-3 py-2 border border-[#363432] text-[#9a9088] rounded-lg hover:bg-[#2a2826] disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="flex items-center justify-center gap-2 px-3 py-2 border border-[var(--border)]/30 text-[#9a9088] rounded-lg hover:bg-[var(--accent)]/10 disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
                   title="Truncate (remove oldest)"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -225,7 +260,7 @@ function SettingsPanel({
           max="95"
           value={config.compactionThreshold * 100}
           onChange={(e) => onUpdate({ compactionThreshold: parseInt(e.target.value) / 100 })}
-          className="w-full accent-[#8b7355]"
+          className="w-full accent-[var(--accent)]"
         />
       </div>
       <div>
@@ -238,7 +273,7 @@ function SettingsPanel({
           max="70"
           value={config.targetAfterCompaction * 100}
           onChange={(e) => onUpdate({ targetAfterCompaction: parseInt(e.target.value) / 100 })}
-          className="w-full accent-[#8b7355]"
+          className="w-full accent-[var(--accent)]"
         />
       </div>
       <div>
@@ -251,15 +286,15 @@ function SettingsPanel({
           max="20"
           value={config.preserveRecentMessages}
           onChange={(e) => onUpdate({ preserveRecentMessages: parseInt(e.target.value) })}
-          className="w-full accent-[#8b7355]"
+          className="w-full accent-[var(--accent)]"
         />
       </div>
-      <label className="flex items-center gap-2 text-sm text-[#f0ebe3]">
+      <label className="flex items-center gap-2 text-sm text-[#d0c8c0]">
         <input
           type="checkbox"
           checked={config.autoCompact}
           onChange={(e) => onUpdate({ autoCompact: e.target.checked })}
-          className="accent-[#8b7355]"
+          className="accent-[var(--accent)]"
         />
         Auto-compact when threshold reached
       </label>
@@ -276,7 +311,7 @@ function HistoryPanel({ history }: { history: CompactionEvent[] }) {
   if (history.length === 0) {
     return (
       <div className="p-4 text-center text-[#9a9088] text-sm">
-        No compaction history yet
+        No compaction history
       </div>
     );
   }
@@ -286,10 +321,10 @@ function HistoryPanel({ history }: { history: CompactionEvent[] }) {
       {sortedHistory.map((event) => (
         <div
           key={event.id}
-          className="p-3 border-b border-[#363432] last:border-0"
+          className="p-3 border-b border-[var(--border)]/30 last:border-0 hover:bg-[var(--accent)]/5 transition-colors"
         >
           <div className="flex items-center justify-between text-sm">
-            <span className="text-[#f0ebe3]">{event.strategy}</span>
+            <span className="text-[#d0c8c0]">{event.strategy}</span>
             <span className="text-xs text-[#9a9088]">
               {event.timestamp.toLocaleTimeString()}
             </span>

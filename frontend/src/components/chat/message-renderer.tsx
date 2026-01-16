@@ -11,7 +11,6 @@ import { EnhancedCodeBlock } from './enhanced-code-block';
 import { TypingIndicator, StreamingCursor } from './typing-indicator';
 import { MessageActions } from './message-actions';
 import type { Artifact } from '@/lib/types';
-import { normalizeAssistantMarkdownForRender } from '@/lib/chat-markdown';
 
 // Initialize mermaid with dark theme
 mermaid.initialize({
@@ -239,9 +238,10 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
   const { thinkingContent, mainContent, artifacts } = useMemo(() => {
     // First strip any MCP XML tool calls that leaked through streaming
     const contentWithoutMcp = stripMcpXml(content);
-    const normalizedContent = normalizeAssistantMarkdownForRender(contentWithoutMcp);
+    // Strip box tags but otherwise render content as-is
+    const cleanedContent = stripBoxTags(contentWithoutMcp);
     // First extract any explicit artifact blocks
-    const { text: contentWithoutArtifacts, artifacts: extractedArtifacts } = extractArtifacts(normalizedContent);
+    const { text: contentWithoutArtifacts, artifacts: extractedArtifacts } = extractArtifacts(cleanedContent);
 
     const split = splitThinking(contentWithoutArtifacts);
     const visibleContent = split.mainContent;
@@ -287,7 +287,7 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
   }, [content, artifactsEnabled]);
 
   return (
-    <div className="message-content overflow-hidden max-w-full group relative text-inherit">
+    <div className="message-content min-w-0 break-words overflow-hidden max-w-full group relative text-inherit">
       {/* Message Actions */}
       {showActions && messageId && content && (
         <div className="absolute -top-2 right-0 z-10">
@@ -309,7 +309,7 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
               if (isInline) {
               return (
                 <code
-                  className="px-2 py-1 md:px-1.5 md:py-0.5 rounded bg-[var(--accent)] font-mono text-base md:text-sm"
+                  className="px-2 py-1 md:px-1.5 md:py-0.5 rounded bg-[var(--accent)] font-mono text-[14px] md:text-sm break-words"
                   {...props}
                 >
                   {codeContent}
@@ -329,25 +329,25 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
               );
             },
             p({ children }) {
-              return <p className="mb-3 last:mb-0 leading-relaxed text-base md:text-[15px] text-[#e8e4dd]">{children}</p>;
+              return <p className="mb-2 md:mb-3 last:mb-0 leading-relaxed text-[16px] md:text-[16px] text-[#e8e4dd]">{children}</p>;
             },
             ul({ children }) {
-              return <ul className="mb-3 pl-5 md:pl-4 space-y-1.5 md:space-y-1 list-disc">{children}</ul>;
+              return <ul className="mb-2 md:mb-3 pl-4 md:pl-4 space-y-0.5 md:space-y-1 list-disc">{children}</ul>;
             },
             ol({ children }) {
-              return <ol className="mb-3 pl-5 md:pl-4 space-y-1.5 md:space-y-1 list-decimal">{children}</ol>;
+              return <ol className="mb-2 md:mb-3 pl-4 md:pl-4 space-y-0.5 md:space-y-1 list-decimal">{children}</ol>;
             },
             li({ children }) {
-              return <li className="leading-relaxed text-base md:text-[15px] text-[#e8e4dd]">{children}</li>;
+              return <li className="leading-relaxed text-[16px] md:text-[16px] text-[#e8e4dd]">{children}</li>;
             },
             h1({ children }) {
-              return <h1 className="text-3xl md:text-2xl font-semibold mb-3 mt-6 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h1>;
+              return <h1 className="text-2xl md:text-xl font-semibold mb-2.5 mt-4 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h1>;
             },
             h2({ children }) {
-              return <h2 className="text-2xl md:text-xl font-semibold mb-3 mt-5 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h2>;
+              return <h2 className="text-xl md:text-lg font-semibold mb-2 mt-3.5 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h2>;
             },
             h3({ children }) {
-              return <h3 className="text-xl md:text-lg font-semibold mb-2 mt-4 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h3>;
+              return <h3 className="text-lg md:text-base font-semibold mb-1.5 mt-3 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h3>;
             },
             blockquote({ children }) {
               return (
@@ -412,6 +412,13 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
                   className="max-w-full rounded-lg my-3 h-auto w-full"
                   unoptimized
                 />
+              );
+            },
+            pre({ children }) {
+              return (
+                <pre className="my-3 p-4 rounded-lg bg-[var(--accent)] overflow-x-auto whitespace-pre font-mono text-sm">
+                  {children}
+                </pre>
               );
             },
           }}

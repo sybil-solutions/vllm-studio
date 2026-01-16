@@ -90,13 +90,13 @@ function ToolResultModal({ toolName, result, onClose }: ToolResultModalProps) {
 }
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
-  'brave_web_search': <Globe className="h-4 w-4 md:h-3 md:w-3" />,
-  'brave_local_search': <Search className="h-4 w-4 md:h-3 md:w-3" />,
-  'search': <Search className="h-4 w-4 md:h-3 md:w-3" />,
-  'fetch': <ExternalLink className="h-4 w-4 md:h-3 md:w-3" />,
-  'get_current_time': <Clock className="h-4 w-4 md:h-3 md:w-3" />,
-  'getContents': <ExternalLink className="h-4 w-4 md:h-3 md:w-3" />,
-  'findSimilar': <Search className="h-4 w-4 md:h-3 md:w-3" />,
+  'brave_web_search': <Globe className="h-3.5 w-3.5 sm:h-4 sm:w-4" />,
+  'brave_local_search': <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4" />,
+  'search': <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4" />,
+  'fetch': <ExternalLink className="h-3.5 w-3.5 sm:h-4 sm:w-4" />,
+  'get_current_time': <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />,
+  'getContents': <ExternalLink className="h-3.5 w-3.5 sm:h-4 sm:w-4" />,
+  'findSimilar': <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4" />,
 };
 
 export function ToolCallCard({ toolCall, result, isExecuting, compact = false }: ToolCallCardProps) {
@@ -139,16 +139,16 @@ export function ToolCallCard({ toolCall, result, isExecuting, compact = false }:
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2 text-sm md:text-[11px] text-[#9a9088]">
+      <div className="flex items-center gap-2 text-xs sm:text-sm text-[#9a9088]">
         {isExecuting ? (
-          <Loader2 className="h-4 w-4 md:h-3 md:w-3 animate-spin text-[#c9a66b]" />
+          <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-[#c9a66b]" />
         ) : hasResult ? (
-          isError ? <XCircle className="h-4 w-4 md:h-3 md:w-3 text-[#c97a6b]" /> : <CheckCircle className="h-4 w-4 md:h-3 md:w-3 text-[#7d9a6a]" />
+          isError ? <XCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#c97a6b]" /> : <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#7d9a6a]" />
         ) : (
           icon
         )}
         <span className="font-medium">{toolName}</span>
-        {argPreview && <span className="text-[#9a9088]/60 truncate max-w-[200px]">{argPreview}</span>}
+        {argPreview && <span className="text-[#9a9088]/60 truncate max-w-[160px]">{argPreview}</span>}
       </div>
     );
   }
@@ -167,16 +167,16 @@ export function ToolCallCard({ toolCall, result, isExecuting, compact = false }:
         {/* Minimal header */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 text-sm md:text-[11px] text-[#9a9088] hover:text-[#c9a66b] transition-colors w-full text-left py-1.5 md:py-1"
+          className="flex items-center gap-2 text-xs sm:text-sm text-[#9a9088] hover:text-[#c9a66b] transition-colors w-full text-left py-0.5 sm:py-1"
         >
           <span className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>
-            <ChevronRight className="h-4 w-4 md:h-3 md:w-3" />
+            <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </span>
 
           {isExecuting ? (
-            <Loader2 className="h-4 w-4 md:h-3 md:w-3 animate-spin text-[#c9a66b]" />
+            <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-[#c9a66b]" />
           ) : hasResult ? (
-            isError ? <XCircle className="h-4 w-4 md:h-3 md:w-3 text-[#c97a6b]" /> : <CheckCircle className="h-4 w-4 md:h-3 md:w-3 text-[#7d9a6a]" />
+            isError ? <XCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#c97a6b]" /> : <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#7d9a6a]" />
           ) : (
             <span className="text-[#9a9088]">{icon}</span>
           )}
@@ -185,17 +185,17 @@ export function ToolCallCard({ toolCall, result, isExecuting, compact = false }:
           {displayServer && <span className="text-[#9a9088]/50">via {displayServer}</span>}
 
           {!isExpanded && argPreview && (
-            <span className="text-[#9a9088]/60 truncate flex-1">{argPreview}</span>
+            <span className="text-[#9a9088]/60 truncate flex-1 hidden sm:inline">{argPreview}</span>
           )}
         </button>
 
         {/* Expanded content */}
         {isExpanded && (
-          <div className="mt-2 pl-5 border-l-2 border-[#363432] space-y-3 md:space-y-2">
+          <div className="mt-2 pl-4 border-l-2 border-[#363432] space-y-2">
             {/* Arguments */}
             <div>
-              <span className="text-xs md:text-[10px] uppercase tracking-wider text-[#9a9088]/50">args</span>
-              <pre className="mt-1.5 md:mt-1 text-sm md:text-xs text-[#9a9088] font-mono overflow-x-auto">
+              <span className="text-[10px] uppercase tracking-wider text-[#9a9088]/50">args</span>
+              <pre className="mt-1 text-xs text-[#9a9088] font-mono overflow-x-auto">
                 {JSON.stringify(args, null, 2)}
               </pre>
             </div>
@@ -204,20 +204,20 @@ export function ToolCallCard({ toolCall, result, isExecuting, compact = false }:
             {hasResult && (
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs md:text-[10px] uppercase tracking-wider text-[#9a9088]/50">
+                  <span className="text-[10px] uppercase tracking-wider text-[#9a9088]/50">
                     result {isLongResult && `(${resultContent.length.toLocaleString()} chars)`}
                   </span>
                   {isLongResult && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowModal(true); }}
-                      className="flex items-center gap-1.5 md:gap-1 text-xs md:text-[10px] text-[#9a9088] hover:text-[#c9a66b] py-1"
+                      className="flex items-center gap-1 text-[10px] text-[#9a9088] hover:text-[#c9a66b] py-1"
                     >
-                      <Maximize2 className="h-4 w-4 md:h-3 md:w-3" />
+                      <Maximize2 className="h-3.5 w-3.5" />
                       expand
                     </button>
                   )}
                 </div>
-                <pre className={`mt-1.5 md:mt-1 text-sm md:text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto ${
+                <pre className={`mt-1 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-36 overflow-y-auto ${
                   isError ? 'text-[#c97a6b]' : 'text-[#9a9088]'
                 }`}>
                   {isLongResult ? resultContent.slice(0, 300) + '...' : resultContent}
@@ -229,14 +229,14 @@ export function ToolCallCard({ toolCall, result, isExecuting, compact = false }:
 
         {/* Collapsed result preview */}
         {!isExpanded && hasResult && !isError && resultContent && (
-          <div className="mt-1 pl-5 text-sm md:text-[11px] text-[#9a9088]/60 truncate">
+          <div className="mt-0.5 pl-4 text-xs text-[#9a9088]/60 truncate hidden sm:block">
             {getResultPreview()}
           </div>
         )}
 
         {/* Collapsed error preview */}
         {!isExpanded && hasResult && isError && (
-          <div className="mt-1 pl-5 text-sm md:text-[11px] text-[#c97a6b]/80 truncate">
+          <div className="mt-0.5 pl-4 text-xs text-[#c97a6b]/80 truncate hidden sm:block">
             {resultContent.slice(0, 80)}
           </div>
         )}

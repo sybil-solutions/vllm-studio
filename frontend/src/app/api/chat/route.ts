@@ -50,28 +50,6 @@ const cleanGLMBoxTokens = (text: string): string => {
     .replace(/^\n+/, ''); // Clean leading newlines that GLM adds before content
 };
 
-const mergeStreamingText = (prevFull: string, incoming: string): { nextFull: string; emit: string } => {
-  const prev = prevFull || '';
-  const next = incoming || '';
-  if (!next) return { nextFull: prev, emit: '' };
-  if (!prev) return { nextFull: next, emit: next };
-
-  if (next === prev) return { nextFull: prev, emit: '' };
-  if (next.startsWith(prev)) return { nextFull: next, emit: next.slice(prev.length) };
-  if (prev.startsWith(next)) return { nextFull: prev, emit: '' };
-  if (prev.endsWith(next)) return { nextFull: prev, emit: '' };
-
-  const maxOverlap = Math.min(prev.length, next.length);
-  for (let k = maxOverlap; k > 0; k--) {
-    const prefix = next.slice(0, k);
-    if (prev.endsWith(prefix)) {
-      const suffix = next.slice(k);
-      return { nextFull: prev + suffix, emit: suffix };
-    }
-  }
-
-  return { nextFull: prev + next, emit: next };
-};
 
 function getClientInfo(req: NextRequest) {
   const ip = req.headers.get('CF-Connecting-IP') ||
@@ -270,12 +248,11 @@ export async function POST(req: NextRequest) {
                     assistantContentFull += '</think>\n\n';
                   }
 
-                  // Clean GLM-4.6V box tokens from streaming content
+                  // Clean GLM-4.6V box tokens and emit content directly
                   const cleanedContent = cleanGLMBoxTokens(delta.content);
                   if (cleanedContent) {
-                    const merged = mergeStreamingText(assistantContentFull, cleanedContent);
-                    assistantContentFull = merged.nextFull;
-                    if (merged.emit) controller.enqueue(sendEvent({ type: 'text', content: merged.emit }));
+                    assistantContentFull += cleanedContent;
+                    controller.enqueue(sendEvent({ type: 'text', content: cleanedContent }));
                   }
                 }
 
@@ -299,12 +276,17 @@ export async function POST(req: NextRequest) {
           emitCompletedToolsIfAny(controller);
           try { controller.enqueue(sendEvent({ type: 'done' })); } catch {}
         } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const lowered = message.toLowerCase();
+          const isTerminated = lowered.includes('terminated') || lowered.includes('aborted') || lowered.includes('cancelled');
           console.error('[Chat API] Stream error:', error);
+          emitCompletedToolsIfAny(controller);
           try {
-            controller.enqueue(sendEvent({
-              type: 'error',
-              error: error instanceof Error ? error.message : String(error)
-            }));
+            if (isTerminated) {
+              controller.enqueue(sendEvent({ type: 'done' }));
+            } else {
+              controller.enqueue(sendEvent({ type: 'error', error: message }));
+            }
           } catch {}
         } finally {
           try { controller.close(); } catch {}
