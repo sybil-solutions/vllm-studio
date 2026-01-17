@@ -5,7 +5,8 @@ import { Copy, Check, Play, Code2, Maximize2, Minimize2 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { CodeSandbox } from './code-sandbox';
-import { ArtifactRenderer, getArtifactType } from './artifact-renderer';
+import { ArtifactRenderer } from './artifact-renderer';
+import { useMessageParsing } from '@/lib/services/message-parsing';
 
 interface EnhancedCodeBlockProps {
   children: string;
@@ -25,6 +26,7 @@ export function EnhancedCodeBlock({
   const [copied, setCopied] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const { getArtifactType } = useMessageParsing();
   const lang = language || className?.replace('language-', '') || 'text';
   const code = String(children).replace(/\n$/, '');
 
@@ -82,9 +84,9 @@ export function EnhancedCodeBlock({
   const shouldCollapse = isLongCode && !isExpanded;
 
   return (
-    <div className="my-3 rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)] shadow-sm transition-all duration-200 hover:shadow-md group">
+    <div className="my-3 rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)]/90 shadow-sm transition-all duration-200 hover:shadow-md group">
       {/* Header */}
-      <div className="flex items-center justify-between bg-[var(--accent)]/50 backdrop-blur-sm px-4 py-2.5 border-b border-[var(--border)]">
+      <div className="flex items-center justify-between bg-[var(--card-hover)]/80 backdrop-blur-sm px-4 py-2.5 border-b border-[var(--border)]">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-red-400/80" />
@@ -103,11 +105,11 @@ export function EnhancedCodeBlock({
 
         <div className="flex items-center gap-1">
           {canPreview && (
-            <button
-              onClick={() => setShowPreview(true)}
-              className="p-1.5 rounded-lg hover:bg-[var(--accent)] transition-all duration-200 flex items-center gap-1.5 text-xs font-medium text-[var(--success)] hover:text-[var(--success)]"
-              title="Run preview"
-            >
+           <button
+             onClick={() => setShowPreview(true)}
+             className="p-1.5 rounded-lg hover:bg-[var(--card-hover)] transition-all duration-200 flex items-center gap-1.5 text-xs font-medium text-[#9fc68a] hover:text-[#b7e4a0]"
+             title="Run preview"
+           >
               <Play className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Preview</span>
             </button>
@@ -116,7 +118,7 @@ export function EnhancedCodeBlock({
           {isLongCode && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1.5 rounded-lg hover:bg-[var(--accent)] transition-all duration-200 text-[#9a9590] hover:text-[var(--foreground)]"
+              className="p-1.5 rounded-lg hover:bg-[var(--card-hover)] transition-all duration-200 text-[#9a9590] hover:text-[var(--foreground)]"
               title={isExpanded ? 'Collapse' : 'Expand'}
             >
               {isExpanded ? (
@@ -127,11 +129,11 @@ export function EnhancedCodeBlock({
             </button>
           )}
 
-          <button
-            onClick={copyCode}
-            className="p-1.5 rounded-lg hover:bg-[var(--accent)] transition-all duration-200 text-[#9a9590] hover:text-[var(--foreground)]"
-            title="Copy code"
-          >
+            <button
+              onClick={copyCode}
+              className="p-1.5 rounded-lg hover:bg-[var(--card-hover)] transition-all duration-200 text-[#9a9590] hover:text-[var(--foreground)]"
+              title="Copy code"
+            >
             {copied ? (
               <Check className="h-3.5 w-3.5 text-[var(--success)]" />
             ) : (

@@ -342,7 +342,7 @@ export function CodeSandbox({
         style={isFullscreen ? { paddingTop: 'env(safe-area-inset-top, 0)', paddingBottom: 'env(safe-area-inset-bottom, 0)' } : undefined}
       >
       {/* Header - minimal in fullscreen */}
-      <div className="flex items-center justify-between px-2 md:px-3 py-2 bg-[var(--accent)] border-b border-[var(--border)] flex-shrink-0">
+      <div className="flex items-center justify-between px-2 md:px-3 py-2 bg-[var(--card)] border-b border-[var(--border)] flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-medium truncate">
             {title || `${language.toUpperCase()}`}
@@ -376,7 +376,7 @@ export function CodeSandbox({
       <div className={`overflow-auto ${isFullscreen ? 'flex-1 min-h-0 bg-[var(--card)]' : 'h-48 md:h-64 bg-[var(--card)]'}`}>
         <iframe
           ref={iframeRef}
-          className="w-full h-full border-0 bg-white"
+          className="w-full h-full border-0 bg-[#0f0f10]"
           sandbox="allow-scripts allow-modals allow-same-origin"
           title={title || 'Code Preview'}
         />
@@ -384,7 +384,7 @@ export function CodeSandbox({
 
       {/* Footer controls - only in fullscreen mode */}
       {isFullscreen && (
-        <div className="flex-shrink-0 px-3 py-3 bg-[var(--accent)] border-t border-[var(--border)]">
+        <div className="flex-shrink-0 px-3 py-3 bg-[var(--card)] border-t border-[var(--border)]">
           {renderToolbarButtons(true)}
         </div>
       )}

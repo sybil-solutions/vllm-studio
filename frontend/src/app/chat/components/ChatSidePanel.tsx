@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { X, Loader2, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { ArtifactPanel } from '@/components/chat';
 import type { ToolCall, ToolResult, Artifact } from '@/lib/types';
@@ -61,7 +61,7 @@ export function ChatSidePanel({
   if (!isOpen) return null;
 
   return (
-    <div className="w-80 flex-shrink-0 border-l border-[var(--border)] bg-[var(--background)] flex flex-col overflow-hidden">
+    <div className="w-[22rem] flex-shrink-0 border-l border-[var(--border)] bg-[var(--background)] flex flex-col overflow-hidden">
       {/* Header with elegant tabs */}
       <div className="border-b border-[var(--border)] bg-[var(--background)]">
         <div className="flex items-center justify-between px-2 py-1">
@@ -157,23 +157,39 @@ function ToolsPanel({
   activityItems,
 }: ToolsPanelProps) {
   const toolCount = allToolCalls.length;
-  // Default to all items expanded for better UX
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const prevCountRef = useRef(0);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(
     new Set(activityItems.map((item) => item.id))
   );
 
-  // Auto-expand new items when they're added
   useEffect(() => {
-    setExpandedItems((prev) => {
-      const next = new Set(prev);
-      activityItems.forEach((item) => {
-        if (!next.has(item.id)) {
-          next.add(item.id);
-        }
-      });
-      return next;
+    const nextExpanded = new Set<string>();
+    activityItems.forEach((item) => {
+      if (item.type === 'thinking') {
+        nextExpanded.add(item.id);
+        return;
+      }
+      const result = toolResultsMap.get(item.toolCall.id);
+      const isExecuting = executingTools.has(item.toolCall.id);
+      if (!result && !isExecuting) return;
+      nextExpanded.add(item.id);
     });
-  }, [activityItems]);
+    setExpandedItems(nextExpanded);
+  }, [activityItems, executingTools, toolResultsMap]);
+
+  useEffect(() => {
+    const count = activityItems.length;
+    const list = listRef.current;
+    if (!list || count === 0) {
+      prevCountRef.current = count;
+      return;
+    }
+    if (count !== prevCountRef.current) {
+      list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
+      prevCountRef.current = count;
+    }
+  }, [activityItems.length]);
 
   const toggleItem = (id: string) => {
     setExpandedItems((prev) => {
@@ -352,20 +368,20 @@ function ToolsPanel({
         </div>
       )}
 
-      <div>
-        <div className="px-3 py-2 text-xs font-medium text-[#b0a8a0] border-b border-[var(--border)]/50">
-          <span className="uppercase tracking-wider text-[10px]">Activity</span>
-          {toolCount > 0 && (
-            <span className="ml-2 text-[10px] text-[#9a9590]">({toolCount})</span>
-          )}
-        </div>
-        <div className="relative">
-          {activityRows}
-          {activityRows.length === 0 && !researchProgress && !researchSources.length && !thinkingActive && !thinkingContent && (
-            <div className="px-3 py-6 text-center text-xs text-[#9a9590]">No tool activity yet</div>
-          )}
-        </div>
-      </div>
+       <div className="flex flex-col min-h-0">
+         <div className="px-3 py-2 text-xs font-medium text-[#b0a8a0] border-b border-[var(--border)]/50">
+           <span className="uppercase tracking-wider text-[10px]">Activity</span>
+           {toolCount > 0 && (
+             <span className="ml-2 text-[10px] text-[#9a9590]">({toolCount})</span>
+           )}
+         </div>
+         <div ref={listRef} className="relative overflow-y-auto">
+           {activityRows}
+           {activityRows.length === 0 && !researchProgress && !researchSources.length && !thinkingActive && !thinkingContent && (
+             <div className="px-3 py-6 text-center text-xs text-[#9a9590]">No tool activity yet</div>
+           )}
+         </div>
+       </div>
 
       {researchSources.length > 0 && (
         <div className="border-t border-[var(--border)]/50">

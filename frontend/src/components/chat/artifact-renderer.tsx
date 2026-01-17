@@ -32,8 +32,17 @@ const SVG_TEMPLATE = (svgCode: string) => `
       display: flex;
       align-items: center;
       justify-content: center;
-      background: white;
+      background: #0f0f10;
       overflow: auto;
+      color: #f6f3ee;
+    }
+    .frame {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      padding: 12px;
     }
     svg {
       max-width: 100%;
@@ -43,9 +52,11 @@ const SVG_TEMPLATE = (svgCode: string) => `
     }
   </style>
 </head>
-<body>
-  ${svgCode}
-</body>
+  <body>
+    <div class="frame">
+      ${svgCode}
+    </div>
+  </body>
 </html>
 `;
 
@@ -208,7 +219,7 @@ export function ArtifactRenderer({ artifact }: ArtifactRendererProps) {
         style={isFullscreen ? { paddingTop: 'env(safe-area-inset-top, 0)', paddingBottom: 'env(safe-area-inset-bottom, 0)' } : undefined}
         >
           {/* Header - minimal in fullscreen */}
-          <div className="flex items-center justify-between px-2 md:px-3 py-1.5 md:py-2 bg-[var(--accent)] border-b border-[var(--border)] flex-shrink-0">
+           <div className="flex items-center justify-between px-2 md:px-3 py-1.5 md:py-2 bg-[var(--card)] border-b border-[var(--border)] flex-shrink-0">
             <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
               {icon}
               <span className="text-xs font-medium truncate">{artifact.title || 'SVG'}</span>
@@ -234,11 +245,11 @@ export function ArtifactRenderer({ artifact }: ArtifactRendererProps) {
             </pre>
           )}
           {/* SVG rendered in iframe for proper mobile support */}
-          <div className={`overflow-hidden ${isFullscreen ? 'flex-1' : ''}`}>
-            <iframe
-              srcDoc={svgHtml}
-              className="w-full border-0 bg-white"
-              style={{ height: isFullscreen ? '100%' : '200px', minHeight: '120px' }}
+           <div className={`overflow-hidden ${isFullscreen ? 'flex-1' : ''}`}>
+             <iframe
+               srcDoc={svgHtml}
+               className="w-full border-0 bg-[#0f0f10]"
+               style={{ height: isFullscreen ? '100%' : '200px', minHeight: '120px' }}
               sandbox="allow-scripts"
               title={artifact.title || 'SVG Preview'}
             />

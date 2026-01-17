@@ -2,17 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  ContextConfig,
-  ContextStats,
-  CompactionEvent,
-  CompactionStrategy,
+  useContextManagement,
+  type ContextConfig,
+  type ContextStats,
+  type CompactionEvent,
+  type CompactionStrategy,
+  type ContextMessage,
   DEFAULT_CONTEXT_CONFIG,
-  calculateMessageTokens,
-  compactMessages,
-  estimateTokens,
-  getUtilizationLevel,
-  Message,
-} from '@/lib/context-manager';
+} from '@/lib/services/context-management';
+
+type Message = ContextMessage;
 
 interface UseContextManagerProps {
   /** Current chat messages */
@@ -113,22 +112,16 @@ export function useContextManager({
   const [compactionHistory, setCompactionHistory] = useState<CompactionEvent[]>(loadHistory);
   const lastAutoCompactRef = useRef<number>(0);
 
+  // Use the context management service
+  const {
+    calculateStats,
+    getUtilizationLevel,
+    compactMessages: serviceCompactMessages,
+  } = useContextManagement();
+
   // Calculate stats
   const stats = useMemo((): ContextStats => {
-    const systemPromptTokens = systemPrompt ? estimateTokens(systemPrompt) : 0;
-    const toolsTokens = tools?.length ? estimateTokens(JSON.stringify(tools)) : 0;
-    const conversationTokens = calculateMessageTokens(messages);
-    const currentTokens = systemPromptTokens + toolsTokens + conversationTokens;
-    const utilization = maxContext > 0 ? currentTokens / maxContext : 0;
-    const headroom = Math.max(0, maxContext - currentTokens);
-
-    // Estimate messages until limit based on average message size
-    const avgMessageTokens = messages.length > 0
-      ? conversationTokens / messages.length
-      : 100; // Default estimate
-    const estimatedMessagesUntilLimit = avgMessageTokens > 0
-      ? Math.floor(headroom / avgMessageTokens)
-      : 0;
+    const baseStats = calculateStats(messages, maxContext, systemPrompt, tools);
 
     const totalCompactions = compactionHistory.length;
     const totalTokensCompacted = compactionHistory.reduce(
@@ -140,21 +133,13 @@ export function useContextManager({
       : undefined;
 
     return {
-      currentTokens,
-      maxContext,
-      utilization,
-      messagesCount: messages.length,
-      systemPromptTokens,
-      toolsTokens,
-      conversationTokens,
-      headroom,
-      estimatedMessagesUntilLimit,
+      ...baseStats,
       compactionHistory,
       lastCompaction,
       totalCompactions,
       totalTokensCompacted,
     };
-  }, [messages, maxContext, systemPrompt, tools, compactionHistory]);
+  }, [messages, maxContext, systemPrompt, tools, compactionHistory, calculateStats]);
 
   const utilizationLevel = getUtilizationLevel(stats.utilization);
   const isWarning = stats.utilization >= 0.75;
@@ -167,10 +152,9 @@ export function useContextManager({
       return; // Nothing to compact
     }
 
-    const { messages: newMessages, event } = compactMessages(
+    const { messages: newMessages, event } = serviceCompactMessages(
       messages,
       maxContext,
-      config,
       strategy
     );
 
@@ -183,7 +167,7 @@ export function useContextManager({
 
       onCompact?.(newMessages, event);
     }
-  }, [messages, maxContext, config, onCompact]);
+  }, [messages, maxContext, config.preserveRecentMessages, onCompact, serviceCompactMessages]);
 
   // Auto-compact check
   useEffect(() => {

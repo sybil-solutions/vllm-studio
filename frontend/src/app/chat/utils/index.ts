@@ -1,5 +1,30 @@
 'use client';
 
+import type { ChatMessage } from '@/store';
+import type { ToolResult, StoredMessage, StoredToolCall } from '@/lib/types';
+
+// Re-export ChatMessage as Message for convenience
+export type Message = ChatMessage;
+
+// OpenAI API types
+export type OpenAIContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+export type OpenAIToolCall = {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+};
+
+export type OpenAIMessage =
+  | {
+      role: 'user' | 'assistant' | 'system';
+      content: string | null | OpenAIContentPart[];
+      tool_calls?: OpenAIToolCall[];
+    }
+  | { role: 'tool'; tool_call_id: string; name?: string; content: string };
+
 // Types
 export interface StreamEvent {
   type: 'text' | 'tool_calls' | 'done' | 'error';
@@ -10,44 +35,6 @@ export interface StreamEvent {
     function: { name: string; arguments: string };
   }>;
   error?: string;
-}
-
-// Constants
-const BOX_TAGS_PATTERN = /<\|(?:begin|end)_of_box\|>/g;
-
-// Strip thinking tags for model context (keeps artifact code blocks)
-export const stripThinkingForModelContext = (text: string): string => {
-  if (!text) return text;
-  let cleaned = text.replace(BOX_TAGS_PATTERN, '');
-  const preservedBlocks: string[] = [];
-  cleaned = cleaned.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, (block) => {
-    const fenceRegex = /```([a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/g;
-    let m: RegExpExecArray | null;
-    while ((m = fenceRegex.exec(block)) !== null) {
-      const lang = (m[1] || '').toLowerCase();
-      const isRenderable = ['html', 'svg', 'javascript', 'js', 'react', 'jsx', 'tsx'].includes(lang) || lang.startsWith('artifact-');
-      if (isRenderable) preservedBlocks.push(`\n\n\`\`\`${lang}\n${m[2].trim()}\n\`\`\``);
-    }
-    return '';
-  });
-  cleaned = cleaned.replace(/<\/?think(?:ing)?>/gi, '');
-  return (cleaned.trim() + preservedBlocks.join('')).trim();
-};
-
-// Strip thinking tags but keep text inside
-export const stripThinkTagsKeepText = (text: string): string => {
-  return text?.replace(/<\/?think(?:ing)?>/gi, '') || '';
-};
-
-// Try to parse nested JSON from string
-export function tryParseNestedJsonString(raw: string): Record<string, unknown> | null {
-  try {
-    const trimmed = raw.trim();
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return JSON.parse(trimmed);
-    const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
-  } catch {}
-  return null;
 }
 
 // Parse Server-Sent Events from a stream
@@ -91,4 +78,48 @@ export function downloadTextFile(filename: string, content: string, mime = 'text
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Extract tool results from stored tool calls
+export function extractToolResults(toolCalls: StoredToolCall[] = []): ToolResult[] {
+  return toolCalls
+    .filter((tc) => tc.result)
+    .map((tc) => {
+      const rawResult = tc.result;
+      const content =
+        typeof rawResult === 'string'
+          ? rawResult
+          : rawResult && typeof rawResult === 'object' && 'content' in rawResult
+            ? String(rawResult.content ?? '')
+            : rawResult != null
+              ? JSON.stringify(rawResult)
+              : '';
+      const isError =
+        rawResult && typeof rawResult === 'object' && 'isError' in rawResult
+          ? Boolean((rawResult as { isError?: boolean }).isError)
+          : undefined;
+      return { tool_call_id: tc.id, content, isError };
+    });
+}
+
+// Normalize a stored message to the Message type
+export function normalizeStoredMessage(message: StoredMessage): Message {
+  const toolCalls = message.tool_calls || [];
+  const toolResults = extractToolResults(toolCalls);
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    model: message.model,
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    toolResults: toolResults.length > 0 ? toolResults : undefined,
+    prompt_tokens: message.prompt_tokens,
+    completion_tokens: message.completion_tokens,
+    total_tokens: message.total_tokens,
+    request_prompt_tokens: message.request_prompt_tokens,
+    request_tools_tokens: message.request_tools_tokens,
+    request_total_input_tokens: message.request_total_input_tokens,
+    request_completion_tokens: message.request_completion_tokens,
+    estimated_cost_usd: message.estimated_cost_usd,
+  };
 }

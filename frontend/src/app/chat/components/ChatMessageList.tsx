@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useRef, useEffect, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { AlertCircle, Copy, Check, Bookmark, BookmarkCheck, GitBranch } from 'lucide-react';
-import { MessageRenderer, splitThinking } from '@/components/chat/message-renderer';
-import { normalizeAssistantMarkdownForRender } from '@/lib/chat-markdown';
+import { MessageRenderer } from '@/components/chat/message-renderer';
+import { useMessageParsing, markdownParser } from '@/lib/services/message-parsing';
 
 interface Message {
   id: string;
@@ -28,6 +28,11 @@ interface Message {
 
 export type ChatMessage = Message;
 
+type RenderMessage = Message & {
+  rawContent?: string | null;
+  normalizedContent?: string | null;
+};
+
 interface ChatMessageListProps {
   messages: Message[];
   currentSessionId?: string | null;
@@ -36,6 +41,7 @@ interface ChatMessageListProps {
   isLoading: boolean;
   error: string | null;
   copiedIndex: number | null;
+  renderDebug?: boolean;
   onCopy: (text: string, index: number) => void;
   onFork: (messageId: string) => void;
   onToggleBookmark: (messageId: string) => void;
@@ -59,36 +65,42 @@ export function ChatMessageList({
   isLoading,
   error,
   copiedIndex,
+  renderDebug = false,
   onCopy,
   onFork,
   onToggleBookmark,
 }: ChatMessageListProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showCopied, setShowCopied] = useState(false);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  const { parseThinking } = useMessageParsing();
 
   const normalizedMessages = useMemo(() => {
-    return messages.map((msg) => ({
-      ...msg,
-      content: msg.role === 'assistant' && msg.content
-        ? normalizeAssistantMarkdownForRender(msg.content)
-        : msg.content,
-    }));
+    return messages.map((msg) => {
+      const isAssistant = msg.role === 'assistant';
+      const rawContent = msg.content;
+      const normalized = isAssistant && rawContent
+        ? markdownParser.normalizeForRender(rawContent)
+        : rawContent;
+
+      return {
+        ...msg,
+        content: normalized,
+        rawContent,
+        normalizedContent: normalized,
+      } as RenderMessage;
+    });
   }, [messages]);
 
   const visibleMessages = useMemo(() => {
     return normalizedMessages.filter((msg) => {
       if (msg.role !== 'assistant') return true;
       if (msg.isStreaming) return true;
-      const rawContent = msg.content ?? '';
+      const rawContent = msg.rawContent ?? msg.content ?? '';
       if (!rawContent.trim()) return false;
-      const { mainContent } = splitThinking(rawContent);
+      const { mainContent } = parseThinking(rawContent);
       return mainContent.trim().length > 0;
     });
-  }, [normalizedMessages]);
+  }, [normalizedMessages, parseThinking]);
 
   const lastAssistantMessage = useMemo(() => {
     return [...visibleMessages].reverse().find((m) => m.role === 'assistant');
@@ -129,6 +141,7 @@ export function ChatMessageList({
             index={index}
             currentSessionId={currentSessionId || null}
             artifactsEnabled={artifactsEnabled}
+            renderDebug={renderDebug}
             onCopy={handleCopy}
             onFork={onFork}
             onToggleBookmark={onToggleBookmark}
@@ -150,10 +163,11 @@ export function ChatMessageList({
 }
 
 interface MessageItemProps {
-  message: Message;
+  message: RenderMessage;
   index: number;
   currentSessionId: string | null;
   artifactsEnabled: boolean;
+  renderDebug: boolean;
   onCopy: (text: string, index: number) => void;
   onFork: (messageId: string) => void;
   onToggleBookmark: (messageId: string) => void;
@@ -166,6 +180,7 @@ function MessageItem({
   index,
   currentSessionId,
   artifactsEnabled,
+  renderDebug,
   onCopy,
   onFork,
   onToggleBookmark,
@@ -220,6 +235,33 @@ function MessageItem({
             messageId={message.id}
             showActions={false}
           />
+          {renderDebug && (
+            <details className="mt-2 rounded-lg border border-dashed border-[var(--border)] bg-[var(--card)]/40 px-3 py-2 text-xs text-[#b8b4ad]">
+              <summary className="cursor-pointer select-none text-[10px] uppercase tracking-[0.2em] text-[#8a8580]">
+                Render Trace
+              </summary>
+              <div className="mt-2 space-y-2">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-[#7a756f]">Raw</div>
+                  <pre className="mt-1 whitespace-pre-wrap break-words rounded border border-[var(--border)]/50 bg-[var(--card)]/70 p-2 font-mono text-[11px] text-[#d8d4cd]">
+                    {message.rawContent ?? ''}
+                  </pre>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-[#7a756f]">Normalized</div>
+                  <pre className="mt-1 whitespace-pre-wrap break-words rounded border border-[var(--border)]/50 bg-[var(--card)]/70 p-2 font-mono text-[11px] text-[#d8d4cd]">
+                    {message.normalizedContent ?? ''}
+                  </pre>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-[#7a756f]">Streaming</div>
+                  <div className="mt-1 text-[11px] text-[#d8d4cd]">
+                    {message.isStreaming ? 'true' : 'false'}
+                  </div>
+                </div>
+              </div>
+            </details>
+          )}
           <div
             className={`absolute right-0 -top-1 opacity-0 group-hover:opacity-100 transition-opacity ${showActions ? '' : 'hidden'}`}
           >

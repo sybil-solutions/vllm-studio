@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getMessageParsingService } from '@/lib/services/message-parsing';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 const API_KEY = process.env.API_KEY || '';
-
-const BOX_TAGS_PATTERN = /<\|(?:begin|end)_of_box\|>/g;
-const stripBoxTags = (text: string) => (text ? text.replace(BOX_TAGS_PATTERN, '') : text);
 
 function cleanTitle(raw: string): string {
   let title = String(raw || '');
@@ -61,14 +59,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'User text required' }, { status: 400 });
     }
 
-    // Clean input text
-    let promptUser = stripBoxTags(user);
-    promptUser = promptUser.replace(/<think[^>]*>[\s\S]*?<\/think[^>]*>/gi, '').trim();
-    promptUser = promptUser.slice(0, 500);
-    
-    let promptAssistant = stripBoxTags(assistant);
-    promptAssistant = promptAssistant.replace(/<think[^>]*>[\s\S]*?<\/think[^>]*>/gi, '').trim();
-    promptAssistant = promptAssistant.slice(0, 500);
+    // Clean input text using service
+    const parsingService = getMessageParsingService();
+    const userThinking = parsingService.parseThinking(user);
+    const promptUser = userThinking.mainContent.slice(0, 500);
+
+    const assistantThinking = parsingService.parseThinking(assistant);
+    const promptAssistant = assistantThinking.mainContent.slice(0, 500);
 
     const incomingAuth = req.headers.get('authorization');
     const outgoingAuth = incomingAuth || (API_KEY ? `Bearer ${API_KEY}` : undefined);

@@ -14,12 +14,12 @@ import {
   Zap,
 } from 'lucide-react';
 import {
-  ContextStats,
-  ContextConfig,
-  CompactionEvent,
-  CompactionStrategy,
-  formatTokenCount,
-} from '@/lib/context-manager';
+  useContextManagement,
+  type ContextStats,
+  type ContextConfig,
+  type CompactionEvent,
+  type CompactionStrategy,
+} from '@/lib/services/context-management';
 
 interface ContextIndicatorProps {
   stats: ContextStats;
@@ -52,6 +52,7 @@ export function ContextIndicator({
   const [showDetails, setShowDetails] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const { formatTokenCount } = useContextManagement();
 
   const colors = LEVEL_COLORS[utilizationLevel];
   const percentage = Math.round(stats.utilization * 100);
@@ -303,6 +304,7 @@ function SettingsPanel({
 }
 
 function HistoryPanel({ history }: { history: CompactionEvent[] }) {
+  const { formatTokenCount } = useContextManagement();
   const sortedHistory = useMemo(
     () => [...history].reverse().slice(0, 20),
     [history]

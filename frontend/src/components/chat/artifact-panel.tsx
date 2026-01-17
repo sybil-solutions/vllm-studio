@@ -94,7 +94,8 @@ const REACT_TEMPLATE = (code: string) => `
     html, body, #root {
       width: 100%;
       height: 100%;
-      background: white;
+      background: #0f0f10;
+      color: #f6f3ee;
       overflow: auto;
     }
     .error {
@@ -162,7 +163,7 @@ const JS_TEMPLATE = (code: string) => `
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; padding: 16px; background: white; min-height: 100vh; }
+    body { font-family: system-ui, sans-serif; padding: 16px; background: #0f0f10; color: #f6f3ee; min-height: 100vh; }
     #output { white-space: pre-wrap; font-family: monospace; }
   </style>
 </head>

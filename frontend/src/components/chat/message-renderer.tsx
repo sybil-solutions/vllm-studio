@@ -1,16 +1,24 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
-import Image from 'next/image';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { AlertCircle } from 'lucide-react';
 import mermaid from 'mermaid';
-import { ArtifactRenderer, extractArtifacts, getArtifactType } from './artifact-renderer';
+import { ArtifactRenderer } from './artifact-renderer';
 import { EnhancedCodeBlock } from './enhanced-code-block';
 import { TypingIndicator, StreamingCursor } from './typing-indicator';
 import { MessageActions } from './message-actions';
-import type { Artifact } from '@/lib/types';
+import {
+  useParsedMessage,
+  useMessageParsing,
+  thinkingParser,
+} from '@/lib/services/message-parsing';
+import type { Artifact, MarkdownSegment, ThinkingResult } from '@/lib/services/message-parsing';
+
+// Re-export splitThinking for backward compatibility (used by ChatSidePanel)
+export { thinkingParser };
+export function splitThinking(content: string): ThinkingResult {
+  return thinkingParser.parse(content);
+}
 
 // Initialize mermaid with dark theme
 mermaid.initialize({
@@ -30,105 +38,6 @@ interface MessageRendererProps {
   showActions?: boolean;
 }
 
-const BOX_TAGS_PATTERN = /<\|(?:begin|end)_of_box\|>/g;
-const stripBoxTags = (text: string) => (text ? text.replace(BOX_TAGS_PATTERN, '') : text);
-
-// Strip MCP tool call XML from content (MiroThinker/Qwen3 models)
-// Handles various malformations: missing <, space in closing tag, etc.
-const MCP_TOOL_PATTERN = /<?use_mcp_tool>[\s\S]*?<\/use_mcp[_ ]?tool>/gi;
-const MCP_INCOMPLETE_PATTERN = /<use_mcp_tool>[\s\S]*$/gi;
-const stripMcpXml = (text: string): string => {
-  if (!text) return text;
-  // Remove complete MCP tool blocks
-  let result = text.replace(MCP_TOOL_PATTERN, '');
-  // Remove incomplete MCP blocks at end of stream
-  result = result.replace(MCP_INCOMPLETE_PATTERN, '');
-  // Clean up any orphaned fragments
-  result = result.replace(/use_mcp_tool>[\s\S]*?<\/use_mcp[_ ]?tool>/gi, '');
-  return result.trim();
-};
-
-// Export for use in chat page (thinking panel)
-export function splitThinking(content: string): {
-  thinkingContent: string | null;
-  mainContent: string;
-  isThinkingComplete: boolean;
-} {
-  if (!content) return { thinkingContent: null, mainContent: '', isThinkingComplete: true };
-
-  const openTags = ['<think>', '<thinking>'];
-  const closeTags = ['</think>', '</thinking>'];
-
-  const reasoningParts: string[] = [];
-  const visibleParts: string[] = [];
-  let remaining = content;
-  let isComplete = true;
-
-  while (remaining) {
-    const lower = remaining.toLowerCase();
-
-    const openIdxs = openTags
-      .map((t) => lower.indexOf(t))
-      .filter((i) => i !== -1);
-    const closeIdxs = closeTags
-      .map((t) => lower.indexOf(t))
-      .filter((i) => i !== -1);
-
-    const openIdx = openIdxs.length ? Math.min(...openIdxs) : -1;
-    const closeIdx = closeIdxs.length ? Math.min(...closeIdxs) : -1;
-
-    if (openIdx === -1 && closeIdx === -1) {
-      visibleParts.push(remaining);
-      break;
-    }
-
-    const isOpenNext = openIdx !== -1 && (closeIdx === -1 || openIdx < closeIdx);
-
-    if (isOpenNext) {
-      if (openIdx > 0) {
-        visibleParts.push(remaining.slice(0, openIdx));
-      }
-
-      const matchedOpen = openTags.find((t) => lower.startsWith(t, openIdx))!;
-      remaining = remaining.slice(openIdx + matchedOpen.length);
-
-      const lowerAfter = remaining.toLowerCase();
-      const closeIdxAfter = closeTags
-        .map((t) => lowerAfter.indexOf(t))
-        .filter((i) => i !== -1);
-      const closePos = closeIdxAfter.length ? Math.min(...closeIdxAfter) : -1;
-      if (closePos === -1) {
-        reasoningParts.push(remaining);
-        remaining = '';
-        isComplete = false;
-        break;
-      }
-
-      reasoningParts.push(remaining.slice(0, closePos));
-      const matchedClose = closeTags.find((t) => lowerAfter.startsWith(t, closePos))!;
-      remaining = remaining.slice(closePos + matchedClose.length);
-      continue;
-    }
-
-    // Closing tag without explicit opening (prompt may include opening tag)
-    if (closeIdx > 0) {
-      reasoningParts.push(remaining.slice(0, closeIdx));
-    }
-    const matchedClose = closeTags.find((t) => lower.startsWith(t, closeIdx))!;
-    remaining = remaining.slice(closeIdx + matchedClose.length);
-  }
-
-  const thinkingText = stripBoxTags(reasoningParts.join('')).trim();
-  const visibleText = stripBoxTags(visibleParts.join(''));
-
-  return {
-    thinkingContent: thinkingText ? thinkingText : null,
-    mainContent: visibleText,
-    isThinkingComplete: isComplete,
-  };
-}
-
-
 function MermaidDiagram({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
@@ -140,7 +49,6 @@ function MermaidDiagram({ code }: { code: string }) {
     const renderDiagram = async () => {
       if (!code.trim()) return;
 
-      // Mermaid parsing is noisy (and often invalid while streaming). Debounce renders.
       const seq = ++renderSeqRef.current;
 
       const looksLikeMermaid =
@@ -148,14 +56,12 @@ function MermaidDiagram({ code }: { code: string }) {
           code.trim()
         );
       if (!looksLikeMermaid) {
-        // Avoid spamming mermaid with obviously non-mermaid content.
         setSvg('');
         setError('Not a valid Mermaid diagram (missing diagram header like `graph TD` or `sequenceDiagram`).');
         return;
       }
 
       try {
-        // Mermaid can behave badly when re-rendered with the same id; include a monotonically increasing suffix.
         const { svg } = await mermaid.render(`mermaid_${id}_${seq}`, code.trim());
         if (seq !== renderSeqRef.current) return;
         setSvg(svg);
@@ -187,7 +93,7 @@ function MermaidDiagram({ code }: { code: string }) {
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="my-3 p-4 rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-x-auto"
       dangerouslySetInnerHTML={{ __html: svg }}
@@ -196,28 +102,25 @@ function MermaidDiagram({ code }: { code: string }) {
 }
 
 interface CodeBlockProps {
-  children: string;
-  className?: string;
+  segment: MarkdownSegment;
   artifactsEnabled?: boolean;
   isStreaming?: boolean;
-  language?: string;
 }
 
-function CodeBlock({ children, className, artifactsEnabled, isStreaming, language }: CodeBlockProps) {
-  const lang = language || className?.replace('language-', '') || '';
+function CodeBlock({ segment, artifactsEnabled, isStreaming }: CodeBlockProps) {
+  const lang = segment.language || '';
 
-  // Check if this is a mermaid diagram
+  // Handle mermaid diagrams
   if (lang === 'mermaid') {
-    // Avoid spamming mermaid parser while a streamed response is still changing.
     if (isStreaming) {
       return (
         <div className="my-3 p-4 rounded-lg border border-[var(--border)] bg-[var(--card)] animate-in fade-in">
           <div className="text-xs text-[#b8b4ad] mb-2">Mermaid preview renders after streaming completes.</div>
-          <pre className="text-xs text-[#d8d4cd] overflow-x-auto">{children}</pre>
+          <pre className="text-xs text-[#d8d4cd] overflow-x-auto">{segment.content}</pre>
         </div>
       );
     }
-    return <MermaidDiagram code={String(children)} />;
+    return <MermaidDiagram code={segment.content} />;
   }
 
   // Use enhanced code block for everything else
@@ -227,64 +130,41 @@ function CodeBlock({ children, className, artifactsEnabled, isStreaming, languag
       artifactsEnabled={artifactsEnabled}
       isStreaming={isStreaming}
     >
-      {String(children)}
+      {segment.content}
     </EnhancedCodeBlock>
   );
 }
 
-export function MessageRenderer({ content, isStreaming, artifactsEnabled, messageId, showActions = true }: MessageRendererProps) {
-  // Mermaid uses an internal render ID cache. We need to reset when content changes.
-  // This is done via useId in MermaidDiagram.
-  const { thinkingContent, mainContent, artifacts } = useMemo(() => {
-    // First strip any MCP XML tool calls that leaked through streaming
-    const contentWithoutMcp = stripMcpXml(content);
-    // Strip box tags but otherwise render content as-is
-    const cleanedContent = stripBoxTags(contentWithoutMcp);
-    // First extract any explicit artifact blocks
-    const { text: contentWithoutArtifacts, artifacts: extractedArtifacts } = extractArtifacts(cleanedContent);
+interface MarkdownBlockProps {
+  html: string;
+}
 
-    const split = splitThinking(contentWithoutArtifacts);
-    const visibleContent = split.mainContent;
-    let updatedThinking = split.thinkingContent;
+function MarkdownBlock({ html }: MarkdownBlockProps) {
+  return (
+    <div
+      className="chat-markdown"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
-    // If the model placed renderable code fences inside <think>, surface them as artifacts
-    // so users can still preview them without expanding the thinking panel.
-    const additionalArtifacts: Artifact[] = [];
-    if (artifactsEnabled && updatedThinking) {
-      const fenceRegex = /```([a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)```/g;
-      const keptChunks: string[] = [];
-      let lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = fenceRegex.exec(updatedThinking)) !== null) {
-        const lang = (m[1] || '').trim();
-        const code = (m[2] || '').trim();
-        const lowered = lang.toLowerCase() === 'mermaidgraph' ? 'mermaid' : lang.toLowerCase();
-        const artifactType = getArtifactType(lowered);
-        const canPreview = artifactType && ['html', 'react', 'javascript', 'svg'].includes(artifactType);
-        if (artifactType && canPreview) {
-          additionalArtifacts.push({
-            id: `think-artifact-${artifactType}-${additionalArtifacts.length}-${code.length}`,
-            type: artifactType,
-            title: lang ? `${lang} (from thinking)` : 'Artifact (from thinking)',
-            code,
-          });
-          keptChunks.push(updatedThinking.slice(lastIndex, m.index));
-          keptChunks.push(`[Artifact: ${artifactType}]`);
-          lastIndex = m.index + m[0].length;
-        }
-      }
-      if (additionalArtifacts.length > 0) {
-        keptChunks.push(updatedThinking.slice(lastIndex));
-        updatedThinking = keptChunks.join('').trim() || null;
-      }
-    }
+export function MessageRenderer({
+  content,
+  isStreaming,
+  artifactsEnabled,
+  messageId,
+  showActions = true,
+}: MessageRendererProps) {
+  // Use the parsing service with memoization
+  const parsed = useParsedMessage(content, {
+    isStreaming,
+    extractArtifacts: artifactsEnabled,
+  });
 
-    return {
-      thinkingContent: updatedThinking,
-      mainContent: visibleContent,
-      artifacts: [...extractedArtifacts, ...additionalArtifacts],
-    };
-  }, [content, artifactsEnabled]);
+  const { renderMarkdown } = useMessageParsing();
+
+  const { thinking, artifacts, segments } = parsed;
+  const mainContent = thinking.mainContent;
 
   return (
     <div className="message-content min-w-0 break-words overflow-hidden max-w-full group relative text-inherit">
@@ -295,136 +175,24 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
         </div>
       )}
 
+      {/* Main content */}
       {mainContent && (
         <div style={{ color: '#e8e4dd' }}>
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            code({ className, children, ...props }) {
-              const isInline = !className;
-              const codeContent = String(children).replace(/\n$/, '');
-              const langMatch = className?.match(/language-(\w+)/);
-              const language = langMatch?.[1];
-
-              if (isInline) {
+          {segments.map((segment, index) => {
+            if (segment.type === 'code') {
               return (
-                <code
-                  className="px-2 py-1 md:px-1.5 md:py-0.5 rounded bg-[var(--accent)] font-mono text-[14px] md:text-sm break-words"
-                  {...props}
-                >
-                  {codeContent}
-                </code>
+                <CodeBlock
+                  key={`code-${index}`}
+                  segment={segment}
+                  artifactsEnabled={artifactsEnabled}
+                  isStreaming={isStreaming}
+                />
               );
             }
 
-              return (
-                <CodeBlock
-                  className={className}
-                  artifactsEnabled={artifactsEnabled}
-                  isStreaming={isStreaming}
-                  language={language}
-                >
-                  {codeContent}
-                </CodeBlock>
-              );
-            },
-            p({ children }) {
-              return <p className="mb-2 md:mb-3 last:mb-0 leading-relaxed text-[16px] md:text-[16px] text-[#e8e4dd]">{children}</p>;
-            },
-            ul({ children }) {
-              return <ul className="mb-2 md:mb-3 pl-4 md:pl-4 space-y-0.5 md:space-y-1 list-disc">{children}</ul>;
-            },
-            ol({ children }) {
-              return <ol className="mb-2 md:mb-3 pl-4 md:pl-4 space-y-0.5 md:space-y-1 list-decimal">{children}</ol>;
-            },
-            li({ children }) {
-              return <li className="leading-relaxed text-[16px] md:text-[16px] text-[#e8e4dd]">{children}</li>;
-            },
-            h1({ children }) {
-              return <h1 className="text-2xl md:text-xl font-semibold mb-2.5 mt-4 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h1>;
-            },
-            h2({ children }) {
-              return <h2 className="text-xl md:text-lg font-semibold mb-2 mt-3.5 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h2>;
-            },
-            h3({ children }) {
-              return <h3 className="text-lg md:text-base font-semibold mb-1.5 mt-3 first:mt-0 text-[#e8e4dd] leading-snug">{children}</h3>;
-            },
-            blockquote({ children }) {
-              return (
-                <blockquote className="border-l-2 border-[var(--border)] pl-4 my-3 text-[#c8c4bd] italic">
-                  {children}
-                </blockquote>
-              );
-            },
-            hr() {
-              return <hr className="my-4 border-[var(--border)]" />;
-            },
-            a({ href, children }) {
-              return (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[var(--success)] hover:underline"
-                >
-                  {children}
-                </a>
-              );
-            },
-            table({ children }) {
-              return (
-                <div className="my-3 overflow-x-auto">
-                  <table className="w-full table-auto border-collapse border border-[var(--border)] rounded-lg overflow-hidden">
-                    {children}
-                  </table>
-                </div>
-              );
-            },
-            thead({ children }) {
-              return <thead className="bg-[var(--accent)] text-left">{children}</thead>;
-            },
-            tbody({ children }) {
-              return <tbody className="divide-y divide-[var(--border)]">{children}</tbody>;
-            },
-            th({ children }) {
-              return (
-                <th className="px-4 py-2.5 md:py-2 text-left text-sm md:text-xs font-medium text-[#d8d4cd] uppercase tracking-wider">
-                  {children}
-                </th>
-              );
-            },
-            td({ children }) {
-              return (
-                <td className="px-4 py-2.5 md:py-2 text-base md:text-sm text-[#e8e4dd] align-top">
-                  {children}
-                </td>
-              );
-            },
-            img({ src, alt }) {
-              if (!src || typeof src !== 'string') return null;
-              return (
-                <Image
-                  src={src}
-                  alt={alt || ''}
-                  width={0}
-                  height={0}
-                  sizes="100vw"
-                  className="max-w-full rounded-lg my-3 h-auto w-full"
-                  unoptimized
-                />
-              );
-            },
-            pre({ children }) {
-              return (
-                <pre className="my-3 p-4 rounded-lg bg-[var(--accent)] overflow-x-auto whitespace-pre font-mono text-sm">
-                  {children}
-                </pre>
-              );
-            },
-          }}
-        >
-          {mainContent}
-        </ReactMarkdown>
+            const html = renderMarkdown(segment.content);
+            return <MarkdownBlock key={`md-${index}`} html={html} />;
+          })}
         </div>
       )}
 
@@ -434,14 +202,14 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled, messag
           {artifacts.map((artifact) => (
             <ArtifactRenderer
               key={artifact.id}
-              artifact={artifact}
+              artifact={artifact as Artifact}
             />
           ))}
         </div>
       )}
 
       {/* Streaming indicators */}
-      {!mainContent && !thinkingContent && isStreaming && (
+      {!mainContent && !thinking.thinkingContent && isStreaming && (
         <div className="flex items-center gap-2">
           <TypingIndicator size="md" />
         </div>
