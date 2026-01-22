@@ -1,0 +1,32 @@
+{
+  "name": "vllm-studio-controller-new",
+  "version": "0.3.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "script:util:compare": "bun scripts/utilities/compare-controllers.ts"
+  },
+  "dependencies": {
+    "dotenv": "16.6.1",
+    "hono": "4.6.12",
+    "pg": "8.13.3",
+    "prom-client": "15.1.3",
+    "yaml": "2.8.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "bun-types": "1.3.6",
+    "@types/node": "24.6.0",
+    "@types/pg": "8.16.0",
+    "@typescript-eslint/eslint-plugin": "8.43.0",
+    "@typescript-eslint/parser": "8.43.0",
+    "eslint": "9.35.0",
+    "eslint-plugin-jsdoc": "59.1.0",
+    "eslint-plugin-unicorn": "60.0.0",
+    "typescript": "5.9.2"
+  }
+}
