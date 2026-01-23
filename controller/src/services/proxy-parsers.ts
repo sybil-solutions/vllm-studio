@@ -125,7 +125,7 @@ export const parseThinkTagsFromContent = (
 
   for (const choice of choices) {
     const choiceRecord = choice as Record<string, unknown>;
-    const delta = choiceRecord["delta"] as Record<string, unknown> | undefined;
+    const delta = (choiceRecord["delta"] ?? choiceRecord["message"]) as Record<string, unknown> | undefined;
     if (!delta) {
       continue;
     }
