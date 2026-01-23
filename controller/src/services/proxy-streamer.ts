@@ -113,7 +113,7 @@ export const createProxyStream = (options: ProxyStreamOptions): ReadableStream<U
         chunk = fixed.join("\n");
       }
 
-      if (chunk.includes("<think>") || thinkState.inThinking) {
+      if (chunk.includes("<think>") || chunk.includes("</think>") || thinkState.inThinking) {
         const lines = chunk.split("\n");
         const fixed = lines.map((line) => {
           if (line.startsWith("data: ") && line !== "data: [DONE]") {
