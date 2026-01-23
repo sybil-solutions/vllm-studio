@@ -133,7 +133,12 @@ export const parseThinkTagsFromContent = (
     if (typeof content !== "string" || content.length === 0) {
       continue;
     }
-    if (delta["reasoning_content"]) {
+    const hasReasoning = typeof delta["reasoning_content"] === "string";
+    if (hasReasoning) {
+      if (content.includes("<think>") || content.includes("</think>")) {
+        const cleaned = content.replace(/<\/?think>/g, "").trim();
+        delta["content"] = cleaned || null;
+      }
       continue;
     }
 
