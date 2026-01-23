@@ -16,8 +16,8 @@ vLLM Studio - Model lifecycle management for vLLM, SGLang, and TabbyAPI inferenc
               │                       │                       │
               ▼                       ▼                       ▼
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
-│  Controller (8080)  │  │   LiteLLM (4100)    │  │   Grafana (3001)    │
-│  FastAPI + SQLite   │  │   API Gateway       │  │   Dashboards        │
+│  Controller (8080)  │  │   LiteLLM (4100)    │  │  Prometheus (9090)  │
+│  Bun + SQLite       │  │   API Gateway       │  │   Metrics Store     │
 └──────────┬──────────┘  └──────────┬──────────┘  └─────────────────────┘
            │                        │
            │                        ▼
@@ -26,13 +26,13 @@ vLLM Studio - Model lifecycle management for vLLM, SGLang, and TabbyAPI inferenc
            │             │  Inference Backend  │
            │             └─────────────────────┘
            │
-           ├──────────────────────────────────────────────────┐
-           │                       │                          │
-           ▼                       ▼                          ▼
-┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
-│   PostgreSQL (5432) │  │    Redis (6379)     │  │  Prometheus (9090)  │
-│   Usage Analytics   │  │   Response Cache    │  │   Metrics Store     │
-└─────────────────────┘  └─────────────────────┘  └─────────────────────┘
+           ├────────────────────────────────────┐
+           │                                    │
+           ▼                                    ▼
+┌─────────────────────┐              ┌─────────────────────┐
+│   PostgreSQL (5432) │              │    Redis (6379)     │
+│   Usage Analytics   │              │   Response Cache    │
+└─────────────────────┘              └─────────────────────┘
 ```
 
 ## Commands
@@ -99,8 +99,7 @@ lmvllm/
 │       └── lib/         # API client, types, utilities
 ├── config/              # Service configurations
 │   ├── litellm.yaml    # LiteLLM routing config
-│   ├── prometheus.yml  # Prometheus scrape config
-│   └── grafana/        # Grafana dashboards
+│   └── prometheus.yml  # Prometheus scrape config
 ├── data/               # Runtime data (SQLite DB, logs)
 └── docker-compose.yml  # Service orchestration
 ```

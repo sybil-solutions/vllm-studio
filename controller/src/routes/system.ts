@@ -188,25 +188,6 @@ export const registerSystemRoutes = (app: Hono, context: AppContext): void => {
       description: "Metrics collection",
     });
 
-    let grafanaStatus = "unknown";
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      const response = await fetch("http://localhost:3001/api/health", { signal: controller.signal });
-      clearTimeout(timeout);
-      grafanaStatus = response.status === 200 ? "running" : "error";
-    } catch {
-      grafanaStatus = "stopped";
-    }
-    services.push({
-      name: "Grafana",
-      port: 3001,
-      internal_port: 3000,
-      protocol: "http",
-      status: grafanaStatus,
-      description: "Metrics dashboards",
-    });
-
     const frontendReachable = await checkService("localhost", 3000);
     services.push({
       name: "Frontend",

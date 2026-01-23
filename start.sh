@@ -37,11 +37,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Use non-snap bun (snap bun has sandbox restrictions)
+BUN="${HOME}/.bun/bin/bun"
+if [ ! -x "$BUN" ]; then
+    BUN="bun"  # Fallback to system bun
+fi
+
 # Start
 if [ "$DEV_MODE" = true ]; then
     echo -e "${GREEN}Starting in dev mode...${NC}"
-    VLLM_STUDIO_PORT="$PORT" bun --watch controller/src/main.ts
+    VLLM_STUDIO_PORT="$PORT" "$BUN" --watch controller/src/main.ts
 else
     echo -e "${GREEN}Starting controller on port $PORT...${NC}"
-    VLLM_STUDIO_PORT="$PORT" bun controller/src/main.ts
+    VLLM_STUDIO_PORT="$PORT" "$BUN" controller/src/main.ts
 fi

@@ -12,6 +12,14 @@ import {
 } from "./proxy-parsers";
 
 /**
+ * Token usage from stream.
+ */
+export interface StreamUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
+/**
  * Options for streaming proxy transforms.
  */
 export interface ProxyStreamOptions {
@@ -19,6 +27,7 @@ export interface ProxyStreamOptions {
   toolCallBuffer: ToolCallBuffer;
   thinkState: ThinkState;
   extractToolName: (content: string) => string;
+  onUsage?: (usage: StreamUsage) => void;
 }
 
 /**
@@ -27,9 +36,10 @@ export interface ProxyStreamOptions {
  * @returns ReadableStream with transformed SSE chunks.
  */
 export const createProxyStream = (options: ProxyStreamOptions): ReadableStream<Uint8Array> => {
-  const { reader, toolCallBuffer, thinkState, extractToolName } = options;
+  const { reader, toolCallBuffer, thinkState, extractToolName, onUsage } = options;
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
+  let usageTracked = false;
 
   return new ReadableStream<Uint8Array>({
     async pull(controller): Promise<void> {
@@ -163,6 +173,19 @@ export const createProxyStream = (options: ProxyStreamOptions): ReadableStream<U
           }
           try {
             const data = JSON.parse(jsonPart) as Record<string, unknown>;
+
+            // Track usage when it appears (typically in final chunks)
+            if (!usageTracked && data["usage"] && onUsage) {
+              const usage = data["usage"] as Record<string, number>;
+              if (usage["prompt_tokens"] || usage["completion_tokens"]) {
+                onUsage({
+                  prompt_tokens: usage["prompt_tokens"] ?? 0,
+                  completion_tokens: usage["completion_tokens"] ?? 0,
+                });
+                usageTracked = true;
+              }
+            }
+
             const choices = data["choices"];
             if (Array.isArray(choices)) {
               for (const choice of choices) {

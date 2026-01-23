@@ -17,7 +17,7 @@ export interface Recipe {
   id: string;
   name: string;
   model_path: string;
-  backend?: 'vllm' | 'sglang';
+  backend?: "vllm" | "sglang";
 
   // Server settings
   host?: string;
@@ -27,7 +27,7 @@ export interface Recipe {
 
   // Model loading
   tokenizer?: string;
-  tokenizer_mode?: 'auto' | 'slow' | 'mistral';
+  tokenizer_mode?: "auto" | "slow" | "mistral";
   trust_remote_code?: boolean;
   dtype?: string;
   seed?: number;
@@ -45,7 +45,7 @@ export interface Recipe {
   pipeline_parallel_size?: number;
   pp?: number;
   data_parallel_size?: number;
-  distributed_executor_backend?: 'ray' | 'mp';
+  distributed_executor_backend?: "ray" | "mp";
   enable_expert_parallel?: boolean;
 
   // Memory & KV Cache
@@ -61,7 +61,7 @@ export interface Recipe {
   // Scheduler & Batching
   max_num_seqs?: number;
   max_num_batched_tokens?: number;
-  scheduling_policy?: 'fcfs' | 'priority';
+  scheduling_policy?: "fcfs" | "priority";
   enable_chunked_prefill?: boolean;
   max_paddings?: number;
 
@@ -80,7 +80,7 @@ export interface Recipe {
   speculative_draft_tensor_parallel_size?: number;
   speculative_max_model_len?: number;
   speculative_disable_mqa_scorer?: boolean;
-  spec_decoding_acceptance_method?: 'rejection_sampler' | 'typical_acceptance_sampler';
+  spec_decoding_acceptance_method?: "rejection_sampler" | "typical_acceptance_sampler";
   typical_acceptance_sampler_posterior_threshold?: number;
   typical_acceptance_sampler_posterior_alpha?: number;
   ngram_prompt_lookup_max?: number;
@@ -99,7 +99,7 @@ export interface Recipe {
 
   // Chat & templates
   chat_template?: string;
-  chat_template_content_format?: 'auto' | 'string' | 'openai';
+  chat_template_content_format?: "auto" | "string" | "openai";
   response_role?: string;
 
   // LoRA
@@ -139,7 +139,7 @@ export interface Recipe {
 }
 
 export interface RecipeWithStatus extends Recipe {
-  status: 'running' | 'stopped' | 'starting' | 'error';
+  status: "running" | "stopped" | "starting" | "error";
 }
 
 // Chat session
@@ -163,12 +163,16 @@ export interface HealthResponse {
 // Tool calling types
 export interface ToolCall {
   id: string;
-  type: 'function';
+  type: "function";
   function: {
     name: string;
     arguments: string;
   };
   server?: string;
+}
+
+export interface StoredToolCall extends ToolCall {
+  result?: { content?: string; isError?: boolean } | string | null;
 }
 
 export interface ToolResult {
@@ -178,6 +182,26 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+export interface StoredMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
+  tool_calls?: StoredToolCall[];
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  request_prompt_tokens?: number | null;
+  request_tools_tokens?: number | null;
+  request_total_input_tokens?: number | null;
+  request_completion_tokens?: number | null;
+  estimated_cost_usd?: number | null;
+}
+
+export interface ChatSessionDetail extends ChatSession {
+  messages?: StoredMessage[];
+}
+
 // MCP types
 export interface MCPServer {
   name: string;
@@ -185,6 +209,7 @@ export interface MCPServer {
   args?: string[];
   env?: Record<string, string>;
   enabled?: boolean;
+  icon?: string;
 }
 
 export interface MCPTool {
@@ -214,7 +239,7 @@ export interface LogSession {
   started_at?: string;
   created_at: string;
   ended_at?: string;
-  status: 'running' | 'stopped' | 'crashed';
+  status: "running" | "stopped" | "crashed";
 }
 
 // Model info from discovery
@@ -228,6 +253,11 @@ export interface ModelInfo {
   context_length?: number | null;
   recipe_ids?: string[];
   has_recipe?: boolean;
+  // KV cache calculation fields
+  num_hidden_layers?: number | null;
+  num_kv_heads?: number | null;
+  hidden_size?: number | null;
+  head_dim?: number | null;
 }
 
 export interface StudioModelsRoot {
@@ -270,8 +300,8 @@ export interface GPU {
   utilization_pct?: number;
   temperature?: number;
   temp_c?: number;
-  power_draw?: number;  // Watts
-  power_limit?: number;  // Watts
+  power_draw?: number; // Watts
+  power_limit?: number; // Watts
 }
 
 // Metrics
@@ -291,7 +321,13 @@ export interface Metrics {
   prompt_tokens_total?: number;
   running_requests?: number;
   pending_requests?: number;
-  // Peak metrics (stored best values)
+  // Session averages (since first token this session)
+  session_avg_prefill?: number;
+  session_avg_generation?: number;
+  // Session peaks (best this session)
+  session_peak_prefill?: number;
+  session_peak_generation?: number;
+  // All-time peak metrics (stored best values)
   peak_prefill_tps?: number;
   peak_generation_tps?: number;
   peak_ttft_ms?: number;
@@ -314,7 +350,7 @@ export interface Metrics {
 // Artifact types for code rendering
 export interface Artifact {
   id: string;
-  type: 'html' | 'react' | 'javascript' | 'python' | 'mermaid' | 'svg';
+  type: "html" | "react" | "javascript" | "python" | "mermaid" | "svg";
   title: string;
   code: string;
   output?: string;
@@ -326,29 +362,201 @@ export interface Artifact {
   created_at?: string;
 }
 
-// RAG (Retrieval Augmented Generation) types
-export interface RAGSettings {
+// ===== SHARED TYPES ACROSS PAGES =====
+
+// Usage Analytics from usage/page.tsx
+export interface UsageStats {
+  totals: {
+    total_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_requests: number;
+    successful_requests: number;
+    failed_requests: number;
+    success_rate: number;
+    unique_sessions: number;
+    unique_users: number;
+  };
+  latency: {
+    avg_ms: number;
+    p50_ms: number;
+    p95_ms: number;
+    p99_ms: number;
+    min_ms: number;
+    max_ms: number;
+  };
+  ttft: {
+    avg_ms: number;
+    p50_ms: number;
+    p95_ms: number;
+    p99_ms: number;
+  };
+  tokens_per_request: {
+    avg: number;
+    avg_prompt: number;
+    avg_completion: number;
+    max: number;
+    p50: number;
+    p95: number;
+  };
+  cache: {
+    hits: number;
+    misses: number;
+    hit_tokens: number;
+    miss_tokens: number;
+    hit_rate: number;
+  };
+  week_over_week: {
+    this_week: {
+      requests: number;
+      tokens: number;
+      successful: number;
+    };
+    last_week: {
+      requests: number;
+      tokens: number;
+      successful: number;
+    };
+    change_pct: {
+      requests: number | null;
+      tokens: number | null;
+    };
+  };
+  recent_activity: {
+    last_hour_requests: number;
+    last_24h_requests: number;
+    prev_24h_requests: number;
+    last_24h_tokens: number;
+    change_24h_pct: number | null;
+  };
+  peak_days: Array<{
+    date: string;
+    requests: number;
+    tokens: number;
+  }>;
+  peak_hours: Array<{
+    hour: number;
+    requests: number;
+  }>;
+  by_model: Array<{
+    model: string;
+    requests: number;
+    successful: number;
+    success_rate: number;
+    total_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    avg_tokens: number;
+    avg_latency_ms: number;
+    p50_latency_ms: number;
+    avg_ttft_ms: number;
+    tokens_per_sec: number | null;
+    prefill_tps: number | null;
+    generation_tps: number | null;
+  }>;
+  daily: Array<{
+    date: string;
+    requests: number;
+    successful: number;
+    success_rate: number;
+    total_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    avg_latency_ms: number;
+  }>;
+  daily_by_model?: Array<{
+    date: string;
+    model: string;
+    requests: number;
+    successful: number;
+    success_rate: number;
+    total_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+  }>;
+  hourly_pattern: Array<{
+    hour: number;
+    requests: number;
+    successful: number;
+    tokens: number;
+  }>;
+}
+
+export interface PeakMetrics {
+  model_id: string;
+  prefill_tps: number | null;
+  generation_tps: number | null;
+  ttft_ms: number | null;
+  total_tokens: number;
+  total_requests: number;
+}
+
+export type SortField = "model" | "requests" | "tokens" | "success" | "latency" | "ttft" | "speed";
+export type SortDirection = "asc" | "desc";
+
+// Hugging Face models from discover/page.tsx
+export interface HuggingFaceModel {
+  _id: string;
+  modelId: string;
+  downloads: number;
+  likes: number;
+  tags: string[];
+  pipeline_tag?: string;
+  library_name?: string;
+  lastModified?: string;
+  author?: string;
+  private: boolean;
+}
+
+// System config types from configs/page.tsx
+export interface ServiceInfo {
+  name: string;
+  port: number;
+  internal_port: number;
+  protocol: string;
+  status: string;
+  description: string | null;
+}
+
+export interface SystemConfig {
+  host: string;
+  port: number;
+  inference_port: number;
+  api_key_configured: boolean;
+  models_dir: string;
+  data_dir: string;
+  db_path: string;
+  sglang_python: string | null;
+  tabby_api_dir: string | null;
+}
+
+export interface EnvironmentInfo {
+  controller_url: string;
+  inference_url: string;
+  litellm_url: string;
+  frontend_url: string;
+}
+
+export interface ConfigData {
+  config: SystemConfig;
+  services: ServiceInfo[];
+  environment: EnvironmentInfo;
+}
+
+// Chat UI types
+export type ActivePanel = "activity" | "artifacts";
+
+export interface DeepResearchConfig {
   enabled: boolean;
-  endpoint: string;
-  apiKey?: string;
-  topK: number;
-  minScore: number;
-  includeMetadata: boolean;
-  contextPosition: 'before' | 'after' | 'system';
-  useProxy: boolean; // Use frontend proxy for remote access
+  maxSources: number;
+  searchDepth: "shallow" | "medium" | "deep";
+  autoSummarize: boolean;
+  includeCitations: boolean;
 }
 
-export interface RAGDocument {
-  id: string;
-  content: string;
-  score: number;
-  metadata?: Record<string, unknown>;
-  source?: string;
-}
-
-export interface RAGQueryResponse {
-  documents: RAGDocument[];
-  query: string;
-  total_results?: number;
-  latency_ms?: number;
+export interface SessionUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost?: number | null;
 }

@@ -72,7 +72,9 @@ export const registerLifecycleRoutes = (app: Hono, context: AppContext): void =>
         if (current.served_model_name && recipe.served_model_name === current.served_model_name) {
           status = "running";
         } else if (current.model_path) {
-          if (recipe.model_path.includes(current.model_path) || current.model_path.includes(recipe.model_path)) {
+          // Compare normalized paths (exact match)
+          const normalize = (p: string): string => p.replace(/\/+$/, "");
+          if (normalize(recipe.model_path) === normalize(current.model_path)) {
             status = "running";
           } else if (current.model_path.split("/").pop() === recipe.model_path.split("/").pop()) {
             status = "running";

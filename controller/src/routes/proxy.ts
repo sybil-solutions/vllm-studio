@@ -176,6 +176,24 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
       const response = await fetch(litellmUrl, { method: "POST", headers, body: bodyBuffer });
       const result = (await response.json()) as Record<string, unknown>;
 
+      // Track token usage to lifetime metrics
+      const usage = result["usage"] as Record<string, number> | undefined;
+      if (usage) {
+        const promptTokens = usage["prompt_tokens"] ?? 0;
+        const completionTokens = usage["completion_tokens"] ?? 0;
+        if (promptTokens > 0) {
+          context.stores.lifetimeMetricsStore.addPromptTokens(promptTokens);
+          context.stores.lifetimeMetricsStore.addTokens(promptTokens);
+        }
+        if (completionTokens > 0) {
+          context.stores.lifetimeMetricsStore.addCompletionTokens(completionTokens);
+          context.stores.lifetimeMetricsStore.addTokens(completionTokens);
+        }
+        if (promptTokens > 0 || completionTokens > 0) {
+          context.stores.lifetimeMetricsStore.addRequests(1);
+        }
+      }
+
       const choices = result["choices"];
       if (Array.isArray(choices) && choices.length > 0) {
         const choice = choices[0] as Record<string, unknown>;
@@ -223,6 +241,20 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
       toolCallBuffer,
       thinkState,
       extractToolName,
+      onUsage: (usage) => {
+        // Track streaming tokens to lifetime metrics
+        if (usage.prompt_tokens > 0) {
+          context.stores.lifetimeMetricsStore.addPromptTokens(usage.prompt_tokens);
+          context.stores.lifetimeMetricsStore.addTokens(usage.prompt_tokens);
+        }
+        if (usage.completion_tokens > 0) {
+          context.stores.lifetimeMetricsStore.addCompletionTokens(usage.completion_tokens);
+          context.stores.lifetimeMetricsStore.addTokens(usage.completion_tokens);
+        }
+        if (usage.prompt_tokens > 0 || usage.completion_tokens > 0) {
+          context.stores.lifetimeMetricsStore.addRequests(1);
+        }
+      },
     });
 
     return new Response(stream, {

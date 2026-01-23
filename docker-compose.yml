@@ -83,27 +83,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # Grafana - Dashboards and visualization
-  grafana:
-    image: grafana/grafana:latest
-    container_name: vllm-studio-grafana
-    ports:
-      - "3001:3000"
-    volumes:
-      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - ./data/grafana:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=http://localhost:3001
-      - GF_INSTALL_PLUGINS=redis-datasource
-    restart: unless-stopped
-    depends_on:
-      - prometheus
-      - redis
-
   # Frontend - Next.js web UI
   frontend:
     build:

@@ -78,6 +78,23 @@ export const startMetricsCollector = (context: AppContext): (() => void) => {
       });
       await context.eventManager.publishGpu(gpuList.map((gpu) => ({ ...gpu })));
 
+      // Always publish basic metrics (lifetime, power) even when idle
+      const lifetimeData = lifetimeStore.getAll();
+      const baseMetrics = {
+        lifetime_prompt_tokens: lifetimeData["prompt_tokens_total"] ?? 0,
+        lifetime_completion_tokens: lifetimeData["completion_tokens_total"] ?? 0,
+        lifetime_requests: lifetimeData["requests_total"] ?? 0,
+        lifetime_energy_kwh: (lifetimeData["energy_wh"] ?? 0) / 1000,
+        lifetime_uptime_hours: (lifetimeData["uptime_seconds"] ?? 0) / 3600,
+        current_power_watts: totalPowerWatts,
+        kwh_per_million_input: lifetimeData["prompt_tokens_total"]
+          ? ((lifetimeData["energy_wh"] ?? 0) / 1000) / ((lifetimeData["prompt_tokens_total"] ?? 1) / 1_000_000)
+          : null,
+        kwh_per_million_output: lifetimeData["completion_tokens_total"]
+          ? ((lifetimeData["energy_wh"] ?? 0) / 1000) / ((lifetimeData["completion_tokens_total"] ?? 1) / 1_000_000)
+          : null,
+      };
+
       if (current) {
         const vllmMetrics = await scrapeVllmMetrics(context.config.inference_port);
         const now = Date.now() / 1000;
@@ -100,10 +117,22 @@ export const startMetricsCollector = (context: AppContext): (() => void) => {
         lastMetricsTime = now;
 
         const modelId = current.served_model_name ?? current.model_path?.split("/").pop() ?? "unknown";
+
+        // Update peak metrics with actual observed throughput (not fake benchmark calculations)
+        if (generationThroughput > 5) {
+          // Only update if we have meaningful throughput (> 5 tok/s to filter noise)
+          context.stores.peakMetricsStore.updateIfBetter(
+            modelId,
+            promptThroughput > 0 ? promptThroughput : undefined,
+            generationThroughput,
+            undefined, // TTFT requires streaming measurement
+          );
+        }
+
         const peakData = context.stores.peakMetricsStore.get(modelId);
-        const lifetimeData = lifetimeStore.getAll();
 
         await context.eventManager.publishMetrics({
+          ...baseMetrics,
           running_requests: Number(vllmMetrics["vllm:num_requests_running"] ?? 0),
           pending_requests: Number(vllmMetrics["vllm:num_requests_waiting"] ?? 0),
           kv_cache_usage: vllmMetrics["vllm:kv_cache_usage_perc"] ?? 0,
@@ -114,19 +143,10 @@ export const startMetricsCollector = (context: AppContext): (() => void) => {
           peak_prefill_tps: peakData?.["prefill_tps"] ?? null,
           peak_generation_tps: peakData?.["generation_tps"] ?? null,
           peak_ttft_ms: peakData?.["ttft_ms"] ?? null,
-          lifetime_prompt_tokens: lifetimeData["prompt_tokens_total"] ?? 0,
-          lifetime_completion_tokens: lifetimeData["completion_tokens_total"] ?? 0,
-          lifetime_requests: lifetimeData["requests_total"] ?? 0,
-          lifetime_energy_kwh: (lifetimeData["energy_wh"] ?? 0) / 1000,
-          lifetime_uptime_hours: (lifetimeData["uptime_seconds"] ?? 0) / 3600,
-          current_power_watts: totalPowerWatts,
-          kwh_per_million_input: lifetimeData["prompt_tokens_total"]
-            ? ((lifetimeData["energy_wh"] ?? 0) / 1000) / ((lifetimeData["prompt_tokens_total"] ?? 1) / 1_000_000)
-            : null,
-          kwh_per_million_output: lifetimeData["completion_tokens_total"]
-            ? ((lifetimeData["energy_wh"] ?? 0) / 1000) / ((lifetimeData["completion_tokens_total"] ?? 1) / 1_000_000)
-            : null,
         });
+      } else {
+        // No model running - still publish base lifetime metrics
+        await context.eventManager.publishMetrics(baseMetrics);
       }
     } catch (error) {
       context.logger.error("Metrics collection error", { error: String(error) });

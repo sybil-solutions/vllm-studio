@@ -90,18 +90,17 @@ export const registerMonitoringRoutes = (app: Hono, context: AppContext): void =
       const completionTokens = usage["completion_tokens"] ?? 0;
 
       if (completionTokens > 0 && promptTokensActual > 0) {
-        const prefillRatio = promptTokensActual / (promptTokensActual + completionTokens * 10);
-        const prefillTime = totalTime * prefillRatio;
-        const generationTime = totalTime - prefillTime;
-        const prefillTps = prefillTime > 0 ? promptTokensActual / prefillTime : 0;
-        const generationTps = generationTime > 0 ? completionTokens / generationTime : 0;
-        const ttftMs = prefillTime * 1000;
+        // Calculate generation throughput from total time
+        // Note: This includes prefill time so it's a conservative estimate
+        // Real-time metrics collector tracks actual generation throughput more accurately
+        const generationTps = completionTokens / totalTime;
 
+        // Don't fake prefill - it requires TTFT measurement from streaming
         const result = context.stores.peakMetricsStore.updateIfBetter(
           modelId,
-          prefillTps,
+          undefined, // prefill requires proper TTFT measurement
           generationTps,
-          ttftMs,
+          undefined, // TTFT requires streaming measurement
         );
         context.stores.peakMetricsStore.addTokens(modelId, completionTokens, 1);
 
@@ -112,9 +111,7 @@ export const registerMonitoringRoutes = (app: Hono, context: AppContext): void =
             prompt_tokens: promptTokensActual,
             completion_tokens: completionTokens,
             total_time_s: Math.round(totalTime * 100) / 100,
-            prefill_tps: Math.round(prefillTps * 10) / 10,
             generation_tps: Math.round(generationTps * 10) / 10,
-            ttft_ms: Math.round(ttftMs),
           },
           peak_metrics: result,
         });

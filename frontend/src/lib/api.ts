@@ -3,24 +3,31 @@
  * Robust client with retry logic, timeouts, and comprehensive error handling
  */
 
-import type { Recipe, RecipeWithStatus, HealthResponse, ProcessInfo, ModelInfo, StudioModelsRoot } from './types';
+import type {
+  Recipe,
+  RecipeWithStatus,
+  HealthResponse,
+  ProcessInfo,
+  ModelInfo,
+  StudioModelsRoot,
+  ChatSession,
+  ChatSessionDetail,
+  StoredMessage,
+  LogSession,
+  MCPServer,
+  MCPTool,
+  GPU,
+  Metrics,
+  VRAMCalculation,
+} from "./types";
+import { getApiKey } from "./api-key";
 
-const API_KEY_STORAGE = 'vllmstudio_api_key';
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const DEFAULT_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second base delay
 
-function getStoredApiKey(): string {
-  if (typeof window === 'undefined') return '';
-  try {
-    return window.localStorage.getItem(API_KEY_STORAGE) || '';
-  } catch {
-    return '';
-  }
-}
-
 // Sleep helper
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Check if error is retryable
 function isRetryableError(error: unknown, status?: number): boolean {
@@ -28,7 +35,7 @@ function isRetryableError(error: unknown, status?: number): boolean {
   if (status === 429) return true; // Rate limiting
   if (status === 408) return true; // Request timeout
   if (error instanceof TypeError) return true; // Network errors
-  if (error instanceof Error && error.name === 'AbortError') return false; // Don't retry aborts
+  if (error instanceof Error && error.name === "AbortError") return false; // Don't retry aborts
   return false;
 }
 
@@ -47,10 +54,7 @@ class APIClient {
     this.useProxy = useProxy;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestOptions = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const {
       timeout = DEFAULT_TIMEOUT,
       retries = DEFAULT_RETRIES,
@@ -58,14 +62,14 @@ class APIClient {
       ...fetchOptions
     } = options;
 
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
 
-    const storedKey = getStoredApiKey();
+    const storedKey = getApiKey();
     if (storedKey) {
-      headers['Authorization'] = `Bearer ${storedKey}`;
+      headers["Authorization"] = `Bearer ${storedKey}`;
     }
 
-    const path = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+    const path = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
     const url = this.useProxy ? `${this.baseUrl}/${path}` : `${this.baseUrl}${endpoint}`;
 
     let lastError: Error | null = null;
@@ -79,7 +83,7 @@ class APIClient {
         const response = await fetch(url, {
           ...fetchOptions,
           headers: { ...headers, ...fetchOptions.headers },
-          credentials: 'include',
+          credentials: "include",
           signal: controller.signal,
         });
 
@@ -87,14 +91,17 @@ class APIClient {
         lastStatus = response.status;
 
         if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({ detail: 'Request failed' }));
-          const errorMessage = errorBody.detail || errorBody.error?.message || `HTTP ${response.status}`;
+          const errorBody = await response.json().catch(() => ({ detail: "Request failed" }));
+          const errorMessage =
+            errorBody.detail || errorBody.error?.message || `HTTP ${response.status}`;
           lastError = new Error(errorMessage);
 
           // Only retry on retryable errors
           if (isRetryableError(lastError, response.status) && attempt < retries) {
             const delay = retryDelay * Math.pow(2, attempt); // Exponential backoff
-            console.warn(`[API] Retry ${attempt + 1}/${retries} for ${endpoint} after ${delay}ms (status: ${response.status})`);
+            console.warn(
+              `[API] Retry ${attempt + 1}/${retries} for ${endpoint} after ${delay}ms (status: ${response.status})`,
+            );
             await sleep(delay);
             continue;
           }
@@ -104,11 +111,10 @@ class APIClient {
 
         const text = await response.text();
         return text ? JSON.parse(text) : (null as unknown as T);
-
       } catch (error) {
         clearTimeout(timeoutId);
 
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (error instanceof Error && error.name === "AbortError") {
           lastError = new Error(`Request timeout after ${timeout}ms`);
         } else if (error instanceof Error) {
           lastError = error;
@@ -119,7 +125,9 @@ class APIClient {
         // Only retry on retryable errors
         if (isRetryableError(error, lastStatus) && attempt < retries) {
           const delay = retryDelay * Math.pow(2, attempt);
-          console.warn(`[API] Retry ${attempt + 1}/${retries} for ${endpoint} after ${delay}ms (${lastError.message})`);
+          console.warn(
+            `[API] Retry ${attempt + 1}/${retries} for ${endpoint} after ${delay}ms (${lastError.message})`,
+          );
           await sleep(delay);
           continue;
         }
@@ -128,15 +136,23 @@ class APIClient {
       }
     }
 
-    throw lastError || new Error('Request failed after retries');
+    throw lastError || new Error("Request failed after retries");
   }
 
   async getHealth(): Promise<HealthResponse> {
-    return this.request('/health');
+    return this.request("/health");
   }
 
-  async getStatus(): Promise<{ running: boolean; process: ProcessInfo | null; inference_port: number }> {
-    const data = await this.request<{ running: boolean; process: ProcessInfo | null; inference_port: number }>('/status');
+  async getStatus(): Promise<{
+    running: boolean;
+    process: ProcessInfo | null;
+    inference_port: number;
+  }> {
+    const data = await this.request<{
+      running: boolean;
+      process: ProcessInfo | null;
+      inference_port: number;
+    }>("/status");
     return {
       running: data.running ?? !!data.process,
       process: data.process ?? null,
@@ -145,7 +161,7 @@ class APIClient {
   }
 
   async getRecipes(): Promise<{ recipes: RecipeWithStatus[] }> {
-    const data = await this.request<RecipeWithStatus[]>('/recipes');
+    const data = await this.request<RecipeWithStatus[]>("/recipes");
     return { recipes: Array.isArray(data) ? data : [] };
   }
 
@@ -154,147 +170,247 @@ class APIClient {
   }
 
   async createRecipe(recipe: Recipe): Promise<{ success: boolean; id: string }> {
-    return this.request('/recipes', { method: 'POST', body: JSON.stringify(recipe) });
+    return this.request("/recipes", { method: "POST", body: JSON.stringify(recipe) });
   }
 
   async updateRecipe(id: string, recipe: Recipe): Promise<{ success: boolean; id: string }> {
-    return this.request(`/recipes/${id}`, { method: 'PUT', body: JSON.stringify(recipe) });
+    return this.request(`/recipes/${id}`, { method: "PUT", body: JSON.stringify(recipe) });
   }
 
   async deleteRecipe(id: string): Promise<void> {
-    return this.request(`/recipes/${id}`, { method: 'DELETE' });
+    return this.request(`/recipes/${id}`, { method: "DELETE" });
   }
 
-  async launch(recipeId: string, force = false): Promise<{ success: boolean; pid?: number; message: string }> {
+  async launch(
+    recipeId: string,
+    force = false,
+  ): Promise<{ success: boolean; pid?: number; message: string }> {
     // Model launches can take several minutes; don't use the default 30s timeout and don't retry.
-    return this.request(`/launch/${recipeId}?force=${force}`, { method: 'POST', timeout: 6 * 60 * 1000, retries: 0 });
+    return this.request(`/launch/${recipeId}?force=${force}`, {
+      method: "POST",
+      timeout: 6 * 60 * 1000,
+      retries: 0,
+    });
   }
 
   async evict(force = false): Promise<{ success: boolean; evicted_pid?: number }> {
-    return this.request(`/evict?force=${force}`, { method: 'POST' });
+    return this.request(`/evict?force=${force}`, { method: "POST" });
   }
 
   async waitReady(timeout = 300): Promise<{ ready: boolean; elapsed: number; error?: string }> {
     return this.request(`/wait-ready?timeout=${timeout}`);
   }
 
-  async getOpenAIModels(): Promise<{ data: Array<{ id: string; root?: string; max_model_len?: number }> }> {
-    return this.request('/v1/models');
+  async getOpenAIModels(): Promise<{
+    data: Array<{ id: string; root?: string; max_model_len?: number }>;
+  }> {
+    return this.request("/v1/models");
   }
 
-  async getChatSessions(): Promise<{ sessions: Array<{ id: string; title: string; model?: string; created_at: string; updated_at: string }> }> {
-    const data = await this.request<Array<{ id: string; title: string; model?: string; created_at: string; updated_at: string }>>('/chats');
+  async getChatSessions(): Promise<{ sessions: ChatSession[] }> {
+    const data = await this.request<ChatSession[]>("/chats");
     return { sessions: Array.isArray(data) ? data : [] };
   }
 
-  async getChatSession(id: string): Promise<{ session: any }> {
+  async getChatSession(id: string): Promise<{ session: ChatSessionDetail }> {
     return this.request(`/chats/${id}`);
   }
 
-  async createChatSession(data: { title?: string; model?: string }): Promise<{ session: any }> {
-    return this.request('/chats', { method: 'POST', body: JSON.stringify(data) });
+  async createChatSession(data: {
+    title?: string;
+    model?: string;
+  }): Promise<{ session: ChatSessionDetail }> {
+    return this.request("/chats", { method: "POST", body: JSON.stringify(data) });
   }
 
   async updateChatSession(id: string, data: { title?: string; model?: string }): Promise<void> {
-    return this.request(`/chats/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    return this.request(`/chats/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
   async deleteChatSession(id: string): Promise<void> {
-    return this.request(`/chats/${id}`, { method: 'DELETE' });
+    return this.request(`/chats/${id}`, { method: "DELETE" });
   }
 
-  async forkChatSession(id: string, data: { message_id?: string; model?: string; title?: string }): Promise<{ session: any }> {
-    return this.request(`/chats/${id}/fork`, { method: 'POST', body: JSON.stringify(data) });
+  async forkChatSession(
+    id: string,
+    data: { message_id?: string; model?: string; title?: string },
+  ): Promise<{ session: ChatSessionDetail }> {
+    return this.request(`/chats/${id}/fork`, { method: "POST", body: JSON.stringify(data) });
   }
 
-  async addChatMessage(sessionId: string, message: any): Promise<any> {
-    return this.request(`/chats/${sessionId}/messages`, { method: 'POST', body: JSON.stringify(message) });
+  async addChatMessage(sessionId: string, message: StoredMessage): Promise<StoredMessage> {
+    return this.request(`/chats/${sessionId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(message),
+    });
   }
 
-  async getChatUsage(sessionId: string): Promise<{ prompt_tokens: number; completion_tokens: number; total_tokens: number; estimated_cost_usd?: number }> {
+  async getChatUsage(sessionId: string): Promise<{
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    estimated_cost_usd?: number;
+  }> {
     return this.request(`/chats/${sessionId}/usage`);
   }
 
-  async getMCPServers(): Promise<Array<{ name: string; command: string; args?: string[]; env?: Record<string, string>; enabled?: boolean }>> {
-    return this.request('/mcp/servers');
+  async getMCPServers(): Promise<{ servers: MCPServer[] }> {
+    const data = await this.request<MCPServer[] | { servers?: MCPServer[] }>("/mcp/servers");
+    const servers = Array.isArray(data) ? data : (data?.servers ?? []);
+    return { servers };
   }
 
-  async getMCPTools(): Promise<{ tools: Array<{ name: string; description?: string; input_schema?: any; server: string }> }> {
-    return this.request('/mcp/tools');
+  async getMCPTools(): Promise<{
+    tools: MCPTool[];
+    errors?: Array<{ server: string; error: string }>;
+  }> {
+    const data = await this.request<{
+      tools?: Array<{
+        name: string;
+        description?: string;
+        input_schema?: unknown;
+        inputSchema?: unknown;
+        server: string;
+      }>;
+      errors?: Array<{ server: string; error: string }>;
+    }>("/mcp/tools");
+    const tools = Array.isArray(data?.tools)
+      ? data.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          server: tool.server,
+          inputSchema: (tool.inputSchema ?? tool.input_schema) as
+            | Record<string, unknown>
+            | undefined,
+        }))
+      : [];
+    return { tools, errors: data?.errors ?? undefined };
   }
 
-  async callMCPTool(server: string, tool: string, args: Record<string, unknown>): Promise<{ result: any }> {
-    return this.request(`/mcp/tools/${server}/${tool}`, { method: 'POST', body: JSON.stringify(args) });
+  async getMCPServerTools(serverId: string): Promise<{ tools: MCPTool[] }> {
+    const data = await this.request<{
+      tools?: Array<{
+        name: string;
+        description?: string;
+        input_schema?: unknown;
+        inputSchema?: unknown;
+        server?: string;
+      }>;
+    }>(`/mcp/servers/${serverId}/tools`);
+    const tools = Array.isArray(data?.tools)
+      ? data.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          server: tool.server || serverId,
+          inputSchema: (tool.inputSchema ?? tool.input_schema) as
+            | Record<string, unknown>
+            | undefined,
+        }))
+      : [];
+    return { tools };
   }
 
-  async tokenizeChatCompletions(data: { model: string; messages: unknown[]; tools?: unknown[] }): Promise<{ input_tokens?: number; breakdown?: { messages?: number; tools?: number } }> {
-    return this.request('/v1/chat/completions/tokenize', { method: 'POST', body: JSON.stringify(data) });
+  async callMCPTool(
+    server: string,
+    tool: string,
+    args: Record<string, unknown>,
+  ): Promise<{ result: unknown }> {
+    return this.request(`/mcp/tools/${server}/${tool}`, {
+      method: "POST",
+      body: JSON.stringify(args),
+    });
+  }
+
+  async tokenizeChatCompletions(data: {
+    model: string;
+    messages: unknown[];
+    tools?: unknown[];
+  }): Promise<{ input_tokens?: number; breakdown?: { messages?: number; tools?: number } }> {
+    return this.request("/v1/chat/completions/tokenize", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
   async countTextTokens(data: { model: string; text: string }): Promise<{ num_tokens?: number }> {
-    return this.request('/v1/tokens/count', { method: 'POST', body: JSON.stringify(data) });
+    return this.request("/v1/tokens/count", { method: "POST", body: JSON.stringify(data) });
   }
 
-  async getLogSessions(): Promise<{ sessions: any[] }> {
-    return this.request('/logs');
-  }
-
-  async getLogContent(sessionId: string, limit?: number): Promise<{ content: string }> {
-    const query = limit ? `?limit=${limit}` : '';
-    return this.request(`/logs/${sessionId}${query}`);
+  async getLogSessions(): Promise<{ sessions: LogSession[] }> {
+    return this.request("/logs");
   }
 
   async getLogs(sessionId: string, limit?: number): Promise<{ logs: string[] }> {
-    const query = limit ? `?limit=${limit}` : '';
+    const query = limit ? `?limit=${limit}` : "";
+    return this.request(`/logs/${sessionId}${query}`);
+  }
+
+  async getLogContent(sessionId: string, limit?: number): Promise<{ content: string }> {
+    const query = limit ? `?limit=${limit}` : "";
     return this.request(`/logs/${sessionId}${query}`);
   }
 
   async deleteLogSession(sessionId: string): Promise<void> {
-    return this.request(`/logs/${sessionId}`, { method: 'DELETE' });
+    return this.request(`/logs/${sessionId}`, { method: "DELETE" });
   }
 
-  async getModels(): Promise<{ models: ModelInfo[]; roots?: StudioModelsRoot[]; configured_models_dir?: string }> {
-    return this.request('/v1/studio/models');
+  async getModels(): Promise<{
+    models: ModelInfo[];
+    roots?: StudioModelsRoot[];
+    configured_models_dir?: string;
+  }> {
+    return this.request("/v1/studio/models");
   }
 
-  async getGPUs(): Promise<{ gpus: any[] }> {
-    return this.request('/gpus');
+  async getGPUs(): Promise<{ gpus: GPU[] }> {
+    return this.request("/gpus");
   }
 
-  async calculateVRAM(data: any): Promise<any> {
-    return this.request('/vram-calculator', { method: 'POST', body: JSON.stringify(data) });
+  async calculateVRAM(data: {
+    model: string;
+    context_length: number;
+    tp_size: number;
+    kv_dtype: string;
+  }): Promise<VRAMCalculation> {
+    return this.request("/vram-calculator", { method: "POST", body: JSON.stringify(data) });
   }
 
-  async getMetrics(): Promise<any> {
-    return this.request('/v1/metrics/vllm');
+  async getMetrics(): Promise<Metrics> {
+    return this.request("/v1/metrics/vllm");
   }
 
-  async switchModel(recipeId: string, force = true): Promise<any> {
+  async switchModel(
+    recipeId: string,
+    force = true,
+  ): Promise<{ success: boolean; pid?: number; message: string }> {
     return this.launch(recipeId, force);
   }
 
-  async addMCPServer(server: any): Promise<void> {
-    return this.request('/mcp/servers', { method: 'POST', body: JSON.stringify(server) });
+  async addMCPServer(server: unknown): Promise<void> {
+    return this.request("/mcp/servers", { method: "POST", body: JSON.stringify(server) });
   }
 
-  async updateMCPServer(name: string, server: any): Promise<void> {
-    return this.request(`/mcp/servers/${name}`, { method: 'PUT', body: JSON.stringify(server) });
+  async updateMCPServer(name: string, server: unknown): Promise<void> {
+    return this.request(`/mcp/servers/${name}`, { method: "PUT", body: JSON.stringify(server) });
   }
 
   async removeMCPServer(name: string): Promise<void> {
-    return this.request(`/mcp/servers/${name}`, { method: 'DELETE' });
+    return this.request(`/mcp/servers/${name}`, { method: "DELETE" });
   }
 
   async evictModel(force = false): Promise<{ success: boolean }> {
     return this.evict(force);
   }
 
-  async exportRecipes(): Promise<{ content: any }> {
+  async exportRecipes(): Promise<{ content: unknown }> {
     const { recipes } = await this.getRecipes();
     return { content: { recipes } };
   }
 
-  async runBenchmark(promptTokens = 1000, maxTokens = 100): Promise<{
+  async runBenchmark(
+    promptTokens = 1000,
+    maxTokens = 100,
+  ): Promise<{
     success?: boolean;
     error?: string;
     model_id?: string;
@@ -314,7 +430,9 @@ class APIClient {
       total_requests: number;
     };
   }> {
-    return this.request(`/benchmark?prompt_tokens=${promptTokens}&max_tokens=${maxTokens}`, { method: 'POST' });
+    return this.request(`/benchmark?prompt_tokens=${promptTokens}&max_tokens=${maxTokens}`, {
+      method: "POST",
+    });
   }
 
   async getPeakMetrics(modelId?: string): Promise<{
@@ -328,7 +446,7 @@ class APIClient {
     }>;
     error?: string;
   }> {
-    const query = modelId ? `?model_id=${modelId}` : '';
+    const query = modelId ? `?model_id=${modelId}` : "";
     return this.request(`/peak-metrics${query}`);
   }
 
@@ -339,29 +457,117 @@ class APIClient {
       prompt_tokens: number;
       completion_tokens: number;
       total_requests: number;
+      successful_requests: number;
+      failed_requests: number;
+      success_rate: number;
+      unique_sessions: number;
+      unique_users: number;
+    };
+    latency: {
+      avg_ms: number;
+      p50_ms: number;
+      p95_ms: number;
+      p99_ms: number;
+      min_ms: number;
+      max_ms: number;
+    };
+    ttft: {
+      avg_ms: number;
+      p50_ms: number;
+      p95_ms: number;
+      p99_ms: number;
+    };
+    tokens_per_request: {
+      avg: number;
+      avg_prompt: number;
+      avg_completion: number;
+      max: number;
+      p50: number;
+      p95: number;
     };
     cache: {
       hits: number;
       misses: number;
       hit_tokens: number;
       miss_tokens: number;
+      hit_rate: number;
     };
+    week_over_week: {
+      this_week: {
+        requests: number;
+        tokens: number;
+        successful: number;
+      };
+      last_week: {
+        requests: number;
+        tokens: number;
+        successful: number;
+      };
+      change_pct: {
+        requests: number | null;
+        tokens: number | null;
+      };
+    };
+    recent_activity: {
+      last_hour_requests: number;
+      last_24h_requests: number;
+      prev_24h_requests: number;
+      last_24h_tokens: number;
+      change_24h_pct: number | null;
+    };
+    peak_days: Array<{
+      date: string;
+      requests: number;
+      tokens: number;
+    }>;
+    peak_hours: Array<{
+      hour: number;
+      requests: number;
+    }>;
     by_model: Array<{
       model: string;
+      requests: number;
+      successful: number;
+      success_rate: number;
       total_tokens: number;
       prompt_tokens: number;
       completion_tokens: number;
-      requests: number;
+      avg_tokens: number;
+      avg_latency_ms: number;
+      p50_latency_ms: number;
+      avg_ttft_ms: number;
+      tokens_per_sec: number | null;
+      prefill_tps: number | null;
+      generation_tps: number | null;
     }>;
     daily: Array<{
       date: string;
+      requests: number;
+      successful: number;
+      success_rate: number;
       total_tokens: number;
       prompt_tokens: number;
       completion_tokens: number;
+      avg_latency_ms: number;
+    }>;
+    daily_by_model?: Array<{
+      date: string;
+      model: string;
       requests: number;
+      successful: number;
+      success_rate: number;
+      total_tokens: number;
+      prompt_tokens: number;
+      completion_tokens: number;
+    }>;
+    hourly_pattern: Array<{
+      hour: number;
+      requests: number;
+      successful: number;
+      tokens: number;
     }>;
   }> {
-    return this.request('/usage');
+    return this.request("/usage");
   }
 
   async getSystemConfig(): Promise<{
@@ -391,134 +597,20 @@ class APIClient {
       frontend_url: string;
     };
   }> {
-    return this.request('/config');
+    return this.request("/config");
   }
 }
 
-// RAG API client - separate from main API since it connects to a custom endpoint
-// Supports proxy mode for accessing local RAG via the frontend server
-export class RAGClient {
-  private endpoint: string;
-  private apiKey?: string;
-  private useProxy: boolean;
+// For client-side calls, use the proxy which handles authentication
+// The proxy adds the API key server-side, avoiding CORS and auth issues
+const isClient = typeof window !== "undefined";
+const clientBaseUrl = isClient
+  ? "/api/proxy"
+  : process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.VLLM_STUDIO_BACKEND_URL ||
+    "https://<your-api-domain>";
 
-  constructor(endpoint: string, apiKey?: string, useProxy = false) {
-    this.endpoint = endpoint.replace(/\/$/, ''); // Remove trailing slash
-    this.apiKey = apiKey;
-    this.useProxy = useProxy;
-  }
-
-  setConfig(endpoint: string, apiKey?: string, useProxy = false) {
-    this.endpoint = endpoint.replace(/\/$/, '');
-    this.apiKey = apiKey;
-    this.useProxy = useProxy;
-  }
-
-  async query(
-    query: string,
-    options: { topK?: number; minScore?: number; includeMetadata?: boolean } = {}
-  ): Promise<{
-    documents: Array<{
-      id: string;
-      content: string;
-      score: number;
-      metadata?: Record<string, unknown>;
-      source?: string;
-    }>;
-    query: string;
-    total_results?: number;
-    latency_ms?: number;
-  }> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      let response: Response;
-
-      if (this.useProxy) {
-        // Use frontend proxy to reach local RAG (for remote access via Cloudflare etc)
-        response = await fetch('/api/rag', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'query',
-            query,
-            top_k: options.topK || 5,
-            min_score: options.minScore || 0.0,
-            include_metadata: options.includeMetadata ?? true,
-          }),
-          signal: controller.signal,
-        });
-      } else {
-        // Direct connection to RAG endpoint
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (this.apiKey) {
-          headers['Authorization'] = `Bearer ${this.apiKey}`;
-        }
-
-        response = await fetch(`${this.endpoint}/query`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            query,
-            top_k: options.topK || 5,
-            min_score: options.minScore || 0.0,
-            include_metadata: options.includeMetadata ?? true,
-          }),
-          signal: controller.signal,
-        });
-      }
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ detail: 'RAG query failed' }));
-        throw new Error(errorBody.detail || errorBody.error || `RAG HTTP ${response.status}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('RAG query timeout');
-      }
-      throw error;
-    }
-  }
-
-  async health(): Promise<{ status: string; documents_count?: number }> {
-    try {
-      let response: Response;
-
-      if (this.useProxy) {
-        response = await fetch('/api/rag', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'health' }),
-        });
-      } else {
-        const headers: Record<string, string> = {};
-        if (this.apiKey) {
-          headers['Authorization'] = `Bearer ${this.apiKey}`;
-        }
-        response = await fetch(`${this.endpoint}/health`, { headers });
-      }
-
-      if (!response.ok) {
-        return { status: 'offline' };
-      }
-
-      return response.json();
-    } catch {
-      return { status: 'offline' };
-    }
-  }
-}
-
-export const api = new APIClient('/api/proxy', true);
-
-export function createServerAPI(backendUrl?: string) {
-  return new APIClient(backendUrl || process.env.BACKEND_URL || 'http://localhost:8080');
-}
+export const api = new APIClient(clientBaseUrl, isClient);
 
 export default api;
