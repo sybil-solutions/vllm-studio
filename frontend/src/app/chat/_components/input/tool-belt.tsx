@@ -37,7 +37,6 @@ export function ToolBelt({
   value,
   onChange,
   onSubmit,
-  disabled,
   isLoading,
   placeholder = "Message...",
   onStop,
@@ -57,6 +56,7 @@ export function ToolBelt({
   queuedContext = "",
   onQueuedContextChange,
 }: ToolBeltProps) {
+  const isDisabled = false;
   const attachments = useAppStore((state) => state.attachments);
   const setAttachments = useAppStore((state) => state.setAttachments);
   const updateAttachments = useAppStore((state) => state.updateAttachments);
@@ -243,7 +243,7 @@ export function ToolBelt({
 
   const handleSubmit = () => {
     if (isLoading) return;
-    if ((!value.trim() && attachments.length === 0) || disabled) return;
+    if (!value.trim() && attachments.length === 0) return;
     onSubmit(attachments.length > 0 ? [...attachments] : undefined);
     setAttachments([]);
   };
@@ -255,7 +255,7 @@ export function ToolBelt({
     }
   };
 
-  const canSend = (value.trim() || attachments.length > 0) && !disabled;
+  const canSend = value.trim() || attachments.length > 0;
 
   return (
     <div className="px-3 md:px-3 pb-0 md:pb-0 bg-(--background)">
@@ -295,13 +295,13 @@ export function ToolBelt({
             }
             onKeyDown={handleKeyDown}
             placeholder={
-              disabled
+              isDisabled
                 ? "No model running"
                 : isLoading
                   ? "Type here to queue for next message..."
                   : placeholder
             }
-            disabled={disabled}
+            disabled={isDisabled}
             rows={1}
             className="w-full px-3 py-2 md:px-4 md:py-3 bg-transparent text-[15px] md:text-sm resize-none focus:outline-none disabled:opacity-50 placeholder:text-[#9a9590] overflow-y-hidden min-h-[52px] md:min-h-[44px]"
             style={{ fontSize: "16px", lineHeight: "1.5" }}
@@ -330,7 +330,7 @@ export function ToolBelt({
             isRecording={isRecording}
             isTranscribing={isTranscribing}
             attachmentsCount={attachments.length}
-            disabled={disabled}
+            disabled={isDisabled}
             canSend={canSend as boolean}
             hasSystemPrompt={hasSystemPrompt}
             mcpEnabled={mcpEnabled}

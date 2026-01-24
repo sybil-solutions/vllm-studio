@@ -19,10 +19,11 @@ import { useChatUsage } from "../../hooks/use-chat-usage";
 import { useChatDerived } from "../../hooks/use-chat-derived";
 import { useChatTransport } from "../../hooks/use-chat-transport";
 import type { UIMessage } from "@ai-sdk/react";
-import type { Artifact } from "@/lib/types";
+import type { Artifact, StoredMessage, StoredToolCall } from "@/lib/types";
 import { useContextManagement } from "@/lib/services/context-management";
 import { useAppStore } from "@/store";
 import type { Attachment } from "../../types";
+import { tryParseNestedJsonString } from "../../utils";
 
 export function ChatPage() {
   const searchParams = useSearchParams();
@@ -117,6 +118,63 @@ export function ChatPage() {
   // Track the last user input for title generation
   const lastUserInputRef = useRef<string>("");
   const autoArtifactSwitchRef = useRef(false);
+
+  const mapStoredToolCalls = useCallback((toolCalls?: StoredToolCall[]) => {
+    if (!toolCalls || toolCalls.length === 0) return [];
+    return toolCalls.map((toolCall) => {
+      const name = toolCall.function?.name || "tool";
+      const args = toolCall.function?.arguments;
+      const parsedArgs =
+        typeof args === "string" ? tryParseNestedJsonString(args) ?? args : args ?? undefined;
+      const hasResult = toolCall.result !== undefined && toolCall.result !== null;
+      return {
+        type: `tool-${name}`,
+        toolCallId: toolCall.id,
+        state: hasResult ? "result" : "call",
+        input: parsedArgs,
+        output: hasResult ? toolCall.result : undefined,
+      };
+    });
+  }, []);
+
+  const mapStoredMessages = useCallback((storedMessages: StoredMessage[]) => {
+    return storedMessages.map((message) => {
+      const parts: UIMessage["parts"] = [];
+      if (message.content) {
+        parts.push({ type: "text", text: message.content });
+      }
+
+      const toolParts = mapStoredToolCalls(message.tool_calls);
+      for (const toolPart of toolParts) {
+        parts.push(toolPart as UIMessage["parts"][number]);
+      }
+
+      const inputTokens = message.prompt_tokens ?? undefined;
+      const outputTokens = message.completion_tokens ?? undefined;
+      const totalTokens =
+        message.total_tokens ??
+        (inputTokens != null || outputTokens != null
+          ? (inputTokens ?? 0) + (outputTokens ?? 0)
+          : undefined);
+
+      return {
+        id: message.id,
+        role: message.role,
+        parts,
+        metadata: {
+          model: message.model,
+          usage:
+            inputTokens != null || outputTokens != null || totalTokens != null
+              ? {
+                  inputTokens,
+                  outputTokens,
+                  totalTokens,
+                }
+              : undefined,
+        },
+      } satisfies UIMessage;
+    });
+  }, [mapStoredToolCalls]);
 
   const resolveToolDefinitions = useCallback(async () => {
     if (!mcpEnabled) return [];
@@ -370,9 +428,27 @@ export function ChatPage() {
       return;
     }
     if (sessionFromUrl) {
-      void loadSession(sessionFromUrl);
+      void (async () => {
+        const session = await loadSession(sessionFromUrl);
+        if (session) {
+          if (session.model && session.model !== selectedModel) {
+            setSelectedModel(session.model);
+          }
+          const storedMessages = session.messages ?? [];
+          setMessages(mapStoredMessages(storedMessages));
+        }
+      })();
     }
-  }, [newChatFromUrl, sessionFromUrl, startNewSession, loadSession, setMessages]);
+  }, [
+    newChatFromUrl,
+    sessionFromUrl,
+    startNewSession,
+    loadSession,
+    setMessages,
+    mapStoredMessages,
+    selectedModel,
+    setSelectedModel,
+  ]);
 
   // Load MCP servers/tools when enabled
   useEffect(() => {
@@ -387,26 +463,34 @@ export function ChatPage() {
     const loadModels = async () => {
       try {
         const data = await api.getOpenAIModels();
+        const dataModels = (data as { data?: unknown[] }).data;
+        const modelsField = (data as { models?: unknown[] }).models;
         const rawModels = Array.isArray(data)
           ? data
-          : Array.isArray(data?.data)
-            ? data.data
-            : Array.isArray((data as { models?: unknown }).models)
-              ? (data as { models: unknown[] }).models
+          : Array.isArray(dataModels)
+            ? dataModels
+            : Array.isArray(modelsField)
+              ? modelsField
               : [];
         const mappedModels = rawModels
-          .map((model) => {
-            if (!model || typeof model !== "object") return null;
-            const record = model as { id?: string; model?: string; name?: string; max_model_len?: number };
-            const id = record.id ?? record.model ?? record.name;
-            if (!id) return null;
-            return {
-              id,
-              name: id,
-              maxModelLen: record.max_model_len,
+          .flatMap((model) => {
+            if (!model || typeof model !== "object") return [];
+            const record = model as {
+              id?: string;
+              model?: string;
+              name?: string;
+              max_model_len?: number;
             };
+            const id = record.id ?? record.model ?? record.name;
+            if (!id) return [];
+            return [
+              {
+                id,
+                name: id,
+                maxModelLen: record.max_model_len ?? undefined,
+              },
+            ];
           })
-          .filter((model): model is { id: string; name?: string; maxModelLen?: number } => Boolean(model))
           .sort((a, b) => a.id.localeCompare(b.id));
 
         setAvailableModels(mappedModels);

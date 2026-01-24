@@ -56,7 +56,7 @@ export const registerSystemRoutes = (app: Hono, context: AppContext): void => {
 
     const payload: HealthResponse = {
       status: "ok",
-      version: "0.3.0",
+      version: "0.3.1",
       inference_ready: inferenceReady,
       backend_reachable: inferenceReady,
       running_model: current ? (current.served_model_name ?? current.model_path ?? null) : null,

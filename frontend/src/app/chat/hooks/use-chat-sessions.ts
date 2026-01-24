@@ -38,8 +38,10 @@ export function useChatSessions() {
       setCurrentSessionId(sessionId);
       setCurrentSessionTitle(data.session?.title || "Chat");
       // Messages are managed by useChat, we just load metadata
+      return data.session ?? null;
     } catch (err) {
       console.error("Failed to load session:", err);
+      return null;
     }
   }, [setCurrentSessionId, setCurrentSessionTitle]);
 

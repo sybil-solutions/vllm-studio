@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-01-24
+
+### Added
+- Frontend: Added `frontend/AGENTS.md` with rebuild notes and standalone asset copy guidance
+
+### Fixed
+- Chat: Toolbelt controls remain interactive regardless of composer state
+- Chat: Session navigation loads messages and titles when opening a session id
+- Chat: Model list now uses `/v1/models` ids for selection
+- Mobile: Composer input respects min-height without fixed cap
+
 ## [0.3.0] - 2026-01-10
 
 ### Added

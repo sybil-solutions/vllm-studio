@@ -14,7 +14,7 @@ const createAppStore: StateCreator<AppStore, [], [], AppStore> = (set, ...args) 
 });
 
 const storage = createJSONStorage(() =>
-  typeof window !== "undefined" ? localStorage : undefined,
+  typeof window !== "undefined" ? localStorage : (undefined as unknown as Storage),
 );
 
 export const useAppStore = create<AppStore>()(
