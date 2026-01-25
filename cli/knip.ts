@@ -18,7 +18,7 @@ export default {
   ignoreExportsUsedInFile: true,
   // Exports are part of public API
   rules: {
-    exports: false,
-    types: false,
+    exports: 'off',
+    types: 'off',
   },
 };

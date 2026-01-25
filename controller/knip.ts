@@ -32,7 +32,7 @@ export default {
   ignoreWorkspaces: [],
   rules: {
     // Allow these specific exports
-    exports: false,
-    types: false,
+    exports: 'off',
+    types: 'off',
   },
 };
