@@ -1,7 +1,5 @@
 // CRITICAL
-import { defineConfig } from 'knip';
-
-export default defineConfig({
+export default {
   entry: ['src/main.ts', 'scripts/**/*.ts'],
   project: ['src/**/*.ts', 'scripts/**/*.ts'],
   test: ['src/**/*.test.ts'],
@@ -15,4 +13,4 @@ export default defineConfig({
   ignoreDependencies: [
     '@types/*',
   ],
-});
+};
