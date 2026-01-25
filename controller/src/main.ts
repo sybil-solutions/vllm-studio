@@ -21,13 +21,13 @@ const checkNvidiaSmi = (): void => {
     console.warn("║  GPU monitoring will not work.                                 ║");
     if (isSnapBun) {
       console.warn("║                                                                ║");
-      console.warn("║  You are using snap-installed bun which has sandbox           ║");
-      console.warn("║  restrictions. Use native bun instead:                        ║");
+      console.warn("║  You are using snap-installed bun which has sandbox            ║");
+      console.warn("║  restrictions. Use native bun instead:                         ║");
       console.warn("║                                                                ║");
-      console.warn("║    curl -fsSL https://bun.sh/install | bash                   ║");
-      console.warn("║    ~/.bun/bin/bun run controller/src/main.ts                  ║");
+      console.warn("║    curl -fsSL https://bun.sh/install | bash                    ║");
+      console.warn("║    ~/.bun/bin/bun run controller/src/main.ts                   ║");
       console.warn("║                                                                ║");
-      console.warn("║  Or use the start script: ./start.sh                          ║");
+      console.warn("║  Or use the start script: ./start.sh                           ║");
     }
     console.warn("╚════════════════════════════════════════════════════════════════╝");
   }
