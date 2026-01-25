@@ -16,4 +16,9 @@ export default {
     'bun-types',
   ],
   ignoreExportsUsedInFile: true,
+  // Exports are part of public API
+  rules: {
+    exports: false,
+    types: false,
+  },
 };

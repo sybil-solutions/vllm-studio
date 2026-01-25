@@ -101,7 +101,7 @@ jobs:
         run: npx jscpd src
       - name: Unused dependencies
         working-directory: ./frontend
-        run: npx depcheck --ignores=@types/react,@types/react-dom,@types/node,@types/react-syntax-highlighter,eslint-config-next,tailwindcss,@tailwindcss/postcss,prettier,@ai-sdk/openai,@ai-sdk/openai-compatible,@ai-sdk/react,ai,rehype-highlight,zod
+        run: npx depcheck --ignores=@types/react,@types/react-dom,@types/node,@types/react-syntax-highlighter,eslint-config-next,tailwindcss,@tailwindcss/postcss,prettier,@ai-sdk/openai,@ai-sdk/openai-compatible,@ai-sdk/react,ai,rehype-highlight,zod,lint-staged,husky,jscpd,depcheck,knip
       - name: Test
         working-directory: ./frontend
         run: npm test

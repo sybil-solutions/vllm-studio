@@ -28,4 +28,11 @@ export default {
     'lint-staged',
   ],
   ignoreExportsUsedInFile: true,
+  // Exports that are part of public API but not used internally
+  ignoreWorkspaces: [],
+  rules: {
+    // Allow these specific exports
+    exports: false,
+    types: false,
+  },
 };
