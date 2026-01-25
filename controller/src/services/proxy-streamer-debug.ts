@@ -82,15 +82,17 @@ export const createProxyStreamDebug = (options: ProxyStreamOptionsDebug): Readab
 
   return new ReadableStream<Uint8Array>({
     async pull(controller): Promise<void> {
-      let result: ReadableStreamReadResult<Uint8Array>;
+      let value: Uint8Array | undefined;
+      let done: boolean;
       try {
-        result = await reader.read();
+        const result = await reader.read();
+        value = result.value;
+        done = result.done;
       } catch {
         log("STREAM_READ_ERROR", "Upstream stream errored; closing");
         controller.close();
         return;
       }
-      const { value, done } = result;
       
       if (done) {
         log("STREAM_DONE", { toolCallBuffer, thinkState });
@@ -186,20 +188,24 @@ export const createProxyStreamDebug = (options: ProxyStreamOptionsDebug): Readab
             if (!dataJson.trim()) return line;
             try {
               const dataBefore = JSON.parse(dataJson) as Record<string, unknown>;
-              log(`THINK_BEFORE_${chunkIndex}`, { 
-                content: (dataBefore["choices"] as any)?.[0]?.delta?.content,
-                reasoning_content: (dataBefore["choices"] as any)?.[0]?.delta?.reasoning_content,
+              const choicesBefore = Array.isArray(dataBefore["choices"]) ? dataBefore["choices"] as Record<string, unknown>[] : [];
+              const deltaBefore = (choicesBefore[0]?.["delta"] ?? {}) as Record<string, unknown>;
+              log(`THINK_BEFORE_${chunkIndex}`, {
+                content: deltaBefore["content"],
+                reasoning_content: deltaBefore["reasoning_content"],
                 thinkState: { ...thinkState }
               });
-              
+
               const dataAfter = parseThinkTagsFromContent(dataBefore, thinkState);
-              
-              log(`THINK_AFTER_${chunkIndex}`, { 
-                content: (dataAfter["choices"] as any)?.[0]?.delta?.content,
-                reasoning_content: (dataAfter["choices"] as any)?.[0]?.delta?.reasoning_content,
+              const choicesAfter = Array.isArray(dataAfter["choices"]) ? dataAfter["choices"] as Record<string, unknown>[] : [];
+              const deltaAfter = (choicesAfter[0]?.["delta"] ?? {}) as Record<string, unknown>;
+
+              log(`THINK_AFTER_${chunkIndex}`, {
+                content: deltaAfter["content"],
+                reasoning_content: deltaAfter["reasoning_content"],
                 thinkState: { ...thinkState }
               });
-              
+
               return `data: ${JSON.stringify(dataAfter)}`;
             } catch { return line; }
           }

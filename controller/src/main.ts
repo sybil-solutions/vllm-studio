@@ -14,7 +14,7 @@ const checkNvidiaSmi = (): void => {
       timeout: 5000,
       stdio: "pipe",
     });
-  } catch (error) {
+  } catch {
     const isSnapBun = process.execPath.includes("/snap/");
     console.warn("╔════════════════════════════════════════════════════════════════╗");
     console.warn("║  WARNING: nvidia-smi is not accessible                         ║");

@@ -96,14 +96,16 @@ export const createProxyStream = (options: ProxyStreamOptions): ReadableStream<U
 
   return new ReadableStream<Uint8Array>({
     async pull(controller): Promise<void> {
-      let result: ReadableStreamReadResult<Uint8Array>;
+      let value: Uint8Array | undefined;
+      let done: boolean;
       try {
-        result = await reader.read();
+        const result = await reader.read();
+        value = result.value;
+        done = result.done;
       } catch {
         controller.close();
         return;
       }
-      const { value, done } = result;
       if (done) {
         const parsedTools: ToolCall[] = [];
         if (!toolCallBuffer.tool_calls_found && toolCallBuffer.tool_args) {
