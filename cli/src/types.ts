@@ -1,7 +1,7 @@
 export type View = 'dashboard' | 'recipes' | 'status' | 'config';
 
 export interface GPU {
-  id: number;
+  index: number;
   name: string;
   memory_used: number;
   memory_total: number;

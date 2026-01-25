@@ -13,15 +13,15 @@ const KEY_MAP: Record<string, string> = {
 
 export function setupInput(onKey: KeyHandler): () => void {
   const stdin = process.stdin;
+  if (!stdin.isTTY) {
+    console.error('Error: vllm-studio requires an interactive terminal (TTY)');
+    process.exit(1);
+  }
   stdin.setRawMode(true);
   stdin.resume();
   stdin.setEncoding('utf8');
 
-  const handler = (data: string) => {
-    const key = KEY_MAP[data] || data;
-    onKey(key);
-  };
-
+  const handler = (data: string) => onKey(KEY_MAP[data] || data);
   stdin.on('data', handler);
 
   return () => {

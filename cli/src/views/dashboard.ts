@@ -23,12 +23,12 @@ export function renderDashboard(state: AppState): string {
         ? c.red(`${gpu.temperature}°C`)
         : `${gpu.temperature}°C`;
       return [
-        gpu.id.toString(),
+        gpu.index.toString(),
         gpu.name.slice(0, 20),
         vram,
         util,
         temp,
-        `${gpu.power_draw}W`,
+        `${Math.round(gpu.power_draw)}W`,
       ];
     });
     lines.push(table(headers, rows, widths));

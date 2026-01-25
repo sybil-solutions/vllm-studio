@@ -27,7 +27,8 @@ async function post<T>(path: string, body?: unknown): Promise<T | null> {
 }
 
 export async function fetchGPUs(): Promise<GPU[]> {
-  return (await get<GPU[]>('/gpus')) || [];
+  const data = await get<{ gpus: GPU[] }>('/gpus');
+  return data?.gpus || [];
 }
 
 export async function fetchRecipes(): Promise<Recipe[]> {
@@ -45,9 +46,9 @@ export async function fetchConfig(): Promise<Config | null> {
 export async function fetchLifetimeMetrics(): Promise<LifetimeMetrics> {
   const data = await get<Record<string, number>>('/lifetime-metrics');
   return {
-    total_tokens: data?.total_tokens || 0,
-    total_requests: data?.total_requests || 0,
-    total_energy_kwh: data?.total_energy_kwh || 0,
+    total_tokens: data?.tokens_total || 0,
+    total_requests: data?.requests_total || 0,
+    total_energy_kwh: data?.energy_kwh || 0,
   };
 }
 
