@@ -44,7 +44,7 @@ services:
       postgres:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request, os; req = urllib.request.Request('http://localhost:4000/health'); req.add_header('Authorization', 'Bearer ' + os.environ.get('LITELLM_MASTER_KEY', 'sk-master')); urllib.request.urlopen(req)\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request, urllib.error, sys; req = urllib.request.Request('http://localhost:4000/health');\ntry:\n  urllib.request.urlopen(req, timeout=5)\n  sys.exit(0)\nexcept urllib.error.HTTPError as e:\n  sys.exit(0 if e.code == 401 else 1)\nexcept Exception:\n  sys.exit(1)\n\""]
       interval: 30s
       timeout: 10s
       retries: 3

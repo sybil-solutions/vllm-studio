@@ -44,7 +44,7 @@ export function ChatConversation({
         onScroll={onScroll}
         className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col"
       >
-        <div className="pb-24 md:pb-4 flex-1 flex flex-col">
+        <div className="pb-16 md:pb-4 flex-1 flex flex-col">
           <div className="flex-1 relative overflow-hidden flex items-center justify-center px-4 md:px-6 py-10 transition-opacity duration-500 ease-out bg-[hsl(30,5%,10.5%)]">
             <ChatSplashCanvas active={showEmptyState} />
             {showEmptyState ? (

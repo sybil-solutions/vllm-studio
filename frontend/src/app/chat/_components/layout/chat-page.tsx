@@ -428,6 +428,35 @@ export function ChatPage() {
     loadSessions();
   }, [loadSessions]);
 
+  // Handle PWA resume - reload session when app becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Reload current session to restore messages after PWA was backgrounded
+        const sessionId = sessionIdRef.current ?? currentSessionId;
+        if (sessionId) {
+          void (async () => {
+            try {
+              const session = await loadSession(sessionId);
+              if (session) {
+                const storedMessages = session.messages ?? [];
+                // Only restore if we lost messages (PWA was killed)
+                if (messages.length === 0 && storedMessages.length > 0) {
+                  setMessages(mapStoredMessages(storedMessages));
+                }
+              }
+            } catch (err) {
+              console.error("Failed to restore session on resume:", err);
+            }
+          })();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [currentSessionId, loadSession, mapStoredMessages, messages.length, setMessages]);
+
   // Handle URL session/new params
   useEffect(() => {
     if (newChatFromUrl) {

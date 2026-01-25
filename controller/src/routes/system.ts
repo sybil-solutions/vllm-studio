@@ -1,5 +1,6 @@
 // CRITICAL
 import type { Hono } from "hono";
+import { z } from "zod";
 import { connect } from "node:net";
 import { hostname } from "node:os";
 import type { AppContext } from "../types/context";

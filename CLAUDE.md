@@ -42,9 +42,16 @@ vLLM Studio - Model lifecycle management for vLLM, SGLang, and TabbyAPI inferenc
 # Install
 pip install -e .
 
-# Run controller
-./start.sh              # Production
-bun --watch controller/src/main.ts  # Development with reload
+# Run controller (IMPORTANT: use start.sh or native bun, NOT snap bun)
+./start.sh                                    # Recommended - uses native bun
+./start.sh --dev                              # Development with auto-reload
+~/.bun/bin/bun run controller/src/main.ts     # Direct with native bun
+
+# DO NOT use snap bun directly - it has sandbox restrictions that block nvidia-smi
+# If you see "nvidia-smi not found" errors, you're using snap bun
+
+# Install native bun if needed:
+curl -fsSL https://bun.sh/install | bash
 
 # Run all services
 docker compose up -d

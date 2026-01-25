@@ -178,6 +178,15 @@ function ChatMessageItemBase({
     .map((part) => part.text)
     .join("");
 
+  // Extract AI SDK reasoning parts (type: "reasoning" from sendReasoning: true)
+  const aiSdkReasoning = message.parts
+    .filter(
+      (part): part is { type: "reasoning"; text: string } =>
+        part.type === "reasoning" && "text" in part,
+    )
+    .map((part) => part.text)
+    .join("");
+
   // For assistant messages, parse thinking content and get mainContent without <think> tags
   const parsedThinking = !isUser ? thinkingParser.parse(rawTextContent) : null;
   const textContent = isUser ? rawTextContent : parsedThinking?.mainContent || "";
@@ -195,8 +204,24 @@ function ChatMessageItemBase({
         .map((p) => ({ text: (p as { text: string }).text.substring(0, 200) })),
     });
   }
-  const thinkingContent = parsedThinking?.thinkingContent || "";
+
+  // Combine parsed <think> tags with AI SDK reasoning parts
+  const thinkingContent = aiSdkReasoning || parsedThinking?.thinkingContent || "";
   const isThinkingActive = isStreaming && !textContent && !!thinkingContent;
+
+  // DEBUG: Log message parts to diagnose reasoning extraction
+  if (!isUser && message.parts.length > 0) {
+    const partTypes = message.parts.map((p) => p.type);
+    if (partTypes.includes("reasoning") || thinkingContent) {
+      console.log("[THINKING DEBUG]", {
+        messageId: message.id,
+        partTypes,
+        aiSdkReasoning: aiSdkReasoning?.slice(0, 100),
+        parsedThinking: parsedThinking?.thinkingContent?.slice(0, 100),
+        thinkingContent: thinkingContent?.slice(0, 100),
+      });
+    }
+  }
 
   // Extract tool parts (they have type starting with "tool-")
   const toolParts = message.parts.filter(

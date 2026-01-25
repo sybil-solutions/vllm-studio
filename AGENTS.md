@@ -431,6 +431,38 @@ On first run, `MCPStore._migrate()` seeds:
   - Falls back to `npx -y exa-mcp-server` if not found
   - Requires `EXA_API_KEY` environment variable
 
+## Docker Deployment
+
+### Frontend Production Server
+
+The frontend runs on **port 3000** inside Docker. After making any frontend changes, you **must rebuild** the container:
+
+```bash
+# Rebuild and restart frontend container
+docker compose up -d --build frontend
+
+# Or rebuild all services
+docker compose up -d --build
+```
+
+**Important:**
+- The frontend is built at container creation time (not hot-reloaded)
+- Changes to `frontend/src/**` require a container rebuild
+- Running `npm run dev` locally does NOT update the Docker container
+- Always verify changes are deployed by checking `docker compose ps`
+
+### Service Ports
+
+| Service | Container Port | Host Port |
+|---------|---------------|-----------|
+| Frontend | 3000 | 3000 |
+| Controller | 8080 | 8080 |
+| LiteLLM | 4000 | 4100 |
+| vLLM/SGLang | 8000 | 8000 |
+| PostgreSQL | 5432 | 5432 |
+| Redis | 6379 | 6379 |
+| Prometheus | 9090 | 9090 |
+
 ## Error Handling Patterns
 
 ### Launch Failure Recovery

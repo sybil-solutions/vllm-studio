@@ -1,0 +1,15 @@
+{
+  "threshold": 10,
+  "reporters": ["console", "console-full"],
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/playwright-report/**",
+    "**/.husky/**"
+  ],
+  "format": ["typescript", "tsx"],
+  "minLines": 5,
+  "minTokens": 50
+}

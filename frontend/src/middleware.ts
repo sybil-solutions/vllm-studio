@@ -1,4 +1,3 @@
-// CRITICAL
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -6,7 +5,7 @@ import type { NextRequest } from "next/server";
  * Access logging middleware for security monitoring.
  * Logs all requests with IP, path, user agent, and auth status.
  */
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const start = Date.now();
 
   // Extract client info

@@ -18,15 +18,37 @@ const switchLock = new AsyncLock();
  */
 export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
   /**
-   * Locate a recipe by model name.
+   * Normalize a model name for comparison.
+   * @param value - Model name string.
+   * @returns Normalized key.
+   */
+  const normalizeModelKey = (value: string): string => {
+    const parts = value.split("/");
+    const tail = parts[parts.length - 1] ?? value;
+    return tail.toLowerCase().replace(/[^a-z0-9]/g, "");
+  };
+
+  /**
+   * Locate a recipe by model name or alias.
    * @param modelName - Requested model name.
    * @returns Matching recipe or null.
    */
   const findRecipeByModel = (modelName: string): Recipe | null => {
     const lower = modelName.toLowerCase();
+    const requestedKey = normalizeModelKey(modelName);
     for (const recipe of context.stores.recipeStore.list()) {
-      const servedLower = (recipe.served_model_name ?? "").toLowerCase();
+      const served = recipe.served_model_name ?? "";
+      const servedLower = served.toLowerCase();
       if (servedLower === lower || recipe.id.toLowerCase() === lower) {
+        return recipe;
+      }
+      const servedKey = normalizeModelKey(served);
+      const idKey = normalizeModelKey(recipe.id);
+      if ((servedKey && requestedKey.startsWith(servedKey)) || (idKey && requestedKey.startsWith(idKey))) {
+        return recipe;
+      }
+      const name = recipe.name ?? "";
+      if (name && normalizeModelKey(name) === requestedKey) {
         return recipe;
       }
     }
@@ -137,6 +159,22 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
     return jsonNameMatch?.[1] ?? "";
   };
 
+  /**
+   * System prompt suffix for models with tokenizer UTF-8 issues (GLM).
+   * These models corrupt emoji and special Unicode during streaming.
+   */
+  const UTF8_AVOIDANCE_PROMPT = `
+
+IMPORTANT: Do not use emoji, Unicode symbols, or decorative box-drawing characters (┌┐└┘─│) in your responses. Use plain ASCII text, standard punctuation, and simple formatting only. For visual elements, use basic ASCII like dashes (---), pipes (|), plus (+), and asterisks (*).`;
+
+  /**
+   * Check if model has known UTF-8 streaming issues.
+   */
+  const hasUtf8Issues = (model: string): boolean => {
+    const lower = model.toLowerCase();
+    return lower.includes("glm");
+  };
+
   app.post("/v1/chat/completions", async (ctx) => {
     let bodyBuffer: ArrayBuffer;
     try {
@@ -147,17 +185,51 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
 
     let requestedModel: string | null = null;
     let isStreaming = false;
+    let modifiedBody: ArrayBuffer | null = null;
+    let bodyChanged = false;
+
     try {
       const bodyText = new TextDecoder().decode(bodyBuffer);
       const parsed = JSON.parse(bodyText) as Record<string, unknown>;
       if (typeof parsed["model"] === "string") {
         requestedModel = parsed["model"];
+        const matched = findRecipeByModel(requestedModel);
+        if (matched) {
+          const canonical = matched.served_model_name ?? matched.id;
+          if (canonical && canonical !== requestedModel) {
+            parsed["model"] = canonical;
+            requestedModel = canonical;
+            bodyChanged = true;
+          }
+        }
       }
       isStreaming = Boolean(parsed["stream"]);
+
+      // Inject UTF-8 avoidance prompt for models with tokenizer issues
+      if (requestedModel && hasUtf8Issues(requestedModel)) {
+        const messages = parsed["messages"];
+        if (Array.isArray(messages) && messages.length > 0) {
+          const firstMsg = messages[0] as Record<string, unknown>;
+          if (firstMsg["role"] === "system" && typeof firstMsg["content"] === "string") {
+            // Append to existing system message
+            firstMsg["content"] = firstMsg["content"] + UTF8_AVOIDANCE_PROMPT;
+          } else {
+            // Prepend new system message
+            messages.unshift({ role: "system", content: UTF8_AVOIDANCE_PROMPT.trim() });
+          }
+          bodyChanged = true;
+        }
+      }
+      if (bodyChanged) {
+        modifiedBody = new TextEncoder().encode(JSON.stringify(parsed)).buffer;
+      }
     } catch {
       requestedModel = null;
       isStreaming = false;
     }
+
+    // Use modified body if we injected the prompt
+    const finalBody = modifiedBody ?? bodyBuffer;
 
     if (requestedModel) {
       const switchError = await ensureModelRunning(requestedModel);
@@ -174,7 +246,7 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
     const litellmUrl = "http://localhost:4100/v1/chat/completions";
 
     if (!isStreaming) {
-      const response = await fetch(litellmUrl, { method: "POST", headers, body: bodyBuffer });
+      const response = await fetch(litellmUrl, { method: "POST", headers, body: finalBody });
       const result = (await response.json()) as Record<string, unknown>;
 
       // Track token usage to lifetime metrics
@@ -223,7 +295,7 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
       return ctx.json(result, { status: response.status });
     }
 
-    const litellmResponse = await fetch(litellmUrl, { method: "POST", headers, body: bodyBuffer });
+    const litellmResponse = await fetch(litellmUrl, { method: "POST", headers, body: finalBody });
     const reader = litellmResponse.body?.getReader();
     if (!reader) {
       throw serviceUnavailable("LiteLLM backend unavailable");

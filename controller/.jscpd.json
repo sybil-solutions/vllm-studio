@@ -1,0 +1,14 @@
+{
+  "threshold": 10,
+  "reporters": ["console", "console-full"],
+  "ignore": [
+    "**/*.test.ts",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/runtime/**",
+    "**/.husky/**"
+  ],
+  "format": ["typescript"],
+  "minLines": 5,
+  "minTokens": 50
+}

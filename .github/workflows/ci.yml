@@ -21,3 +21,87 @@ jobs:
         run: python -m compileall -q controller
       - name: Lint
         run: ruff check controller
+
+  controller:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        working-directory: ./controller
+        run: bun install
+      - name: Type check
+        working-directory: ./controller
+        run: bun run typecheck
+      - name: Lint
+        working-directory: ./controller
+        run: bun run lint
+      - name: Dead code detection
+        working-directory: ./controller
+        run: bunx knip
+      - name: Duplicate code detection
+        working-directory: ./controller
+        run: bunx jscpd src
+      - name: Unused dependencies
+        working-directory: ./controller
+        run: bunx depcheck
+      - name: Test
+        working-directory: ./controller
+        run: bun test
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        working-directory: ./cli
+        run: bun install
+      - name: Type check
+        working-directory: ./cli
+        run: bun run typecheck
+      - name: Lint
+        working-directory: ./cli
+        run: bun run lint
+      - name: Dead code detection
+        working-directory: ./cli
+        run: bunx knip
+      - name: Duplicate code detection
+        working-directory: ./cli
+        run: bunx jscpd src
+      - name: Unused dependencies
+        working-directory: ./cli
+        run: bunx depcheck
+      - name: Test
+        working-directory: ./cli
+        run: bun test
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm install
+      - name: Type check
+        working-directory: ./frontend
+        run: npm run lint  # Next.js includes typecheck in lint
+      - name: Dead code detection
+        working-directory: ./frontend
+        run: npx knip
+      - name: Duplicate code detection
+        working-directory: ./frontend
+        run: npx jscpd src
+      - name: Unused dependencies
+        working-directory: ./frontend
+        run: npx depcheck --ignores=@types/react,@types/react-dom,@types/node,@types/react-syntax-highlighter,eslint-config-next,tailwindcss,@tailwindcss/postcss,prettier,@ai-sdk/openai,@ai-sdk/openai-compatible,@ai-sdk/react,ai,rehype-highlight,zod
+      - name: Test
+        working-directory: ./frontend
+        run: npm test

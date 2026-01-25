@@ -18,7 +18,30 @@ model_list:
   # GLM-4.7-REAP-50 - 4xTP 2xPP, 200K context, FP8 KV, reasoning support
   - model_name: "GLM-4.7-REAP-50"
     litellm_params:
-      model: "openai/GLM-4.7-REAP-50"
+      model: "openai/glm-4.7"
+      api_base: "http://host.docker.internal:8000/v1"
+      api_key: "${INFERENCE_API_KEY:-sk-placeholder}"
+      stream_timeout: 600
+      timeout: 600
+      supports_function_calling: true
+      supports_vision: false
+      supports_reasoning: true
+
+  # Alias noisy external defaults to local GLM-4.7
+  - model_name: "gpt-5-nano"
+    litellm_params:
+      model: "openai/glm-4.7"
+      api_base: "http://host.docker.internal:8000/v1"
+      api_key: "${INFERENCE_API_KEY:-sk-placeholder}"
+      stream_timeout: 600
+      timeout: 600
+      supports_function_calling: true
+      supports_vision: false
+      supports_reasoning: true
+
+  - model_name: "gpt-5-nano-2025-08-07"
+    litellm_params:
+      model: "openai/glm-4.7"
       api_base: "http://host.docker.internal:8000/v1"
       api_key: "${INFERENCE_API_KEY:-sk-placeholder}"
       stream_timeout: 600

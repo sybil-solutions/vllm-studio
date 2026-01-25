@@ -47,9 +47,26 @@ const BOX_DRAWING_RANGE = "[\\u2500-\\u257F\\u2580-\\u259F]";
 const BOX_DRAWING_REGEX = new RegExp(BOX_DRAWING_RANGE);
 
 /**
+ * Pattern matching partial UTF-8 byte suffixes from tokenizer corruption.
+ * When emoji/Unicode are split across tokens, trailing bytes often appear as
+ * hex-like strings (e.g., "8f", "bf") after replacement characters.
+ * This matches: replacement char(s) followed by 1-2 hex digits at end of string.
+ */
+const PARTIAL_BYTE_SUFFIX_PATTERN = /\uFFFD+[0-9a-f]{1,2}$/i;
+
+/**
+ * Pattern for replacement chars followed by byte suffixes mid-string.
+ * Matches patterns like "���8f " or "�orid" from corrupted emoji.
+ */
+const CORRUPTED_EMOJI_PATTERN = /\uFFFD+[0-9a-f]{1,2}(?=\s|$|[^\w])/gi;
+
+/**
  * Clean streaming content that may have UTF-8 corruption from tokenizer byte fallback.
  * This handles cases where multi-byte Unicode characters are split across tokens,
  * causing replacement characters to appear in the stream.
+ *
+ * Handles both box-drawing characters (GLM table corruption) and emoji/Unicode
+ * (4-byte sequences like 🌸 that get split into partial bytes).
  *
  * @param content - The content string to clean.
  * @param state - UTF-8 streaming state.
@@ -65,42 +82,65 @@ export const cleanUtf8StreamContent = (
   let result = state.pendingContent + content;
   state.pendingContent = "";
 
-  // Drop trailing replacement chars if they sit after box-drawing characters.
-  result = result.replace(new RegExp(`(${BOX_DRAWING_RANGE})\\uFFFD+$`, "g"), "$1");
-
-  // If result still ends with replacement char, buffer it for next chunk
+  // Buffer trailing replacement chars - they may combine with next chunk
+  // This handles ALL multi-byte Unicode, not just box-drawing
   if (result.endsWith(REPLACEMENT_CHAR)) {
     state.pendingContent = result;
     return "";
   }
 
-  // Remove replacement characters in common corruption patterns:
+  // Buffer patterns like "���8f" at end - partial emoji byte sequences
+  // These may combine with next chunk to form valid Unicode
+  const partialMatch = result.match(PARTIAL_BYTE_SUFFIX_PATTERN);
+  if (partialMatch) {
+    // Only buffer if this looks like mid-emission (short content or ends string)
+    const matchIndex = result.lastIndexOf(partialMatch[0]);
+    if (matchIndex > 0) {
+      // Buffer the corrupted suffix for potential recombination
+      state.pendingContent = result.slice(matchIndex);
+      result = result.slice(0, matchIndex);
+      if (!result) return "";
+    }
+  }
 
-  // 1. Before box-drawing characters (e.g., "�─" should be just "─" or the corner was lost)
+  // Clean up corrupted emoji patterns that won't recombine
+  // Pattern: replacement chars + hex suffix + boundary (space/punctuation/end)
+  result = result.replace(CORRUPTED_EMOJI_PATTERN, "");
+
+  // Clean orphaned replacement chars followed by common word patterns
+  // e.g., "�orid" was meant to be an emoji + "orid" suffix - just keep the text
+  result = result.replace(/\uFFFD+(?=[a-z]{2,})/gi, "");
+
+  // Drop trailing replacement chars after box-drawing characters
+  result = result.replace(new RegExp(`(${BOX_DRAWING_RANGE})\\uFFFD+$`, "g"), "$1");
+
+  // Remove replacement characters in box-drawing corruption patterns:
+
+  // 1. Before box-drawing characters (e.g., "�─" should be just "─")
   result = result.replace(new RegExp(`\\uFFFD+(?=${BOX_DRAWING_RANGE})`, "g"), "");
 
   // 2. After box-drawing characters (e.g., "─�" where corner/tee was corrupted)
   result = result.replace(new RegExp(`(${BOX_DRAWING_RANGE})\\uFFFD+`, "g"), "$1");
 
-  // 3. Inside backticks (code context) - e.g., "`�`" should become "``"
+  // 3. Inside backticks (code context)
   result = result.replace(/`\uFFFD`/g, "``");
   result = result.replace(/`\uFFFD,/g, "`,");
   result = result.replace(/`\uFFFD\)/g, "`)");
-  result = result.replace(/\uFFFD`/g, "`");  // �` at start of corner char followed by backtick
+  result = result.replace(/\uFFFD`/g, "`");
 
   // 4. Space + replacement patterns
   result = result.replace(new RegExp(` \\uFFFD+(?=${BOX_DRAWING_RANGE}|[ ,\`])`, "g"), " ");
   result = result.replace(/ \uFFFD+ /g, "  ");
 
-  // 5. After common ASCII punctuation followed by box context
+  // 5. After common ASCII punctuation
   result = result.replace(/([,.:;])\uFFFD+/g, "$1");
 
-  // 6. If we still have replacement chars and there are box-drawing chars nearby,
-  // remove the remaining ones as they're almost certainly corruption artifacts
+  // 6. Clean remaining replacement chars in contexts where they're clearly corruption
   if (result.includes(REPLACEMENT_CHAR)) {
-    // Only do aggressive cleanup if we have box-drawing context
     const hasBoxContext = BOX_DRAWING_REGEX.test(result);
-    if (hasBoxContext) {
+    // Also clean if we see HTML tag context (emoji in HTML attributes/content)
+    const hasHtmlContext = /<[^>]*>/.test(result) || result.includes("</");
+    if (hasBoxContext || hasHtmlContext) {
       result = result.replace(/\uFFFD/g, "");
     }
   }

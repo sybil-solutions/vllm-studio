@@ -14,7 +14,29 @@
   },
   "devDependencies": {
     "@types/bun": "^1.1.0",
-    "typescript": "^5.4.0"
+    "@typescript-eslint/eslint-plugin": "8.43.0",
+    "@typescript-eslint/parser": "8.43.0",
+    "eslint": "9.35.0",
+    "husky": "9.1.7",
+    "jscpd": "4.0.5",
+    "knip": "5.44.2",
+    "lint-staged": "15.2.11",
+    "depcheck": "1.4.7",
+    "prettier": "3.4.2",
+    "typescript": "^5.4.0",
+    "vitest": "3.2.4"
+  },
+  "scripts": {
+    "start": "bun src/main.ts",
+    "dev": "bun --watch src/main.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build src/main.ts --compile --outfile vllm-studio",
+    "prepare": "cd ../.. && husky cli/.husky",
+    "test": "vitest run",
+    "check": "knip && jscpd src && depcheck",
+    "check:fix": "knip --fix"
   },
   "engines": {
     "bun": ">=1.0.0"

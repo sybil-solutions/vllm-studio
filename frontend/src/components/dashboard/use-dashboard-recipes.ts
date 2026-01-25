@@ -13,15 +13,38 @@ export function useDashboardRecipes(currentProcess: ProcessInfo | null) {
       const data = await api.getRecipes();
       const list = data.recipes || [];
       setRecipes(list);
-      if (currentProcess) {
-        const running = list.find((r: RecipeWithStatus) => r.status === "running") || null;
-        setCurrentRecipe(running);
-        if (running) {
-          const logData = await api.getLogs(running.id, 50).catch(() => ({ logs: [] }));
+
+      // Find running recipe if any
+      const running = currentProcess
+        ? list.find((r: RecipeWithStatus) => r.status === "running") || null
+        : null;
+      setCurrentRecipe(running);
+
+      // Always load logs from the most recent log session
+      // Note: Log session IDs don't always match recipe IDs, so we use the sessions API
+      try {
+        const sessions = await api.getLogSessions();
+        if (sessions.sessions?.length > 0) {
+          // If there's a running process, try to find its log session first
+          // Otherwise just use the most recent session
+          let targetSession = sessions.sessions[0];
+          
+          if (running) {
+            // Look for a session that matches the running recipe
+            const matchingSession = sessions.sessions.find(
+              (s) => s.status === "running" || s.recipe_id === running.id
+            );
+            if (matchingSession) {
+              targetSession = matchingSession;
+            }
+          }
+          
+          const logData = await api.getLogs(targetSession.id, 50).catch(() => ({ logs: [] }));
           setLogs(logData.logs || []);
+        } else {
+          setLogs([]);
         }
-      } else {
-        setCurrentRecipe(null);
+      } catch {
         setLogs([]);
       }
     } catch (e) {

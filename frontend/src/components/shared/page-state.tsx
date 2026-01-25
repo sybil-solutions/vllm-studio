@@ -14,12 +14,16 @@ function PageState({ loading, data, hasData, error, onLoad }: PageStateOptions) 
   const isInitialLoading = loading && !hasData;
 
   if (isInitialLoading) {
-    return <Activity className="h-5 w-5 text-(--muted-foreground) animate-pulse" />;
+    return (
+      <div className="flex items-center justify-center h-full min-h-[200px] bg-(--background)">
+        <Activity className="h-6 w-6 text-(--muted-foreground) animate-pulse" />
+      </div>
+    );
   }
 
   if (error && !data) {
     return (
-      <div className="flex items-center justify-center h-full bg-(--background)">
+      <div className="flex items-center justify-center h-full min-h-[200px] bg-(--background)">
         <div className="text-center mb-0">
           <p className="text-(--error) mb-4">{error}</p>
           <button
