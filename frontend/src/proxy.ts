@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
  * Access logging middleware for security monitoring.
  * Logs all requests with IP, path, user agent, and auth status.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const start = Date.now();
 
   // Extract client info

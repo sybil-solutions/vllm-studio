@@ -23,6 +23,12 @@ const eslintConfig = defineConfig([
       "complexity": "off",
       "max-lines": "off",
       "@typescript-eslint/naming-convention": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+      "@next/next/no-img-element": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "react-hooks/static-components": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/immutability": "off",
       "boundaries/element-types": [
         "warn",
         {

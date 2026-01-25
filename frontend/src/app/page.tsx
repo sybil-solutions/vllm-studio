@@ -37,6 +37,9 @@ export default function Dashboard() {
   const gpus = realtimeGpus.length > 0 ? realtimeGpus : [];
   const currentProcess = realtimeStatus?.process || null;
   const metrics = realtimeMetrics;
+  const inferencePort = realtimeStatus?.inference_port;
+  const modelLabel = currentRecipe?.name || currentProcess?.model_path?.split("/").pop();
+  const launchStage = launchProgress?.stage;
 
   const loadRecipes = useCallback(async () => {
     try {
@@ -136,6 +139,40 @@ export default function Dashboard() {
           onStop={handleStop}
         />
 
+        <section className="mb-8">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <OverviewCard
+              label="Connection"
+              value={isConnected ? "Live" : "Offline"}
+              sub={isConnected ? "SSE streaming" : `Retry ${reconnectAttempts}`}
+              tone={isConnected ? "success" : "muted"}
+            />
+            <OverviewCard
+              label="Active Model"
+              value={modelLabel || "Idle"}
+              sub={currentProcess ? `${currentProcess.backend} · pid ${currentProcess.pid}` : "No process"}
+              tone={currentProcess ? "accent" : "muted"}
+            />
+            <OverviewCard
+              label="Recipes"
+              value={recipes.length}
+              sub="Available to launch"
+              tone={recipes.length > 0 ? "default" : "muted"}
+            />
+            <OverviewCard
+              label="GPU / Port"
+              value={`${gpus.length} GPU`}
+              sub={inferencePort ? `Port ${inferencePort}` : "Port --"}
+              tone={gpus.length > 0 ? "default" : "muted"}
+            />
+          </div>
+          {launchStage && launchStage !== "ready" && (
+            <div className="mt-4 text-[10px] uppercase tracking-widest text-(--muted-foreground)/40">
+              Launching: {launchStage}
+            </div>
+          )}
+        </section>
+
         {currentProcess && <DashboardMetrics metrics={metrics} gpus={gpus} />}
 
         {/* Main Content */}
@@ -161,6 +198,37 @@ export default function Dashboard() {
       </div>
 
       <LaunchToast launching={launching} launchProgress={launchProgress} />
+    </div>
+  );
+}
+
+function OverviewCard({
+  label,
+  value,
+  sub,
+  tone = "default",
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  tone?: "default" | "accent" | "success" | "muted";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "text-(--success)/80"
+      : tone === "accent"
+        ? "text-(--foreground)"
+        : tone === "muted"
+          ? "text-(--muted-foreground)/60"
+          : "text-(--foreground)/80";
+
+  return (
+    <div className="rounded-lg border border-(--border)/20 bg-(--card)/30 px-4 py-3">
+      <div className="text-[10px] uppercase tracking-widest text-(--muted-foreground)/50">
+        {label}
+      </div>
+      <div className={`mt-2 text-lg font-light tracking-tight ${toneClass}`}>{value}</div>
+      {sub && <div className="mt-1 text-[10px] text-(--muted-foreground)/40">{sub}</div>}
     </div>
   );
 }
