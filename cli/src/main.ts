@@ -1,8 +1,16 @@
+#!/usr/bin/env bun
 import { hideCursor, showCursor } from './ansi';
 import { setupInput } from './input';
 import { render } from './render';
 import * as api from './api';
 import type { AppState, View } from './types';
+
+// Route to headless mode if CLI args provided
+if (process.argv.length > 2) {
+  const { runHeadless } = await import('./headless');
+  await runHeadless();
+  process.exit(0);
+}
 
 const state: AppState = {
   view: 'dashboard', selectedIndex: 0, gpus: [], recipes: [],
@@ -48,13 +56,9 @@ function handleKey(key: string): void {
   render(state);
 }
 
-async function main(): Promise<void> {
-  hideCursor();
-  cleanupInput = setupInput(handleKey);
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
-  await refresh();
-  setInterval(refresh, 2000);
-}
-
-main();
+hideCursor();
+cleanupInput = setupInput(handleKey);
+process.on('SIGINT', cleanup);
+process.on('SIGTERM', cleanup);
+await refresh();
+setInterval(refresh, 2000);
