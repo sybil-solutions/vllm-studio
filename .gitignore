@@ -58,3 +58,4 @@ data/mcp_servers.json
 
 # Local scripts (user-specific)
 scripts/*.local.sh
+.worktree/
