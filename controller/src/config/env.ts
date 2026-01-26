@@ -14,6 +14,7 @@ export interface Config {
   inference_port: number;
   data_dir: string;
   db_path: string;
+  litellm_database_url?: string;
   models_dir: string;
   sglang_python?: string;
   tabby_api_dir?: string;
@@ -61,6 +62,9 @@ export const createConfig = (): Config => {
     VLLM_STUDIO_DATA_DIR: z.string().default(defaultDataDirectory),
     VLLM_STUDIO_DB_PATH: z.string().default(defaultDatabasePath),
     VLLM_STUDIO_MODELS_DIR: z.string().default("/models"),
+    VLLM_STUDIO_LITELLM_DATABASE_URL: z.string().optional(),
+    LITELLM_DATABASE_URL: z.string().optional(),
+    DATABASE_URL: z.string().optional(),
     VLLM_STUDIO_SGLANG_PYTHON: z.string().optional(),
     VLLM_STUDIO_TABBY_API_DIR: z.string().optional(),
   });
@@ -75,6 +79,14 @@ export const createConfig = (): Config => {
     db_path: resolve(parsed.VLLM_STUDIO_DB_PATH),
     models_dir: resolve(parsed.VLLM_STUDIO_MODELS_DIR),
   };
+
+  const litellmDatabaseUrl =
+    parsed.VLLM_STUDIO_LITELLM_DATABASE_URL ??
+    parsed.LITELLM_DATABASE_URL ??
+    parsed.DATABASE_URL;
+  if (litellmDatabaseUrl) {
+    config.litellm_database_url = litellmDatabaseUrl;
+  }
 
   if (parsed.VLLM_STUDIO_API_KEY) {
     config.api_key = parsed.VLLM_STUDIO_API_KEY;

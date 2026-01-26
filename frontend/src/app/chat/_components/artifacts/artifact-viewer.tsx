@@ -45,7 +45,7 @@ const SVG_TEMPLATE = (svgCode: string, scale: number = 1) => `
     html, body {
       width: 100%;
       height: 100%;
-      overflow: hidden;
+      overflow: auto;
       background: transparent;
     }
     .container {
@@ -102,7 +102,7 @@ const REACT_TEMPLATE = (code: string) => `
       width: 100%;
       height: 100%;
       background: transparent;
-      overflow: hidden;
+      overflow: auto;
     }
     .error {
       color: #b91c1c;

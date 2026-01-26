@@ -6,12 +6,14 @@ import type { UIMessage } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
 import { ChatMessageItem } from "./chat-message-item";
 import { useAppStore } from "@/store";
+import type { Artifact } from "@/lib/types";
 
 interface ChatMessageListProps {
   messages: UIMessage[];
   isLoading: boolean;
   error?: string | null;
   artifactsEnabled?: boolean;
+  artifactsByMessage?: Map<string, Artifact[]>;
   selectedModel?: string;
   contextUsageLabel?: string | null;
   onFork?: (messageId: string) => void;
@@ -23,6 +25,7 @@ export function ChatMessageList({
   isLoading,
   error,
   artifactsEnabled = false,
+  artifactsByMessage,
   selectedModel,
   contextUsageLabel,
   onFork,
@@ -88,6 +91,7 @@ export function ChatMessageList({
           message={message}
           isStreaming={isLoading && index === messages.length - 1 && message.role === "assistant"}
           artifactsEnabled={artifactsEnabled}
+          artifacts={artifactsByMessage?.get(message.id)}
           selectedModel={selectedModel}
           contextUsageLabel={contextUsageLabel}
           copied={copiedMessageId === message.id}

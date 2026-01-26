@@ -12,8 +12,8 @@
     "typecheck": "tsc --noEmit",
     "script:util:compare": "bun scripts/utilities/compare-controllers.ts",
     "prepare": "cd ../.. && husky controller/.husky",
-    "test": "vitest run",
-    "check": "knip && jscpd src && depcheck",
+    "test": "bun test",
+    "check": "knip && jscpd src && depcheck --ignores=\"swagger-ui-dist,lint-staged\" --skip-missing",
     "check:fix": "knip --fix"
   },
   "dependencies": {
@@ -42,7 +42,6 @@
     "lint-staged": "15.2.11",
     "depcheck": "1.4.7",
     "prettier": "3.4.2",
-    "typescript": "5.9.2",
-    "vitest": "3.2.4"
+    "typescript": "5.9.2"
   }
 }

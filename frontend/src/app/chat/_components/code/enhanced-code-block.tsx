@@ -1,30 +1,16 @@
 // CRITICAL
 "use client";
 
-import { useMemo, useId } from "react";
-import { Copy, Check, Play, Code2, Maximize2, Minimize2 } from "lucide-react";
+import { useId } from "react";
+import { Copy, Check, Maximize2, Minimize2 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { CodeSandbox } from "./code-sandbox";
-import { ArtifactRenderer } from "../artifacts/artifact-renderer";
-import { useMessageParsing } from "@/lib/services/message-parsing";
 import { useAppStore } from "@/store";
 
-// Map common code languages to artifact types
-const IMPLICIT_ARTIFACT_MAP: Record<string, string> = {
-  jsx: "react",
-  tsx: "react",
-  react: "react",
-  html: "html",
-  javascript: "javascript",
-  js: "javascript",
-  svg: "svg",
-};
 
 interface EnhancedCodeBlockProps {
   children: string;
   className?: string;
-  artifactsEnabled?: boolean;
   isStreaming?: boolean;
   language?: string;
 }
@@ -32,7 +18,6 @@ interface EnhancedCodeBlockProps {
 export function EnhancedCodeBlock({
   children,
   className,
-  artifactsEnabled,
   language,
   isStreaming,
 }: EnhancedCodeBlockProps) {
@@ -42,36 +27,15 @@ export function EnhancedCodeBlock({
       state.codeBlockState[blockId] ?? {
         copied: false,
         isExpanded: false,
-        showPreview: false,
       },
   );
   const updateCodeBlockState = useAppStore((state) => state.updateCodeBlockState);
-  const { copied, isExpanded, showPreview } = blockState;
+  const { copied, isExpanded } = blockState;
   const updateState = (partial: Partial<typeof blockState>) => {
     updateCodeBlockState(blockId, (prev) => ({ ...prev, ...partial }));
   };
-  const { getArtifactType } = useMessageParsing();
   const lang = language || className?.replace("language-", "") || "text";
   const code = String(children).replace(/\n$/, "");
-
-  // Allow previews for explicit artifact fences OR common code languages when artifacts enabled
-  const isExplicitArtifact = lang.startsWith("artifact-");
-
-  // Get artifact type - either from explicit artifact- prefix or implicit mapping
-  const artifactType = useMemo(() => {
-    if (isStreaming) {
-      return null;
-    }
-    if (isExplicitArtifact) {
-      return getArtifactType(lang);
-    }
-    return artifactsEnabled ? IMPLICIT_ARTIFACT_MAP[lang.toLowerCase()] : null;
-  }, [isStreaming, isExplicitArtifact, getArtifactType, lang, artifactsEnabled]);
-
-  const canPreview =
-    artifactsEnabled &&
-    artifactType &&
-    ["html", "react", "javascript", "svg"].includes(artifactType);
 
   const copyCode = () => {
     navigator.clipboard.writeText(code);
@@ -116,44 +80,6 @@ export function EnhancedCodeBlock({
     );
   }
 
-  // If showing preview, render CodeSandbox
-  if (showPreview && canPreview && artifactType) {
-    if (artifactType === "svg") {
-      return (
-        <div className="my-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <ArtifactRenderer
-            artifact={{ id: "inline-svg", type: "svg", title: `${lang} Preview`, code }}
-          />
-          <button
-            onClick={() => updateState({ showPreview: false })}
-            className="mt-2 text-xs text-[#9a9590] hover:text-(--foreground) transition-colors flex items-center gap-1"
-          >
-            <Code2 className="h-3 w-3" />
-            Show code
-          </button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="my-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <CodeSandbox
-          code={code}
-          language={artifactType as "html" | "react" | "javascript"}
-          title={`${lang} Preview`}
-          autoRun={true}
-        />
-        <button
-          onClick={() => updateState({ showPreview: false })}
-          className="mt-2 text-xs text-[#9a9590] hover:text-(--foreground) transition-colors flex items-center gap-1"
-        >
-          <Code2 className="h-3 w-3" />
-          Show code
-        </button>
-      </div>
-    );
-  }
-
   const lineCount = code.split("\n").length;
   const isLongCode = lineCount > 20;
   const shouldCollapse = isLongCode && !isExpanded;
@@ -175,17 +101,6 @@ export function EnhancedCodeBlock({
         </div>
 
         <div className="flex items-center gap-1">
-          {canPreview && (
-            <button
-              onClick={() => updateState({ showPreview: true })}
-              className="p-1.5 rounded-lg hover:bg-(--card-hover) transition-all duration-200 flex items-center gap-1.5 text-xs font-medium text-[#9fc68a] hover:text-[#b7e4a0]"
-              title="Run preview"
-            >
-              <Play className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Preview</span>
-            </button>
-          )}
-
           {isLongCode && (
             <button
               onClick={() => updateState({ isExpanded: !isExpanded })}

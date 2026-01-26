@@ -18,11 +18,14 @@ import {
   Wrench,
 } from "lucide-react";
 import { MessageRenderer, thinkingParser } from "./message-renderer";
+import { MiniArtifactCard } from "../artifacts/mini-artifact-card";
+import type { Artifact } from "@/lib/types";
 
 interface ChatMessageItemProps {
   message: UIMessage;
   isStreaming: boolean;
   artifactsEnabled?: boolean;
+  artifacts?: Artifact[];
   selectedModel?: string;
   contextUsageLabel?: string | null;
   copied: boolean;
@@ -162,6 +165,7 @@ function ChatMessageItemBase({
   message,
   isStreaming,
   artifactsEnabled = false,
+  artifacts,
   selectedModel,
   contextUsageLabel,
   copied,
@@ -171,6 +175,7 @@ function ChatMessageItemBase({
   onExport,
 }: ChatMessageItemProps) {
   const isUser = message.role === "user";
+  const setActiveArtifactId = useAppStore((state) => state.setActiveArtifactId);
 
   // Extract text content from parts
   const rawTextContent = message.parts
@@ -191,37 +196,9 @@ function ChatMessageItemBase({
   const parsedThinking = !isUser ? thinkingParser.parse(rawTextContent) : null;
   const textContent = isUser ? rawTextContent : parsedThinking?.mainContent || "";
 
-  // DEBUG: Log if </think> tag appears in textContent (should never happen)
-  if (!isUser && textContent.includes("</think>")) {
-    console.error("[THINKING BUG] </think> tag found in textContent!", {
-      messageId: message.id,
-      rawTextContent: rawTextContent.substring(0, 500),
-      textContent: textContent.substring(0, 500),
-      parsedThinking,
-      partsTypes: message.parts.map((p) => p.type),
-      textParts: message.parts
-        .filter((p) => p.type === "text")
-        .map((p) => ({ text: (p as { text: string }).text.substring(0, 200) })),
-    });
-  }
-
   // Combine parsed <think> tags with AI SDK reasoning parts
   const thinkingContent = aiSdkReasoning || parsedThinking?.thinkingContent || "";
   const isThinkingActive = isStreaming && !textContent && !!thinkingContent;
-
-  // DEBUG: Log message parts to diagnose reasoning extraction
-  if (!isUser && message.parts.length > 0) {
-    const partTypes = message.parts.map((p) => p.type);
-    if (partTypes.includes("reasoning") || thinkingContent) {
-      console.log("[THINKING DEBUG]", {
-        messageId: message.id,
-        partTypes,
-        aiSdkReasoning: aiSdkReasoning?.slice(0, 100),
-        parsedThinking: parsedThinking?.thinkingContent?.slice(0, 100),
-        thinkingContent: thinkingContent?.slice(0, 100),
-      });
-    }
-  }
 
   // Extract tool parts (they have type starting with "tool-")
   const toolParts = message.parts.filter(
@@ -391,7 +368,6 @@ function ChatMessageItemBase({
           <MessageRenderer
             content={textContent}
             isStreaming={isStreaming}
-            artifactsEnabled={artifactsEnabled}
           />
         ) : isStreaming && !thinkingContent ? (
           <div className="flex items-center gap-2 text-[#6a6560]">
@@ -399,6 +375,18 @@ function ChatMessageItemBase({
             <span className="text-sm">Thinking...</span>
           </div>
         ) : null}
+
+        {artifactsEnabled && artifacts && artifacts.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {artifacts.map((artifact) => (
+              <MiniArtifactCard
+                key={artifact.id}
+                artifact={artifact}
+                onClick={() => setActiveArtifactId(artifact.id)}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Desktop tool invocations preview */}
         {toolParts.length > 0 && (
