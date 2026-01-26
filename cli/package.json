@@ -25,7 +25,7 @@
     "eslint": "9.35.0",
     "husky": "9.1.7",
     "jscpd": "4.0.5",
-    "knip": "5.44.2",
+    "knip": "5.82.1",
     "lint-staged": "15.2.11",
     "depcheck": "1.4.7",
     "prettier": "3.4.2",
