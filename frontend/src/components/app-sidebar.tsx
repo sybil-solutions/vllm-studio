@@ -163,7 +163,7 @@ export function AppSidebar({ children }: AppSidebarProps) {
   };
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-full min-h-full overflow-hidden">
       {/* Mobile overlay */}
       {isMobile && mobileOpen && (
         <div

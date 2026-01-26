@@ -1,5 +1,5 @@
 // CRITICAL
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "bun:test";
 import { RecipeStore } from "./recipe-store";
 import type { Recipe } from "../types/models";
 import { asRecipeId } from "../types/brand";
@@ -51,7 +51,7 @@ describe("RecipeStore", () => {
       const found = store.get(asRecipeId("test-recipe"));
 
       expect(found).toBeDefined();
-      expect(found?.id).toBe("test-recipe");
+      expect(found?.id).toBe(asRecipeId("test-recipe"));
       expect(found?.name).toBe("Test Recipe");
     });
 
@@ -92,7 +92,7 @@ describe("RecipeStore", () => {
       const found = store.get(asRecipeId("test-recipe"));
 
       expect(found).toBeDefined();
-      expect(found?.id).toBe("test-recipe");
+      expect(found?.id).toBe(asRecipeId("test-recipe"));
     });
 
     it("returns null for non-existent recipe", () => {

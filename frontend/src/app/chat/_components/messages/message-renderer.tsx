@@ -98,7 +98,6 @@ async function getMermaid() {
 interface MessageRendererProps {
   content: string;
   isStreaming?: boolean;
-  artifactsEnabled?: boolean;
 }
 
 function MermaidDiagram({ code }: { code: string }) {
@@ -178,11 +177,10 @@ function MermaidDiagram({ code }: { code: string }) {
 
 interface CodeBlockProps {
   segment: MarkdownSegment;
-  artifactsEnabled?: boolean;
   isStreaming?: boolean;
 }
 
-function CodeBlock({ segment, artifactsEnabled, isStreaming }: CodeBlockProps) {
+function CodeBlock({ segment, isStreaming }: CodeBlockProps) {
   const lang = segment.language || "";
 
   // Handle mermaid diagrams
@@ -204,7 +202,6 @@ function CodeBlock({ segment, artifactsEnabled, isStreaming }: CodeBlockProps) {
   return (
     <EnhancedCodeBlock
       language={lang}
-      artifactsEnabled={artifactsEnabled}
       isStreaming={isStreaming}
     >
       {segment.content}
@@ -220,7 +217,7 @@ function MarkdownBlock({ html }: MarkdownBlockProps) {
   return <div className="chat-markdown" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export function MessageRenderer({ content, isStreaming, artifactsEnabled }: MessageRendererProps) {
+export function MessageRenderer({ content, isStreaming }: MessageRendererProps) {
   const parsingService = useMessageParsingService();
   const { renderMarkdown } = useMessageParsing();
 
@@ -252,7 +249,6 @@ export function MessageRenderer({ content, isStreaming, artifactsEnabled }: Mess
                   <CodeBlock
                     key={`code-${index}`}
                     segment={segment}
-                    artifactsEnabled={artifactsEnabled}
                     isStreaming={isStreaming}
                   />
                 );

@@ -7,6 +7,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import { api } from "@/lib/api";
 import { extractArtifacts } from "../artifacts/artifact-renderer";
+import { ArtifactModal } from "../artifacts/artifact-modal";
 import { ToolBelt } from "../input/tool-belt";
 import { ChatSidePanel } from "./chat-side-panel";
 import { ChatConversation } from "./chat-conversation";
@@ -48,6 +49,8 @@ export function ChatPage() {
   const setMcpEnabled = useAppStore((state) => state.setMcpEnabled);
   const artifactsEnabled = useAppStore((state) => state.artifactsEnabled);
   const setArtifactsEnabled = useAppStore((state) => state.setArtifactsEnabled);
+  const activeArtifactId = useAppStore((state) => state.activeArtifactId);
+  const setActiveArtifactId = useAppStore((state) => state.setActiveArtifactId);
   const deepResearch = useAppStore((state) => state.deepResearch);
   const setDeepResearch = useAppStore((state) => state.setDeepResearch);
   const elapsedSeconds = useAppStore((state) => state.elapsedSeconds);
@@ -75,6 +78,7 @@ export function ChatPage() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesLengthRef = useRef(0);
 
   // Sessions hook
   const {
@@ -127,7 +131,6 @@ export function ChatPage() {
 
   // Track the last user input for title generation
   const lastUserInputRef = useRef<string>("");
-  const autoArtifactSwitchRef = useRef(false);
   const [compactionHistory, setCompactionHistory] = useState<CompactionEvent[]>([]);
   const [compacting, setCompacting] = useState(false);
   const [compactionError, setCompactionError] = useState<string | null>(null);
@@ -393,10 +396,13 @@ export function ChatPage() {
     };
   }, [contextStats, estimateTokens, messages, parseThinking]);
 
-  const sessionArtifacts = useMemo(() => {
-    if (!artifactsEnabled || messages.length === 0) return [];
+  const { sessionArtifacts, artifactsByMessage } = useMemo(() => {
+    if (!artifactsEnabled || messages.length === 0) {
+      return { sessionArtifacts: [], artifactsByMessage: new Map<string, Artifact[]>() };
+    }
 
     const artifacts: Artifact[] = [];
+    const byMessage = new Map<string, Artifact[]>();
     messages.forEach((msg) => {
       if (msg.role !== "assistant") return;
 
@@ -407,19 +413,37 @@ export function ChatPage() {
 
       if (!textContent) return;
 
-      const { artifacts: extracted } = extractArtifacts(textContent, { includeImplicit: true });
+      const { artifacts: extracted } = extractArtifacts(textContent, {
+        includeImplicit: true,
+        maxImplicit: 1,
+      });
       extracted.forEach((artifact, index) => {
-        artifacts.push({
+        const enriched = {
           ...artifact,
           id: `${msg.id}-${index}`,
           message_id: msg.id,
           session_id: currentSessionId || undefined,
-        });
+        };
+        artifacts.push(enriched);
+        const existing = byMessage.get(msg.id) ?? [];
+        existing.push(enriched);
+        byMessage.set(msg.id, existing);
       });
     });
 
-    return artifacts;
+    return { sessionArtifacts: artifacts, artifactsByMessage: byMessage };
   }, [messages, artifactsEnabled, currentSessionId]);
+
+  const activeArtifact = useMemo(
+    () => sessionArtifacts.find((artifact) => artifact.id === activeArtifactId) ?? null,
+    [activeArtifactId, sessionArtifacts],
+  );
+
+  useEffect(() => {
+    if (activeArtifactId && !activeArtifact) {
+      setActiveArtifactId(null);
+    }
+  }, [activeArtifact, activeArtifactId, setActiveArtifactId]);
 
   const readUiMessageStream = useCallback(async (response: Response) => {
     const reader = response.body?.getReader();
@@ -653,21 +677,6 @@ export function ChatPage() {
     void runAutoCompaction();
   }, [runAutoCompaction]);
 
-  useEffect(() => {
-    if (sessionArtifacts.length === 0) {
-      autoArtifactSwitchRef.current = false;
-      return;
-    }
-
-    if (!autoArtifactSwitchRef.current) {
-      autoArtifactSwitchRef.current = true;
-      const timeoutId = window.setTimeout(() => {
-        setActivePanel("artifacts");
-      }, 0);
-      return () => window.clearTimeout(timeoutId);
-    }
-  }, [sessionArtifacts.length, setActivePanel]);
-
   const showEmptyState = messages.length === 0 && !isLoading && !error;
 
   // Scroll handling
@@ -722,12 +731,16 @@ export function ChatPage() {
     loadSessions();
   }, [loadSessions]);
 
+  useEffect(() => {
+    messagesLengthRef.current = messages.length;
+  }, [messages.length]);
+
   // Handle PWA resume - reload session when app becomes visible again
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         // Reload current session to restore messages after PWA was backgrounded
-        const sessionId = sessionIdRef.current ?? currentSessionId;
+        const sessionId = sessionIdRef.current;
         if (sessionId) {
           void (async () => {
             try {
@@ -735,7 +748,7 @@ export function ChatPage() {
               if (session) {
                 const storedMessages = session.messages ?? [];
                 // Only restore if we lost messages (PWA was killed)
-                if (messages.length === 0 && storedMessages.length > 0) {
+                if (messagesLengthRef.current === 0 && storedMessages.length > 0) {
                   setMessages(mapStoredMessages(storedMessages));
                 }
               }
@@ -749,7 +762,7 @@ export function ChatPage() {
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [currentSessionId, loadSession, mapStoredMessages, messages.length, setMessages]);
+  }, [loadSession, mapStoredMessages, sessionIdRef, setMessages]);
 
   // Handle URL session/new params
   useEffect(() => {
@@ -1112,13 +1125,11 @@ export function ChatPage() {
       }}
       artifactsEnabled={artifactsEnabled}
       onArtifactsToggle={() => {
-        console.log("[ChatPage] Artifacts toggle:", !artifactsEnabled);
         setArtifactsEnabled(!artifactsEnabled);
       }}
       deepResearchEnabled={deepResearch.enabled}
       onDeepResearchToggle={() => {
         const nextEnabled = !deepResearch.enabled;
-        console.log("[ChatPage] Deep Research toggle:", nextEnabled);
         setDeepResearch({ ...deepResearch, enabled: nextEnabled });
         if (nextEnabled && !mcpEnabled) setMcpEnabled(true);
       }}
@@ -1141,6 +1152,7 @@ export function ChatPage() {
               isLoading={isLoading}
               error={error?.message}
               artifactsEnabled={artifactsEnabled}
+              artifactsByMessage={artifactsByMessage}
               selectedModel={selectedModel}
               contextUsageLabel={contextUsageLabel}
               onFork={handleForkMessage}
@@ -1226,6 +1238,10 @@ export function ChatPage() {
         messages={messages}
         onExportJson={handleExportJson}
         onExportMarkdown={handleExportMarkdown}
+      />
+      <ArtifactModal
+        artifact={activeArtifact}
+        onClose={() => setActiveArtifactId(null)}
       />
     </div>
   );

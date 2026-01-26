@@ -1,5 +1,5 @@
 // CRITICAL
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { Hono } from "hono";
 import { registerSystemRoutes } from "./system";
 import type { AppContext } from "../types/context";
@@ -11,7 +11,7 @@ describe("System Routes", () => {
 
   beforeEach(() => {
     // Mock fetch to avoid real network requests in tests
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error("Network unavailable")) as unknown as typeof fetch;
+    globalThis.fetch = mock(() => Promise.reject(new Error("Network unavailable"))) as unknown as typeof fetch;
 
     app = new Hono();
 
@@ -28,62 +28,62 @@ describe("System Routes", () => {
     const mockContext = {
       config: mockConfig,
       logger: {
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-        debug: vi.fn(),
+        info: mock(() => undefined),
+        warn: mock(() => undefined),
+        error: mock(() => undefined),
+        debug: mock(() => undefined),
       },
       eventManager: {
-        subscribe: vi.fn(),
-        broadcast: vi.fn(),
+        subscribe: mock(() => undefined),
+        broadcast: mock(() => undefined),
       },
       launchState: {
         launching: null,
-        setLaunching: vi.fn(),
-        clearLaunching: vi.fn(),
+        setLaunching: mock(() => undefined),
+        clearLaunching: mock(() => undefined),
       },
       metrics: {
-        requestsTotal: { inc: vi.fn() },
-        requestDuration: { observe: vi.fn() },
+        requestsTotal: { inc: mock(() => undefined) },
+        requestDuration: { observe: mock(() => undefined) },
       },
       metricsRegistry: {
-        metrics: vi.fn().mockReturnValue(""),
+        metrics: mock(() => ""),
       },
       processManager: {
-        findInferenceProcess: vi.fn().mockResolvedValue(null),
-        launchModel: vi.fn(),
-        evictModel: vi.fn(),
+        findInferenceProcess: mock(() => Promise.resolve(null)),
+        launchModel: mock(() => undefined),
+        evictModel: mock(() => undefined),
       },
       stores: {
         recipeStore: {
-          list: vi.fn().mockReturnValue([]),
-          get: vi.fn(),
-          save: vi.fn(),
-          delete: vi.fn(),
+          list: mock(() => []),
+          get: mock(() => undefined),
+          save: mock(() => undefined),
+          delete: mock(() => undefined),
         },
         chatStore: {
-          listSessions: vi.fn().mockReturnValue([]),
-          getSession: vi.fn(),
-          createSession: vi.fn(),
-          deleteSession: vi.fn(),
+          listSessions: mock(() => []),
+          getSession: mock(() => undefined),
+          createSession: mock(() => undefined),
+          deleteSession: mock(() => undefined),
         },
         peakMetricsStore: {
-          get: vi.fn(),
-          update: vi.fn(),
-          list: vi.fn().mockReturnValue([]),
+          get: mock(() => undefined),
+          update: mock(() => undefined),
+          list: mock(() => []),
         },
         lifetimeMetricsStore: {
-          getAll: vi.fn().mockReturnValue({}),
-          addTokens: vi.fn(),
-          addPromptTokens: vi.fn(),
-          addCompletionTokens: vi.fn(),
-          addRequests: vi.fn(),
+          getAll: mock(() => ({})),
+          addTokens: mock(() => undefined),
+          addPromptTokens: mock(() => undefined),
+          addCompletionTokens: mock(() => undefined),
+          addRequests: mock(() => undefined),
         },
         mcpStore: {
-          list: vi.fn().mockReturnValue([]),
-          get: vi.fn(),
-          save: vi.fn(),
-          delete: vi.fn(),
+          list: mock(() => []),
+          get: mock(() => undefined),
+          save: mock(() => undefined),
+          delete: mock(() => undefined),
         },
       },
     } as unknown as AppContext;

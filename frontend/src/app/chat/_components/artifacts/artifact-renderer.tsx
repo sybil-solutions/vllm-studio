@@ -350,10 +350,12 @@ export function ArtifactRenderer({ artifact }: ArtifactRendererProps) {
 // Utility to extract artifacts from message content
 export function extractArtifacts(
   content: string,
-  options?: { includeImplicit?: boolean },
+  options?: { includeImplicit?: boolean; maxImplicit?: number },
 ): { text: string; artifacts: Artifact[] } {
   const artifacts: Artifact[] = [];
   let text = content;
+  const implicitLimit = options?.maxImplicit ?? Number.POSITIVE_INFINITY;
+  let implicitCount = 0;
 
   // Pattern 1: <artifact type="html" title="...">...</artifact>
   const artifactTagRegex =
@@ -398,6 +400,9 @@ export function extractArtifacts(
   if (options?.includeImplicit) {
     const implicitCodeBlockRegex = /```(html|svg)\s*\n([\s\S]*?)```/g;
     while ((match = implicitCodeBlockRegex.exec(content)) !== null) {
+      if (implicitCount >= implicitLimit) {
+        continue;
+      }
       const type = match[1] as Artifact["type"];
       const code = match[2].trim();
       artifacts.push({
@@ -407,6 +412,7 @@ export function extractArtifacts(
         code,
       });
       text = text.replace(match[0], `[Artifact: ${type}]`);
+      implicitCount += 1;
     }
   }
 

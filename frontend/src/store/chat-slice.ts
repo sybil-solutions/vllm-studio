@@ -1,11 +1,6 @@
 // CRITICAL
 import type { StateCreator } from "zustand";
 
-interface Reaction {
-  type: "up" | "down";
-  count: number;
-}
-
 import type {
   ChatSession,
   ToolCall,
@@ -53,25 +48,6 @@ export interface ResearchProgress {
   currentStep: number;
   searchQueries?: string[];
   error?: string;
-}
-
-export interface LegacyDeepResearchSettings {
-  enabled: boolean;
-  numSources: number;
-  autoSummarize: boolean;
-  includeCitations: boolean;
-  searchDepth: "quick" | "normal" | "thorough";
-}
-
-export interface LegacyRagSettings {
-  enabled: boolean;
-  endpoint: string;
-  apiKey?: string;
-  topK: number;
-  minScore: number;
-  includeMetadata: boolean;
-  contextPosition: "before" | "after" | "system";
-  useProxy: boolean;
 }
 
 export interface ChatState {
@@ -147,6 +123,7 @@ export interface ChatState {
   messageInlineToolsExpanded: Record<string, boolean>;
 
   artifactPanelSelectedId: string | null;
+  activeArtifactId: string | null;
   artifactRendererState: Record<
     string,
     { isFullscreen: boolean; showCode: boolean; copied: boolean; showPreview?: boolean }
@@ -165,7 +142,7 @@ export interface ChatState {
     }
   >;
 
-  codeBlockState: Record<string, { copied: boolean; isExpanded: boolean; showPreview: boolean }>;
+  codeBlockState: Record<string, { copied: boolean; isExpanded: boolean }>;
   codeSandboxState: Record<
     string,
     { isRunning: boolean; isFullscreen: boolean; copied: boolean; error: string | null }
@@ -178,64 +155,6 @@ export interface ChatState {
   themeMode: "light" | "dark" | "system";
   resolvedTheme: "light" | "dark";
   themeMenuOpen: boolean;
-
-  legacyMessageSearch: {
-    query: string;
-    filterType: "all" | "user" | "assistant" | "bookmarked" | "hasCode";
-    isFilterOpen: boolean;
-    selectedIndex: number;
-  };
-
-  legacyToolCallCardState: Record<
-    string,
-    { isExpanded: boolean; showModal: boolean; modalCopied: boolean }
-  >;
-
-  legacyThinkingExpanded: Record<string, boolean>;
-
-  legacyMessageActions: Record<
-    string,
-    { copied: boolean; bookmarked: boolean; reaction: Reaction | null; showMenu: boolean }
-  >;
-
-  legacyContextIndicator: {
-    showDetails: boolean;
-    showHistory: boolean;
-    showSettings: boolean;
-  };
-
-  legacyChatSidebar: {
-    hoveredId: string | null;
-    searchQuery: string;
-    visibleCount: number;
-  };
-
-  legacyToolBelt: {
-    attachments: Attachment[];
-    isRecording: boolean;
-    isTranscribing: boolean;
-    transcriptionError: string | null;
-    isTTSEnabled: boolean;
-    recordingDuration: number;
-  };
-
-  legacyMcpSettings: {
-    localServers: MCPServer[];
-    isAdding: boolean;
-    newServer: { name: string; command: string; args: string; envKey: string; envValue: string };
-    envPairs: Array<{ key: string; value: string }>;
-    error: string | null;
-    saving: boolean;
-  };
-
-  legacyChatSettings: {
-    localPrompt: string;
-    forkSelection: Record<string, boolean>;
-    localDeepResearch: LegacyDeepResearchSettings;
-    localRagSettings: LegacyRagSettings;
-    ragTestStatus: "idle" | "testing" | "success" | "error";
-    ragTestResult: string | null;
-  };
 }
 
 export interface ChatActions {
@@ -272,6 +191,7 @@ export interface ChatActions {
 
   setMcpEnabled: (mcpEnabled: boolean) => void;
   setArtifactsEnabled: (artifactsEnabled: boolean) => void;
+  setActiveArtifactId: (artifactId: string | null) => void;
   setMcpServers: (mcpServers: MCPServer[]) => void;
   setMcpSettingsOpen: (mcpSettingsOpen: boolean) => void;
   setMcpTools: (mcpTools: MCPTool[]) => void;
@@ -359,10 +279,9 @@ export interface ChatActions {
 
   updateCodeBlockState: (
     blockId: string,
-    updater: (prev: { copied: boolean; isExpanded: boolean; showPreview: boolean }) => {
+    updater: (prev: { copied: boolean; isExpanded: boolean }) => {
       copied: boolean;
       isExpanded: boolean;
-      showPreview: boolean;
     },
   ) => void;
   updateCodeSandboxState: (
@@ -387,22 +306,6 @@ export interface ChatActions {
   setThemeMode: (themeMode: "light" | "dark" | "system") => void;
   setResolvedTheme: (resolvedTheme: "light" | "dark") => void;
   setThemeMenuOpen: (themeMenuOpen: boolean) => void;
-
-  setLegacyMessageSearch: (updates: Partial<ChatState["legacyMessageSearch"]>) => void;
-  setLegacyToolCallCardState: (
-    toolCallId: string,
-    updates: Partial<ChatState["legacyToolCallCardState"][string]>,
-  ) => void;
-  setLegacyThinkingExpanded: (key: string, expanded: boolean) => void;
-  setLegacyMessageActions: (
-    messageId: string,
-    updates: Partial<ChatState["legacyMessageActions"][string]>,
-  ) => void;
-  setLegacyContextIndicator: (updates: Partial<ChatState["legacyContextIndicator"]>) => void;
-  setLegacyChatSidebar: (updates: Partial<ChatState["legacyChatSidebar"]>) => void;
-  setLegacyToolBelt: (updates: Partial<ChatState["legacyToolBelt"]>) => void;
-  setLegacyMcpSettings: (updates: Partial<ChatState["legacyMcpSettings"]>) => void;
-  setLegacyChatSettings: (updates: Partial<ChatState["legacyChatSettings"]>) => void;
 }
 
 export type ChatSlice = ChatState & ChatActions;
@@ -488,6 +391,7 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   messageInlineToolsExpanded: {},
 
   artifactPanelSelectedId: null,
+  activeArtifactId: null,
   artifactRendererState: {},
   artifactViewerState: {},
 
@@ -501,72 +405,6 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   themeMode: "dark",
   resolvedTheme: "dark",
   themeMenuOpen: false,
-
-  legacyMessageSearch: {
-    query: "",
-    filterType: "all",
-    isFilterOpen: false,
-    selectedIndex: 0,
-  },
-
-  legacyToolCallCardState: {},
-
-  legacyThinkingExpanded: {},
-
-  legacyMessageActions: {},
-
-  legacyContextIndicator: {
-    showDetails: false,
-    showHistory: false,
-    showSettings: false,
-  },
-
-  legacyChatSidebar: {
-    hoveredId: null,
-    searchQuery: "",
-    visibleCount: 15,
-  },
-
-  legacyToolBelt: {
-    attachments: [],
-    isRecording: false,
-    isTranscribing: false,
-    transcriptionError: null,
-    isTTSEnabled: false,
-    recordingDuration: 0,
-  },
-
-  legacyMcpSettings: {
-    localServers: [],
-    isAdding: false,
-    newServer: { name: "", command: "", args: "", envKey: "", envValue: "" },
-    envPairs: [],
-    error: null,
-    saving: false,
-  },
-
-  legacyChatSettings: {
-    localPrompt: "",
-    forkSelection: {},
-    localDeepResearch: {
-      enabled: false,
-      numSources: 5,
-      autoSummarize: true,
-      includeCitations: true,
-      searchDepth: "normal",
-    },
-    localRagSettings: {
-      enabled: false,
-      endpoint: "http://localhost:3002",
-      topK: 5,
-      minScore: 0.0,
-      includeMetadata: true,
-      contextPosition: "system",
-      useProxy: true,
-    },
-    ragTestStatus: "idle",
-    ragTestResult: null,
-  },
 
   setSessions: (sessions) => set({ sessions }),
   updateSessions: (updater) => set((state) => ({ sessions: updater(state.sessions) })),
@@ -601,6 +439,7 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
 
   setMcpEnabled: (mcpEnabled) => set({ mcpEnabled }),
   setArtifactsEnabled: (artifactsEnabled) => set({ artifactsEnabled }),
+  setActiveArtifactId: (activeArtifactId) => set({ activeArtifactId }),
   setMcpServers: (mcpServers) => set({ mcpServers }),
   setMcpSettingsOpen: (mcpSettingsOpen) => set({ mcpSettingsOpen }),
   setMcpTools: (mcpTools) => set({ mcpTools }),
@@ -709,7 +548,6 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
       const prev = state.codeBlockState[blockId] ?? {
         copied: false,
         isExpanded: false,
-        showPreview: false,
       };
       return {
         codeBlockState: {
@@ -747,63 +585,4 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   setThemeMode: (themeMode) => set({ themeMode }),
   setResolvedTheme: (resolvedTheme) => set({ resolvedTheme }),
   setThemeMenuOpen: (themeMenuOpen) => set({ themeMenuOpen }),
-
-  setLegacyMessageSearch: (updates) =>
-    set((state) => ({
-      legacyMessageSearch: { ...state.legacyMessageSearch, ...updates },
-    })),
-  setLegacyToolCallCardState: (toolCallId, updates) =>
-    set((state) => ({
-      legacyToolCallCardState: {
-        ...state.legacyToolCallCardState,
-        [toolCallId]: {
-          ...(state.legacyToolCallCardState[toolCallId] ?? {}),
-          isExpanded: false,
-          showModal: false,
-          modalCopied: false,
-          ...updates,
-        },
-      },
-    })),
-  setLegacyThinkingExpanded: (key, expanded) =>
-    set((state) => ({
-      legacyThinkingExpanded: {
-        ...state.legacyThinkingExpanded,
-        [key]: expanded,
-      },
-    })),
-  setLegacyMessageActions: (messageId, updates) =>
-    set((state) => ({
-      legacyMessageActions: {
-        ...state.legacyMessageActions,
-        [messageId]: {
-          ...(state.legacyMessageActions[messageId] ?? {}),
-          copied: false,
-          bookmarked: false,
-          reaction: null,
-          showMenu: false,
-          ...updates,
-        },
-      },
-    })),
-  setLegacyContextIndicator: (updates) =>
-    set((state) => ({
-      legacyContextIndicator: { ...state.legacyContextIndicator, ...updates },
-    })),
-  setLegacyChatSidebar: (updates) =>
-    set((state) => ({
-      legacyChatSidebar: { ...state.legacyChatSidebar, ...updates },
-    })),
-  setLegacyToolBelt: (updates) =>
-    set((state) => ({
-      legacyToolBelt: { ...state.legacyToolBelt, ...updates },
-    })),
-  setLegacyMcpSettings: (updates) =>
-    set((state) => ({
-      legacyMcpSettings: { ...state.legacyMcpSettings, ...updates },
-    })),
-  setLegacyChatSettings: (updates) =>
-    set((state) => ({
-      legacyChatSettings: { ...state.legacyChatSettings, ...updates },
-    })),
 });

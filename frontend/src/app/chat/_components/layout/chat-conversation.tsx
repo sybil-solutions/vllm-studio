@@ -3,6 +3,7 @@
 
 import type { UIMessage } from "@ai-sdk/react";
 import type { ReactNode, RefObject } from "react";
+import type { Artifact } from "@/lib/types";
 import { ChatMessageList } from "../messages/chat-message-list";
 import { ChatSplashCanvas } from "./chat-splash-canvas";
 
@@ -11,6 +12,7 @@ interface ChatConversationProps {
   isLoading: boolean;
   error?: string | null;
   artifactsEnabled?: boolean;
+  artifactsByMessage?: Map<string, Artifact[]>;
   selectedModel?: string;
   contextUsageLabel?: string | null;
   onFork?: (messageId: string) => void;
@@ -27,6 +29,7 @@ export function ChatConversation({
   isLoading,
   error,
   artifactsEnabled,
+  artifactsByMessage,
   selectedModel,
   contextUsageLabel,
   onFork,
@@ -58,6 +61,7 @@ export function ChatConversation({
                   isLoading={isLoading}
                   error={error || undefined}
                   artifactsEnabled={artifactsEnabled}
+                  artifactsByMessage={artifactsByMessage}
                   selectedModel={selectedModel}
                   contextUsageLabel={contextUsageLabel}
                   onFork={onFork}

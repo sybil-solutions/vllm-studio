@@ -23,6 +23,7 @@
   --accent-purple-shine: hsl(270, 60%, 60%);
   --highlight: hsl(270, 50%, 55%);
   --highlight-bg: hsl(270, 50%, 95%);
+  --app-height: 100vh;
 }
 
 .dark {
@@ -49,6 +50,12 @@
   --highlight-bg: hsl(270, 30%, 18%);
 }
 
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -60,14 +67,11 @@
   border-color: var(--border);
 }
 
-html {
-  overflow: hidden;
-  height: 100%;
-}
-
+html,
 body {
   overflow: hidden;
-  height: 100%;
+  height: var(--app-height);
+  min-height: var(--app-height);
   max-width: 100vw;
   width: 100%;
 }

@@ -1,7 +1,7 @@
 // CRITICAL
 // Frontend uses extensive barrel exports (index.ts) which knip doesn't handle well.
 // This config is deliberately lenient to avoid false positives.
-export default {
+const config = {
   entry: ['src/app/**/*.{ts,tsx}'],
   project: ['src/**/*.{ts,tsx}'],
   ignore: [
@@ -27,12 +27,10 @@ export default {
     'eslint-config-next',
     'tailwindcss',
     // AI SDK providers
-    '@ai-sdk/openai',
     '@ai-sdk/openai-compatible',
     '@ai-sdk/react',
     'ai',
     // Markdown processing
-    'rehype-highlight',
     // PostCSS
     'postcss',
     '@tailwindcss/postcss',
@@ -46,3 +44,5 @@ export default {
   ignoreBinaries: ['husky', 'knip', 'jscpd'],
   ignoreExportsUsedInFile: true,
 };
+
+export default config;
