@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Configure deployment
         run: |
@@ -62,7 +62,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: [deploy-frontend]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Record deployment
         run: |
