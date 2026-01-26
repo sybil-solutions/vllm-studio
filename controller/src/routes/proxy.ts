@@ -5,7 +5,7 @@ import { AsyncLock, delay } from "../core/async";
 import { HttpStatus, serviceUnavailable } from "../core/errors";
 import { buildSseHeaders } from "../http/sse";
 import type { AppContext } from "../types/context";
-import type { Recipe } from "../types/models";
+import type { ProcessInfo, Recipe } from "../types/models";
 import type { ToolCallBuffer, ThinkState, Utf8State } from "../services/proxy-parsers";
 import { parseToolCallsFromContent } from "../services/proxy-parsers";
 import { createProxyStream } from "../services/proxy-streamer";
@@ -19,37 +19,20 @@ const switchLock = new AsyncLock();
  */
 export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
   /**
-   * Normalize a model name for comparison.
-   * @param value - Model name string.
-   * @returns Normalized key.
-   */
-  const normalizeModelKey = (value: string): string => {
-    const parts = value.split("/");
-    const tail = parts[parts.length - 1] ?? value;
-    return tail.toLowerCase().replace(/[^a-z0-9]/g, "");
-  };
-
-  /**
    * Locate a recipe by model name or alias.
+   * Matches on served_model_name, recipe id, or recipe name (case-insensitive).
    * @param modelName - Requested model name.
    * @returns Matching recipe or null.
    */
   const findRecipeByModel = (modelName: string): Recipe | null => {
     const lower = modelName.toLowerCase();
-    const requestedKey = normalizeModelKey(modelName);
     for (const recipe of context.stores.recipeStore.list()) {
-      const served = recipe.served_model_name ?? "";
-      const servedLower = served.toLowerCase();
-      if (servedLower === lower || recipe.id.toLowerCase() === lower) {
+      const served = (recipe.served_model_name ?? "").toLowerCase();
+      if (served === lower || recipe.id.toLowerCase() === lower) {
         return recipe;
       }
-      const servedKey = normalizeModelKey(served);
-      const idKey = normalizeModelKey(recipe.id);
-      if ((servedKey && requestedKey.startsWith(servedKey)) || (idKey && requestedKey.startsWith(idKey))) {
-        return recipe;
-      }
-      const name = recipe.name ?? "";
-      if (name && normalizeModelKey(name) === requestedKey) {
+      const name = (recipe.name ?? "").toLowerCase();
+      if (name && name === lower) {
         return recipe;
       }
     }
@@ -57,35 +40,50 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
   };
 
   /**
-   * Ensure requested model is running.
-   * @param requestedModel - Requested model name.
+   * Check if a recipe matches a running process.
+   * @param recipe - Recipe to check.
+   * @param current - Running process info.
+   * @returns True if the recipe matches the running process.
+   */
+  const isRecipeRunning = (recipe: Recipe, current: ProcessInfo): boolean => {
+    const canonical = (recipe.served_model_name ?? "").toLowerCase();
+    if (canonical && current.served_model_name && current.served_model_name.toLowerCase() === canonical) {
+      return true;
+    }
+    if (current.model_path) {
+      const normalize = (p: string): string => p.replace(/\/+$/, "");
+      if (normalize(recipe.model_path) === normalize(current.model_path)) {
+        return true;
+      }
+      if (current.model_path.split("/").pop() === recipe.model_path.split("/").pop()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  /**
+   * Ensure requested recipe's model is running.
+   * @param recipe - Recipe to launch if not already running.
    * @returns Error message or null.
    */
-  const ensureModelRunning = async (requestedModel: string): Promise<string | null> => {
-    if (!requestedModel) {
-      return null;
-    }
-    const requestedLower = requestedModel.toLowerCase();
+  const ensureModelRunning = async (recipe: Recipe): Promise<string | null> => {
     const current = await context.processManager.findInferenceProcess(context.config.inference_port);
-    if (current?.served_model_name && current.served_model_name.toLowerCase() === requestedLower) {
-      return null;
-    }
-    const recipe = findRecipeByModel(requestedModel);
-    if (!recipe) {
+    if (current && isRecipeRunning(recipe, current)) {
       return null;
     }
 
     const release = await switchLock.acquire();
     try {
       const latest = await context.processManager.findInferenceProcess(context.config.inference_port);
-      if (latest?.served_model_name && latest.served_model_name.toLowerCase() === requestedLower) {
+      if (latest && isRecipeRunning(recipe, latest)) {
         return null;
       }
       await context.processManager.evictModel(false);
       await delay(2000);
       const launch = await context.processManager.launchModel(recipe);
       if (!launch.success) {
-        return `Failed to launch model ${requestedModel}: ${launch.message}`;
+        return `Failed to launch model ${recipe.id}: ${launch.message}`;
       }
 
       const start = Date.now();
@@ -94,7 +92,7 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
         if (launch.pid && !pidExists(launch.pid)) {
           const logFile = `/tmp/vllm_${recipe.id}.log`;
           const errorTail = readLogTail(logFile, 500);
-          return `Model ${requestedModel} crashed during startup: ${errorTail.slice(-200)}`;
+          return `Model ${recipe.id} crashed during startup: ${errorTail.slice(-200)}`;
         }
         try {
           const controller = new AbortController();
@@ -111,7 +109,7 @@ export const registerProxyRoutes = (app: Hono, context: AppContext): void => {
         }
         await delay(3000);
       }
-      return `Model ${requestedModel} failed to become ready (timeout)`;
+      return `Model ${recipe.id} failed to become ready (timeout)`;
     } finally {
       release();
     }
@@ -190,15 +188,16 @@ IMPORTANT: Do not use emoji, Unicode symbols, or decorative box-drawing characte
     let isStreaming = false;
     let modifiedBody: ArrayBuffer | null = null;
     let bodyChanged = false;
+    let matchedRecipe: Recipe | null = null;
 
     try {
       const bodyText = new TextDecoder().decode(bodyBuffer);
       const parsed = JSON.parse(bodyText) as Record<string, unknown>;
       if (typeof parsed["model"] === "string") {
         requestedModel = parsed["model"];
-        const matched = findRecipeByModel(requestedModel);
-        if (matched) {
-          const canonical = matched.served_model_name ?? matched.id;
+        matchedRecipe = findRecipeByModel(requestedModel);
+        if (matchedRecipe) {
+          const canonical = matchedRecipe.served_model_name ?? matchedRecipe.id;
           if (canonical && canonical !== requestedModel) {
             parsed["model"] = canonical;
             requestedModel = canonical;
@@ -228,14 +227,15 @@ IMPORTANT: Do not use emoji, Unicode symbols, or decorative box-drawing characte
       }
     } catch {
       requestedModel = null;
+      matchedRecipe = null;
       isStreaming = false;
     }
 
     // Use modified body if we injected the prompt
     const finalBody = modifiedBody ?? bodyBuffer;
 
-    if (requestedModel) {
-      const switchError = await ensureModelRunning(requestedModel);
+    if (matchedRecipe) {
+      const switchError = await ensureModelRunning(matchedRecipe);
       if (switchError) {
         throw serviceUnavailable(switchError);
       }
