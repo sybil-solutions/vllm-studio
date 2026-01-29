@@ -97,16 +97,19 @@ export function AgentPlanDrawer({ plan, onClear }: AgentPlanDrawerProps) {
           ))}
         </div>
 
-        <button
+        <span
+          role="button"
+          tabIndex={0}
           onClick={(e) => {
             e.stopPropagation();
             onClear();
           }}
-          className="p-0.5 rounded hover:bg-white/[0.06] text-[#444] hover:text-[#888] flex-shrink-0"
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onClear(); } }}
+          className="p-0.5 rounded hover:bg-white/[0.06] text-[#444] hover:text-[#888] flex-shrink-0 cursor-pointer"
           title="Clear plan"
         >
           <X className="h-3 w-3" />
-        </button>
+        </span>
       </button>
 
       {/* Steps */}

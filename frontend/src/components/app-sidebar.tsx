@@ -112,6 +112,20 @@ export function AppSidebar({ children }: AppSidebarProps) {
     }
   };
 
+  // Route users to setup wizard on first launch
+  useEffect(() => {
+    if (pathname.startsWith("/setup")) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    const completed = localStorage.getItem("vllm-studio-setup-complete");
+    if (!completed) {
+      router.push("/setup");
+    }
+  }, [pathname, router]);
+
   // Check status
   useEffect(() => {
     const checkStatus = async () => {
@@ -161,6 +175,10 @@ export function AppSidebar({ children }: AppSidebarProps) {
     setMobileOpen(false);
     router.push("/chat?new=1");
   };
+
+  if (pathname.startsWith("/setup")) {
+    return <div className="h-full w-full">{children}</div>;
+  }
 
   return (
     <div className="flex h-full min-h-full overflow-hidden">

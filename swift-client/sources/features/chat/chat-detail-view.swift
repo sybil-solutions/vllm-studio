@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatDetailView: View {
   let sessionId: String
   @EnvironmentObject private var container: AppContainer
+  @Environment(\.dismiss) private var dismiss
   @StateObject private var model = ChatDetailViewModel()
   @State private var attachments: [ChatAttachment] = []
   @State private var showTools = false
@@ -16,17 +17,11 @@ struct ChatDetailView: View {
       ScrollView {
         VStack(spacing: 12) {
           if let modelId = model.sessionModel {
-            HStack(spacing: 6) {
-              Image(systemName: "cpu")
-                .font(.system(size: 10))
-                .foregroundColor(AppTheme.accentStrong)
-              Text(modelId)
-                .font(AppTheme.captionFont.weight(.medium))
-                .foregroundColor(AppTheme.muted)
-              Spacer()
-            }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 4)
+            Text(modelId)
+              .font(AppTheme.captionFont)
+              .foregroundColor(AppTheme.muted)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, 4)
           }
           if let error = model.error {
             VStack(alignment: .leading, spacing: 8) {
@@ -154,6 +149,17 @@ struct ChatDetailView: View {
     .background(AppTheme.background)
     .navigationTitle(model.title.isEmpty ? "Chat" : model.title)
     .navigationBarTitleDisplayMode(.inline)
+    .navigationBarBackButtonHidden(true)
+    .toolbar {
+      ToolbarItem(placement: .navigationBarLeading) {
+        Button(action: { dismiss() }) {
+          Image(systemName: "chevron.left")
+            .font(.system(size: 17, weight: .medium))
+            .foregroundColor(AppTheme.foreground)
+        }
+        .buttonStyle(.plain)
+      }
+    }
     .sheet(isPresented: $showTools) { ChatToolsSheet(tools: model.tools) }
     .sheet(isPresented: $showContext) {
       ChatContextSheet(
@@ -165,7 +171,7 @@ struct ChatDetailView: View {
       )
     }
     .sheet(item: $activeActions) { actions in
-      ChatAgentActionsSheet(actions: actions)
+      ChatAgentActionsSheet(actions: actions, service: model.openAIService)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
@@ -180,70 +186,18 @@ struct ChatDetailView: View {
 }
 
 private struct EmptyChatWelcome: View {
-  @State private var isAnimating = false
-  
   var body: some View {
-    VStack(spacing: 24) {
-      Spacer().frame(height: 40)
-      
-      // Animated icon
-      ZStack {
-        Circle()
-          .fill(AppTheme.accent.opacity(0.2))
-          .frame(width: 120, height: 120)
-          .scaleEffect(isAnimating ? 1.05 : 1.0)
-          .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: isAnimating)
-        
-        Circle()
-          .fill(AppTheme.accent.opacity(0.3))
-          .frame(width: 90, height: 90)
-          .scaleEffect(isAnimating ? 1.08 : 1.0)
-          .animation(.easeInOut(duration: 2).delay(0.3).repeatForever(autoreverses: true), value: isAnimating)
-        
-        Image(systemName: "bubble.left.and.bubble.right.fill")
-          .font(.system(size: 40))
-          .foregroundColor(AppTheme.accentStrong)
-      }
-      
-      VStack(spacing: 8) {
-        Text("Start a conversation")
-          .font(AppTheme.titleFont)
-          .foregroundColor(AppTheme.foreground)
-        
-        Text("Ask anything, upload files, or enable tools to get started")
-          .font(AppTheme.bodyFont)
-          .foregroundColor(AppTheme.muted)
-          .multilineTextAlignment(.center)
-          .padding(.horizontal, 32)
-      }
-      
-      // Quick suggestion chips
-      HStack(spacing: 8) {
-        SuggestionChip(text: "Help me code")
-        SuggestionChip(text: "Explain a concept")
-        SuggestionChip(text: "Analyze data")
-      }
-      .padding(.top, 8)
-      
+    VStack(spacing: 16) {
+      Spacer().frame(height: 60)
+      Image(systemName: "bubble.left.and.bubble.right")
+        .font(.system(size: 32, weight: .light))
+        .foregroundColor(AppTheme.muted.opacity(0.5))
+      Text("New conversation")
+        .font(AppTheme.bodyFont)
+        .foregroundColor(AppTheme.muted)
       Spacer()
     }
     .frame(maxWidth: .infinity)
-    .onAppear { isAnimating = true }
-  }
-}
-
-private struct SuggestionChip: View {
-  let text: String
-  
-  var body: some View {
-    Text(text)
-      .font(AppTheme.captionFont)
-      .foregroundColor(AppTheme.muted)
-      .padding(.horizontal, 12)
-      .padding(.vertical, 6)
-      .background(AppTheme.card)
-      .cornerRadius(16)
-      .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.border, lineWidth: 1))
   }
 }
 

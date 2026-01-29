@@ -91,6 +91,9 @@ final class ChatDetailViewModel: ObservableObject {
   func cleanedContent(for message: StoredMessage) -> String {
     var content = message.content ?? ""
     if message.role == "assistant" {
+      if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        content = message.reasoningContent ?? message.reasoning ?? ""
+      }
       content = ThinkingParser.stripThinkingBlocks(content)
       content = ArtifactParser.stripArtifactBlocks(content)
     }
@@ -102,10 +105,11 @@ final class ChatDetailViewModel: ObservableObject {
     for message in messages {
       if message.role == "tool", !includeToolMessages { continue }
       let label = message.role == "assistant" ? "Assistant" : message.role.capitalized
-      var content = message.content ?? ""
+      let content: String
       if message.role == "assistant" {
-        content = ThinkingParser.stripThinkingBlocks(content)
-        content = ArtifactParser.stripArtifactBlocks(content)
+        content = cleanedContent(for: message)
+      } else {
+        content = (message.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
       }
       lines.append("**\(label):**\n\(content)")
     }

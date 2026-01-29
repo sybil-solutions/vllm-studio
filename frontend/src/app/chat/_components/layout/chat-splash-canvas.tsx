@@ -400,20 +400,34 @@ export function ChatSplashCanvas({ active }: { active: boolean }) {
     let lastScale = 1;
 
     const resize = () => {
+      const MAX_CANVAS_SIZE = 4096; // Safe limit for most devices
       const width = Math.max(wrapper.clientWidth, 1);
       const height = Math.max(wrapper.clientHeight, 1);
       const nextScale = Math.min(window.devicePixelRatio || 1, 2);
 
-      if (width === lastWidth && height === lastHeight && Math.abs(nextScale - lastScale) < 0.01) {
+      // Cap canvas size to prevent exceeding browser limits
+      const scaledWidth = width * nextScale;
+      const scaledHeight = height * nextScale;
+      const effectiveScale = Math.min(
+        nextScale,
+        MAX_CANVAS_SIZE / width,
+        MAX_CANVAS_SIZE / height
+      );
+
+      if (width === lastWidth && height === lastHeight && Math.abs(effectiveScale - lastScale) < 0.01) {
         return;
       }
 
       lastWidth = width;
       lastHeight = height;
-      lastScale = nextScale;
-      canvasScale = nextScale;
-      canvas.width = width * canvasScale;
-      canvas.height = height * canvasScale;
+      lastScale = effectiveScale;
+      canvasScale = effectiveScale;
+
+      const finalWidth = Math.min(scaledWidth, MAX_CANVAS_SIZE);
+      const finalHeight = Math.min(scaledHeight, MAX_CANVAS_SIZE);
+
+      canvas.width = finalWidth;
+      canvas.height = finalHeight;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
       ctx.setTransform(canvasScale, 0, 0, canvasScale, 0, 0);

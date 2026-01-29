@@ -1,9 +1,12 @@
+// CRITICAL
 import Foundation
 
 struct StoredMessage: Codable, Identifiable {
   let id: String
   let role: String
   let content: String?
+  let reasoningContent: String?
+  let reasoning: String?
   let model: String?
   let toolCalls: [ToolCall]?
   let toolCallId: String?
@@ -14,10 +17,25 @@ struct StoredMessage: Codable, Identifiable {
   let requestCompletionTokens: Int?
   let createdAt: String?
 
-  init(id: String, role: String, content: String?, model: String?, toolCalls: [ToolCall]?, toolCallId: String? = nil, promptTokens: Int? = nil, toolsTokens: Int? = nil, totalInputTokens: Int? = nil, completionTokens: Int? = nil) {
+  init(
+    id: String,
+    role: String,
+    content: String?,
+    model: String?,
+    toolCalls: [ToolCall]?,
+    reasoningContent: String? = nil,
+    reasoning: String? = nil,
+    toolCallId: String? = nil,
+    promptTokens: Int? = nil,
+    toolsTokens: Int? = nil,
+    totalInputTokens: Int? = nil,
+    completionTokens: Int? = nil
+  ) {
     self.id = id
     self.role = role
     self.content = content
+    self.reasoningContent = reasoningContent
+    self.reasoning = reasoning
     self.model = model
     self.toolCalls = toolCalls
     self.toolCallId = toolCallId

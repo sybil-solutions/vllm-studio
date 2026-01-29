@@ -23,7 +23,7 @@ export function AttachmentsPreview({
       {attachments.map((attachment) => (
         <div
           key={attachment.id}
-          className="relative group flex items-center gap-2 px-2.5 py-1.5 bg-(--accent) rounded-lg border border-(--border)"
+          className="relative group flex items-center gap-2 px-2.5 py-1.5 bg-(--accent) rounded-lg border border-(--border) transition-all:ease-in:200ms"
         >
           {attachment.type === "image" ? (
             <div className="flex items-center gap-2">
@@ -37,23 +37,23 @@ export function AttachmentsPreview({
                   unoptimized
                 />
               )}
-              <div className="text-xs">
+              <div className="text-xs font-medium">
                 <p className="font-medium truncate max-w-[100px]">{attachment.name}</p>
                 <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
               </div>
             </div>
           ) : attachment.type === "audio" ? (
             <div className="flex items-center gap-2">
-              <Mic className="h-4 w-4 text-(--success)" />
-              <div className="text-xs">
-                <p className="font-medium">{attachment.name}</p>
+              <Mic className="h-3.5 w-3.5 text-(--success)" />
+              <div className="text-xs font-medium">
+                <p className="font-medium truncate">{attachment.name}</p>
                 <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-[#9a9590]" />
-              <div className="text-xs">
+              <FileText className="h-3.5 w-3.5 text-[#9a9590]" />
+              <div className="text-xs font-medium">
                 <p className="font-medium truncate max-w-[100px]">{attachment.name}</p>
                 <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
               </div>
@@ -61,9 +61,9 @@ export function AttachmentsPreview({
           )}
           <button
             onClick={() => onRemove(attachment.id)}
-            className="absolute -top-1 -right-1 p-0.5 rounded-full bg-(--error) text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute -top-1 -right-1 p-0.5 rounded-full bg-(--error) text-white opacity-0 group-hover:opacity-100 transition-opacity:ease-in:200ms"
           >
-            <X className="h-3 w-3" />
+            <X className="h-2.5 w-2.5" />
           </button>
         </div>
       ))}

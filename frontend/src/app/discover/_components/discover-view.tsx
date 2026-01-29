@@ -4,14 +4,18 @@ import {
   CheckCircle2,
   Copy,
   Download,
+  DownloadCloud,
   ExternalLink,
   Filter,
   Heart,
+  Pause,
+  Play,
+  XCircle,
   RefreshCw,
   Search,
   X,
 } from "lucide-react";
-import type { HuggingFaceModel } from "@/lib/types";
+import type { HuggingFaceModel, ModelDownload } from "@/lib/types";
 import { formatNumber } from "@/lib/formatters";
 import { RefreshButton } from "@/components/shared";
 import { SORT_OPTIONS, TASKS } from "./config";
@@ -31,6 +35,8 @@ interface DiscoverViewProps {
   hasMore: boolean;
   providerFilter: string;
   providers: string[];
+  downloads: ModelDownload[];
+  getDownloadForModel: (modelId: string) => ModelDownload | null;
   onSearchChange: (value: string) => void;
   onTaskChange: (value: string) => void;
   onSortChange: (value: string) => void;
@@ -41,6 +47,10 @@ interface DiscoverViewProps {
   onLoadMore: () => void;
   onRefresh: () => void;
   isModelLocal: (modelId: string) => boolean;
+  onStartDownload: (params: { model_id: string }) => Promise<void>;
+  onPauseDownload: (downloadId: string) => Promise<void>;
+  onResumeDownload: (downloadId: string) => Promise<void>;
+  onCancelDownload: (downloadId: string) => Promise<void>;
 }
 
 export function DiscoverView({
@@ -57,6 +67,8 @@ export function DiscoverView({
   hasMore,
   providerFilter,
   providers,
+  downloads,
+  getDownloadForModel,
   onSearchChange,
   onTaskChange,
   onSortChange,
@@ -67,7 +79,34 @@ export function DiscoverView({
   onLoadMore,
   onRefresh,
   isModelLocal,
+  onStartDownload,
+  onPauseDownload,
+  onResumeDownload,
+  onCancelDownload,
 }: DiscoverViewProps) {
+  const renderDownloadStatus = (download: ModelDownload) => {
+    const total = download.total_bytes ?? 0;
+    const progress = total > 0 ? Math.min(100, Math.round((download.downloaded_bytes / total) * 100)) : 0;
+    const statusLabel = download.status.replace("_", " ");
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2 text-xs text-(--muted-foreground)">
+          <span className="uppercase tracking-wide">{statusLabel}</span>
+          {total > 0 && <span>{progress}%</span>}
+        </div>
+        <div className="h-1.5 w-full rounded-full bg-(--card)">
+          <div
+            className="h-1.5 rounded-full bg-(--accent-purple) transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        {download.error && download.status === "failed" && (
+          <div className="text-xs text-(--error)">{download.error}</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full bg-(--background) text-(--foreground)">
       {/* Header */}
@@ -104,6 +143,54 @@ export function DiscoverView({
       {/* Content */}
       <div className="flex-1 overflow-auto">
         <div style={{ padding: "1.5rem" }}>
+          {downloads.length > 0 && (
+            <div className="mb-5 border border-(--border) rounded-lg bg-(--card) p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-medium">Download Queue</div>
+                <div className="text-xs text-(--muted-foreground)">{downloads.length} active</div>
+              </div>
+              <div className="space-y-3">
+                {downloads.map((download) => (
+                  <div key={download.id} className="flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{download.model_id}</div>
+                      {renderDownloadStatus(download)}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {download.status === "downloading" && (
+                        <button
+                          onClick={() => onPauseDownload(download.id)}
+                          className="p-2 rounded-lg border border-(--border) hover:bg-(--card-hover)"
+                          title="Pause"
+                        >
+                          <Pause className="h-4 w-4" />
+                        </button>
+                      )}
+                      {(download.status === "paused" || download.status === "failed") && (
+                        <button
+                          onClick={() => onResumeDownload(download.id)}
+                          className="p-2 rounded-lg border border-(--border) hover:bg-(--card-hover)"
+                          title="Resume"
+                        >
+                          <Play className="h-4 w-4" />
+                        </button>
+                      )}
+                      {download.status !== "completed" && download.status !== "canceled" && (
+                        <button
+                          onClick={() => onCancelDownload(download.id)}
+                          className="p-2 rounded-lg border border-(--border) hover:bg-(--card-hover) text-(--error)"
+                          title="Cancel"
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Toolbar */}
           <div className="flex items-center gap-3 mb-4">
             <div className="flex-1 relative">
@@ -271,6 +358,9 @@ export function DiscoverView({
                         Stats
                       </th>
                       <th className="px-4 py-3 text-right text-xs font-medium text-(--muted-foreground) uppercase tracking-wider w-8"></th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
+                        Action
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-(--border)">
@@ -278,6 +368,7 @@ export function DiscoverView({
                       const provider = extractProvider(model.modelId);
                       const quantizations = extractQuantizations(model.tags);
                       const isLocal = isModelLocal(model.modelId);
+                      const activeDownload = getDownloadForModel(model.modelId);
 
                       return (
                         <tr key={model._id} className="hover:bg-(--card)/30 transition-colors">
@@ -364,6 +455,49 @@ export function DiscoverView({
                             >
                               <ExternalLink className="h-4 w-4" />
                             </a>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {isLocal ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-(--success)">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Ready
+                              </span>
+                            ) : activeDownload ? (
+                              <div className="flex items-center justify-end gap-2">
+                                {activeDownload.status === "downloading" && (
+                                  <button
+                                    onClick={() => onPauseDownload(activeDownload.id)}
+                                    className="p-1.5 rounded-lg border border-(--border) hover:bg-(--card-hover)"
+                                    title="Pause download"
+                                  >
+                                    <Pause className="h-4 w-4" />
+                                  </button>
+                                )}
+                                {(activeDownload.status === "paused" || activeDownload.status === "failed") && (
+                                  <button
+                                    onClick={() => onResumeDownload(activeDownload.id)}
+                                    className="p-1.5 rounded-lg border border-(--border) hover:bg-(--card-hover)"
+                                    title="Resume download"
+                                  >
+                                    <Play className="h-4 w-4" />
+                                  </button>
+                                )}
+                                {activeDownload.status === "completed" && (
+                                  <span className="text-xs text-(--success)">Downloaded</span>
+                                )}
+                                {(activeDownload.status === "downloading" || activeDownload.status === "queued") && (
+                                  <span className="text-xs text-(--muted-foreground)">Downloading…</span>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => onStartDownload({ model_id: model.modelId })}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-(--accent-purple) text-white text-xs font-medium hover:opacity-90"
+                              >
+                                <DownloadCloud className="h-3.5 w-3.5" />
+                                Download
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

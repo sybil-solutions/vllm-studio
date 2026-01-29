@@ -17,6 +17,8 @@ export interface Artifact {
   type: ArtifactType;
   title: string;
   code: string;
+  groupId?: string;
+  version?: number;
 }
 
 export interface ArtifactsResult {

@@ -23,22 +23,24 @@ export function useDiscover() {
 
   const PAGE_SIZE = 50;
 
+  const loadLocalModels = useCallback(async () => {
+    try {
+      const data = await api.getModels();
+      setLocalModels(data.models || []);
+    } catch {
+      setLocalModels([]);
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
-    api
-      .getModels()
-      .then((data) => {
-        if (mounted) {
-          setLocalModels(data.models || []);
-        }
-      })
-      .catch(() => {
-        if (mounted) setLocalModels([]);
-      });
+    if (mounted) {
+      loadLocalModels();
+    }
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [loadLocalModels]);
 
   const localModelMap = useMemo(() => {
     const map = new Map<string, boolean>();
@@ -166,6 +168,7 @@ export function useDiscover() {
     copyModelId,
     loadMore,
     refreshModels,
+    refreshLocalModels: loadLocalModels,
     isModelLocal,
   };
 }

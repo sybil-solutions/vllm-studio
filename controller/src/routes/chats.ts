@@ -6,6 +6,34 @@ import { notFound } from "../core/errors";
 import { compactChatSession } from "../services/chat-compaction";
 
 /**
+ * Generate a simple title from the first few words of a message
+ */
+function generateTitleFromMessage(content: string): string {
+  if (!content || !content.trim()) {
+    return "New Chat";
+  }
+
+  const cleaned = content
+    .replace(/\n/g, " ")
+    .replace(/[^\w\s'-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const words = cleaned.split(" ").filter((w) => w.length > 0);
+  const titleWords = words.slice(0, 5);
+
+  if (titleWords.length === 0) {
+    return "New Chat";
+  }
+
+  const title = titleWords
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
+
+  return title.length > 50 ? title.slice(0, 47) + "..." : title;
+}
+
+/**
  * Register chat session routes.
  * @param app - Hono app.
  * @param context - App context.
@@ -40,9 +68,9 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
     const preserveLast = body["preserve_last"] !== false;
 
     const result = await compactChatSession(context, sessionId, {
-      model,
-      systemPrompt,
-      title,
+      ...(model ? { model } : {}),
+      ...(systemPrompt ? { systemPrompt } : {}),
+      ...(title ? { title } : {}),
       preserveFirst,
       preserveLast,
     });
@@ -54,7 +82,8 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
     const sessionId = randomUUID();
     const title = typeof body["title"] === "string" ? body["title"] : "New Chat";
     const model = typeof body["model"] === "string" ? body["model"] : undefined;
-    const session = context.stores.chatStore.createSession(sessionId, title, model);
+    const agentState = body["agent_state"];
+    const session = context.stores.chatStore.createSession(sessionId, title, model, undefined, agentState);
     return ctx.json({ session });
   });
 
@@ -63,7 +92,9 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
     const body = (await ctx.req.json()) as Record<string, unknown>;
     const title = typeof body["title"] === "string" ? body["title"] : undefined;
     const model = typeof body["model"] === "string" ? body["model"] : undefined;
-    const updated = context.stores.chatStore.updateSession(sessionId, title, model);
+    const hasAgentState = Object.prototype.hasOwnProperty.call(body, "agent_state");
+    const agentState = hasAgentState ? body["agent_state"] : undefined;
+    const updated = context.stores.chatStore.updateSession(sessionId, title, model, agentState);
     if (!updated) {
       throw notFound("Session not found");
     }
@@ -87,6 +118,8 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
     const content = typeof body["content"] === "string" ? body["content"] : undefined;
     const model = typeof body["model"] === "string" ? body["model"] : undefined;
     const toolCalls = Array.isArray(body["tool_calls"]) ? body["tool_calls"] : undefined;
+    const parts = Array.isArray(body["parts"]) ? body["parts"] : undefined;
+    const metadata = Object.prototype.hasOwnProperty.call(body, "metadata") ? body["metadata"] : undefined;
     const promptTokens = typeof body["request_prompt_tokens"] === "number" ? body["request_prompt_tokens"] : undefined;
     const toolsTokens = typeof body["request_tools_tokens"] === "number" ? body["request_tools_tokens"] : undefined;
     const totalInputTokens = typeof body["request_total_input_tokens"] === "number" ? body["request_total_input_tokens"] : undefined;
@@ -103,6 +136,8 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
       toolsTokens,
       totalInputTokens,
       completionTokens,
+      parts,
+      metadata,
     );
     return ctx.json(message);
   });
@@ -110,6 +145,35 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
   app.get("/chats/:sessionId/usage", async (ctx) => {
     const sessionId = ctx.req.param("sessionId");
     return ctx.json(context.stores.chatStore.getUsage(sessionId));
+  });
+
+  app.post("/chats/retitle-all", async (ctx) => {
+    const sessions = context.stores.chatStore.listSessions();
+    let updated = 0;
+    let skipped = 0;
+
+    for (const session of sessions) {
+      const sessionId = String(session["id"]);
+      const fullSession = context.stores.chatStore.getSession(sessionId);
+      if (!fullSession) {
+        skipped++;
+        continue;
+      }
+
+      const messages = (fullSession["messages"] ?? []) as Array<Record<string, unknown>>;
+      const firstUserMessage = messages.find((m) => m["role"] === "user");
+
+      if (!firstUserMessage || !firstUserMessage["content"]) {
+        skipped++;
+        continue;
+      }
+
+      const newTitle = generateTitleFromMessage(String(firstUserMessage["content"]));
+      context.stores.chatStore.updateSession(sessionId, newTitle);
+      updated++;
+    }
+
+    return ctx.json({ updated, skipped, total: sessions.length });
   });
 
   app.post("/chats/:sessionId/fork", async (ctx) => {

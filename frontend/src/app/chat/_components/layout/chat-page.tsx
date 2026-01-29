@@ -29,8 +29,11 @@ import { useAppStore } from "@/store";
 import type { Attachment } from "../../types";
 import { stripThinkingForModelContext, tryParseNestedJsonString } from "../../utils";
 import { useAgentTools } from "../../hooks/use-agent-tools";
+import { useAgentFiles } from "../../hooks/use-agent-files";
+import { useAgentState } from "../../hooks/use-agent-state";
 import { AgentPlanDrawer } from "../agent/agent-plan-drawer";
 import { AgentFilesPanel } from "../agent/agent-files-panel";
+import { AgentTasksPanel } from "../agent/agent-tasks-panel";
 import { UnifiedSidebar, type SidebarTab } from "./unified-sidebar";
 import { ActivityPanel, ContextPanel } from "./chat-side-panel";
 
@@ -92,8 +95,22 @@ export function ChatPage() {
     isAgentTool,
     buildAgentSystemPrompt,
     agentPlan,
+    agentTasks,
     clearPlan,
+    clearTasks,
   } = useAgentTools();
+
+  const {
+    agentFiles,
+    loadAgentFiles,
+    clearAgentFiles,
+  } = useAgentFiles();
+
+  const {
+    hydrateAgentState,
+    persistAgentState,
+    buildAgentState,
+  } = useAgentState();
 
   const effectiveSystemPrompt = useMemo(() => {
     const base = systemPrompt.trim();
@@ -134,6 +151,10 @@ export function ChatPage() {
     removeMcpServer,
   } = useChatTools({ mcpEnabled });
 
+  // Ref to avoid contextStats recalculating when getToolDefinitions changes
+  const getToolDefinitionsRef = useRef(getToolDefinitions);
+  useEffect(() => { getToolDefinitionsRef.current = getToolDefinitions; }, [getToolDefinitions]);
+
   // Usage hook
   const { refreshUsage } = useChatUsage();
 
@@ -158,39 +179,54 @@ export function ChatPage() {
 
   // Track the last user input for title generation
   const lastUserInputRef = useRef<string>("");
+  // Agent continuation loop: track auto-sends to prevent infinite loops
+  const agentContinuationRef = useRef<number>(0);
+  const agentContinuationMaxRef = useRef<number>(50);
+  const agentStateSignatureRef = useRef<string | null>(null);
   const [compactionHistory, setCompactionHistory] = useState<CompactionEvent[]>([]);
   const [compacting, setCompacting] = useState(false);
   const [compactionError, setCompactionError] = useState<string | null>(null);
   const lastCompactionSignatureRef = useRef<string | null>(null);
 
   const mapStoredToolCalls = useCallback((toolCalls?: StoredToolCall[]) => {
-    if (!toolCalls || toolCalls.length === 0) return [];
-    return toolCalls.map((toolCall) => {
-      const name = toolCall.function?.name || "tool";
-      const args = toolCall.function?.arguments;
-      const parsedArgs =
-        typeof args === "string" ? tryParseNestedJsonString(args) ?? args : args ?? undefined;
-      const hasResult = toolCall.result !== undefined && toolCall.result !== null;
+    if (!toolCalls?.length) return [];
+    return toolCalls.map((tc) => {
+      const name = tc.function?.name || "tool";
+      const args = tc.function?.arguments;
+      const input = typeof args === "string" ? tryParseNestedJsonString(args) ?? args : args;
+      const result = tc.result as { content?: unknown; isError?: boolean } | string | undefined;
+      const hasResult = result != null;
+      const isError = typeof result === "object" && result?.isError === true;
+      const content = typeof result === "object" ? result?.content ?? result : result;
+
       return {
-        type: `tool-${name}`,
-        toolCallId: toolCall.id,
-        state: hasResult ? "result" : "call",
-        input: parsedArgs,
-        output: hasResult ? toolCall.result : undefined,
+        type: tc.dynamic ? "dynamic-tool" : `tool-${name}`,
+        toolName: tc.dynamic ? name : undefined,
+        toolCallId: tc.id,
+        state: hasResult ? (isError ? "output-error" : "output-available") : "input-available",
+        input,
+        output: isError ? undefined : content,
+        errorText: isError ? (typeof content === "string" ? content : safeJsonStringify(content, "")) : undefined,
+        providerExecuted: tc.providerExecuted,
       };
     });
   }, []);
 
   const mapStoredMessages = useCallback((storedMessages: StoredMessage[]) => {
     return storedMessages.map((message) => {
-      const parts: UIMessage["parts"] = [];
-      if (message.content) {
+      const storedParts = message.parts as UIMessage["parts"] | undefined;
+      const hasStoredParts = Array.isArray(storedParts) && storedParts.length > 0;
+      const parts: UIMessage["parts"] = hasStoredParts ? [...storedParts] : [];
+
+      if (!hasStoredParts && message.content) {
         parts.push({ type: "text", text: message.content });
       }
 
-      const toolParts = mapStoredToolCalls(message.tool_calls);
-      for (const toolPart of toolParts) {
-        parts.push(toolPart as UIMessage["parts"][number]);
+      if (!hasStoredParts) {
+        const toolParts = mapStoredToolCalls(message.tool_calls);
+        for (const toolPart of toolParts) {
+          parts.push(toolPart as UIMessage["parts"][number]);
+        }
       }
 
       const inputTokens = message.prompt_tokens ?? undefined;
@@ -201,11 +237,13 @@ export function ChatPage() {
           ? (inputTokens ?? 0) + (outputTokens ?? 0)
           : undefined);
 
+      const metadata = message.metadata as UIMessage["metadata"] | undefined;
+
       return {
         id: message.id,
         role: message.role,
         parts,
-        metadata: {
+        metadata: metadata ?? {
           model: message.model,
           usage:
             inputTokens != null || outputTokens != null || totalTokens != null
@@ -221,6 +259,7 @@ export function ChatPage() {
   }, [mapStoredToolCalls]);
 
   const resolveToolDefinitions = useCallback(async () => {
+    console.log("[resolveToolDefinitions] agentMode:", agentMode, "agentToolDefs:", agentToolDefs.length);
     const mcpDefs: typeof mcpTools = [];
     if (mcpEnabled) {
       if (mcpTools.length > 0) {
@@ -233,18 +272,51 @@ export function ChatPage() {
     }
     // Inject synthetic agent tools when agent mode is on
     if (agentMode) {
-      return [...mcpDefs, ...agentToolDefs];
+      const allTools = [...mcpDefs, ...agentToolDefs];
+      console.log("[resolveToolDefinitions] Returning agent tools:", allTools.map(t => t.name));
+      return allTools;
     }
     return mcpDefs;
   }, [mcpEnabled, mcpTools, loadMCPTools, getToolDefinitions, agentMode, agentToolDefs]);
 
-  // Create transport for useChat (static; request-level body passed on send)
+  // Refs so the transport body always has the latest values on every request
+  const systemRef = useRef<string | undefined>(undefined);
+  const modelRef = useRef<string | undefined>(selectedModel || undefined);
+  const toolsRef = useRef<Array<{ name: string; server?: string; description?: string; inputSchema?: unknown }>>([]);
+
+  useEffect(() => { systemRef.current = effectiveSystemPrompt?.trim() || undefined; }, [effectiveSystemPrompt]);
+  useEffect(() => { modelRef.current = selectedModel || undefined; }, [selectedModel]);
+  // Keep tools ref updated whenever agent mode or MCP tools change
+  useEffect(() => {
+    const updateTools = async () => {
+      const tools = await resolveToolDefinitions();
+      toolsRef.current = tools;
+      console.log("[Tools] Updated:", tools.map(t => t.name), "agentMode:", agentMode);
+    };
+    void updateTools();
+  }, [resolveToolDefinitions, agentMode]);
+
+  // Transport body is resolved fresh on every request
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
+        body: async () => {
+          // Ensure tools are resolved before sending
+          if (toolsRef.current.length === 0) {
+            const tools = await resolveToolDefinitions();
+            toolsRef.current = tools;
+          }
+          console.log("[Transport] Sending with tools:", toolsRef.current.map(t => t.name));
+          return {
+            system: systemRef.current,
+            model: modelRef.current,
+            tools: toolsRef.current,
+            toolChoice: toolsRef.current.length > 0 ? "auto" : undefined,
+          };
+        },
       }),
-    [],
+    [resolveToolDefinitions],
   );
 
   // AI SDK useChat - the source of truth for messages
@@ -256,26 +328,15 @@ export function ChatPage() {
       const toolName = toolCall.toolName;
       const args = (toolCall as { input?: unknown }).input as Record<string, unknown>;
 
-      // Handle synthetic agent tools locally (no MCP round-trip)
-      const agentResult = isAgentTool(toolName)
-        ? executeAgentTool(toolName, args || {})
-        : null;
+      console.log("[onToolCall] Tool:", toolName);
 
-      if (agentResult !== null) {
-        await addToolOutput({
-          tool: toolName as never,
-          toolCallId,
-          output: agentResult as never,
-        });
+      // Agent tools are executed on the server - skip
+      if (isAgentTool(toolName)) {
         return;
       }
 
-      // Regular MCP tool
-      const result = await executeTool({
-        toolCallId,
-        toolName,
-        args,
-      });
+      // MCP tools - execute locally
+      const result = await executeTool({ toolCallId, toolName, args });
       if (result.isError) {
         await addToolOutput({
           tool: toolName as never,
@@ -322,6 +383,15 @@ export function ChatPage() {
   });
 
   const isLoading = status === "streaming" || status === "submitted";
+
+  useEffect(() => {
+    if (!currentSessionId) return;
+    const agentState = buildAgentState(agentPlan, agentTasks);
+    const signature = safeJsonStringify(agentState, "");
+    if (signature === agentStateSignatureRef.current) return;
+    agentStateSignatureRef.current = signature;
+    void persistAgentState(currentSessionId, agentState);
+  }, [currentSessionId, agentPlan, agentTasks, buildAgentState, persistAgentState]);
 
   // Derived state from messages
   const { thinkingActive, activityGroups } = useChatDerived({
@@ -391,9 +461,10 @@ export function ChatPage() {
 
   const contextStats = useMemo(() => {
     if (!maxContext) return null;
-    const tools = getToolDefinitions?.() ?? [];
+    // Use ref to avoid recalculating when getToolDefinitions changes
+    const tools = getToolDefinitionsRef.current?.() ?? [];
     return calculateStats(contextMessages, maxContext, effectiveSystemPrompt, tools);
-  }, [contextMessages, maxContext, effectiveSystemPrompt, getToolDefinitions, calculateStats]);
+  }, [contextMessages, maxContext, effectiveSystemPrompt, calculateStats]);
 
   const contextUsageLabel = useMemo(() => {
     if (!contextStats) return null;
@@ -433,9 +504,10 @@ export function ChatPage() {
         thinkingTokens += estimateTokens(thinking);
       }
 
-      toolCalls += message.parts.filter(
-        (part) => typeof part.type === "string" && part.type.startsWith("tool-"),
-      ).length;
+      toolCalls += message.parts.filter((part) => {
+        if (part.type === "dynamic-tool") return true;
+        return typeof part.type === "string" && part.type.startsWith("tool-");
+      }).length;
     });
 
     return {
@@ -456,6 +528,7 @@ export function ChatPage() {
 
     const artifacts: Artifact[] = [];
     const byMessage = new Map<string, Artifact[]>();
+    const versionsByGroup = new Map<string, number>();
     messages.forEach((msg) => {
       if (msg.role !== "assistant") return;
 
@@ -471,9 +544,16 @@ export function ChatPage() {
         maxImplicit: 1,
       });
       extracted.forEach((artifact, index) => {
+        const titleKey = (artifact.title || artifact.type).trim().toLowerCase();
+        const groupKey = `${artifact.type}:${titleKey}`;
+        const nextVersion = (versionsByGroup.get(groupKey) ?? 0) + 1;
+        versionsByGroup.set(groupKey, nextVersion);
+
         const enriched = {
           ...artifact,
           id: `${msg.id}-${index}`,
+          groupId: groupKey,
+          version: nextVersion,
           message_id: msg.id,
           session_id: currentSessionId || undefined,
         };
@@ -561,6 +641,8 @@ export function ChatPage() {
       setCurrentSessionTitle(compactedSession.title || compactedTitle);
       sessionIdRef.current = compactedSession.id;
       setMessages(compactedMessages);
+      hydrateAgentState(compactedSession);
+      void loadAgentFiles({ sessionId: compactedSession.id });
 
       const afterTokens = calculateMessageTokens(
         compactedMessages.map((message) => {
@@ -642,6 +724,8 @@ export function ChatPage() {
     setCurrentSessionTitle,
     setMessages,
     updateSessions,
+    hydrateAgentState,
+    loadAgentFiles,
   ]);
 
   useEffect(() => {
@@ -650,17 +734,31 @@ export function ChatPage() {
     setCompactionHistory([]);
   }, [currentSessionId]);
 
-  // Auto-compaction effect - only runs when key values change
-  // Uses ref to prevent duplicate calls with same signature
-  const compactionAttemptedRef = useRef(false);
+  // Reset agent continuation counter on session change or agent mode toggle
   useEffect(() => {
-    // Skip if already attempted this render cycle
-    if (compactionAttemptedRef.current) return;
+    agentContinuationRef.current = 0;
+    agentStateSignatureRef.current = null;
+  }, [currentSessionId, agentMode]);
+
+  // Auto-compaction effect - only check when streaming stops (not during)
+  const compactionAttemptedRef = useRef(false);
+  const wasLoadingRef = useRef(false);
+  useEffect(() => {
+    // Track loading state transitions
+    if (isLoading) {
+      wasLoadingRef.current = true;
+      return;
+    }
     
-    // Only run when messages or utilization changes significantly
+    // Only check compaction when streaming just finished
+    if (!wasLoadingRef.current) return;
+    wasLoadingRef.current = false;
+    
+    // Skip if already attempted
+    if (compactionAttemptedRef.current) return;
     if (!contextStats || !maxContext) return;
     if (!contextConfig.autoCompact) return;
-    if (compacting || isLoading) return;
+    if (compacting) return;
     if (contextStats.utilization < contextConfig.compactionThreshold) return;
     if (!selectedModel || messages.length < 2) return;
     if (!currentSessionId) return;
@@ -673,16 +771,14 @@ export function ChatPage() {
     
     void runAutoCompaction();
     
-    // Reset the flag after the async operation completes
     return () => {
       compactionAttemptedRef.current = false;
     };
   }, [
-    messages.length,
-    contextStats?.utilization,
-    contextStats?.currentTokens,
-    currentSessionId,
     isLoading,
+    messages.length,
+    contextStats,
+    currentSessionId,
     compacting,
     maxContext,
     contextConfig.autoCompact,
@@ -703,41 +799,41 @@ export function ChatPage() {
   }, [setUserScrolledUp]);
 
   // Auto-scroll to bottom
+  // Throttled scroll - only react to message count changes, not content updates
+  const prevMessageCountRef = useRef(messages.length);
   useEffect(() => {
+    // Only scroll when message count changes (new message added) or loading state changes
+    if (messages.length === prevMessageCountRef.current && isLoading) return;
+    prevMessageCountRef.current = messages.length;
+    
     if (!userScrolledUp) {
       messagesEndRef.current?.scrollIntoView({
         behavior: isLoading ? "auto" : "smooth",
       });
     }
-  }, [isLoading, messages, userScrolledUp]);
+  }, [isLoading, messages.length, userScrolledUp]);
 
-  // Ensure a start time exists for any streaming session
+  // Elapsed time timer - combined start time and interval logic
   useEffect(() => {
-    if (isLoading && streamingStartTime == null) {
-      setStreamingStartTime(Date.now());
-    }
-  }, [isLoading, setStreamingStartTime, streamingStartTime]);
-
-  // Elapsed time timer
-  useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    if (isLoading && streamingStartTime != null) {
-      intervalId = setInterval(
+    if (isLoading) {
+      // Set start time if not set
+      if (streamingStartTime == null) {
+        setStreamingStartTime(Date.now());
+        return;
+      }
+      // Start interval to update elapsed seconds
+      const intervalId = setInterval(
         () => setElapsedSeconds(Math.floor((Date.now() - streamingStartTime) / 1000)),
         1000,
       );
-    } else if (!isLoading) {
-      const timeoutId = setTimeout(() => {
-        if (!isLoading) {
-          setStreamingStartTime(null);
-          setElapsedSeconds(0);
-        }
-      }, 3000);
-      return () => clearTimeout(timeoutId);
+      return () => clearInterval(intervalId);
     }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
+    // Not loading - reset after delay
+    const timeoutId = setTimeout(() => {
+      setStreamingStartTime(null);
+      setElapsedSeconds(0);
+    }, 3000);
+    return () => clearTimeout(timeoutId);
   }, [isLoading, setElapsedSeconds, setStreamingStartTime, streamingStartTime]);
 
   // Load sessions on mount
@@ -748,6 +844,14 @@ export function ChatPage() {
   useEffect(() => {
     messagesLengthRef.current = messages.length;
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!currentSessionId) {
+      clearPlan();
+      clearTasks();
+      clearAgentFiles();
+    }
+  }, [currentSessionId, clearPlan, clearTasks, clearAgentFiles]);
 
   // Handle PWA resume - reload session when app becomes visible again
   useEffect(() => {
@@ -765,6 +869,8 @@ export function ChatPage() {
                 if (messagesLengthRef.current === 0 && storedMessages.length > 0) {
                   setMessages(mapStoredMessages(storedMessages));
                 }
+                hydrateAgentState(session);
+                void loadAgentFiles({ sessionId: session.id });
               }
             } catch (err) {
               console.error("Failed to restore session on resume:", err);
@@ -776,7 +882,7 @@ export function ChatPage() {
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [loadSession, mapStoredMessages, sessionIdRef, setMessages]);
+  }, [loadSession, mapStoredMessages, sessionIdRef, setMessages, hydrateAgentState, loadAgentFiles]);
 
   // Handle URL session/new params
   useEffect(() => {
@@ -784,6 +890,8 @@ export function ChatPage() {
       startNewSession();
       setMessages([]);
       clearPlan();
+      clearTasks();
+      clearAgentFiles();
       return;
     }
     if (sessionFromUrl) {
@@ -795,6 +903,8 @@ export function ChatPage() {
           }
           const storedMessages = session.messages ?? [];
           setMessages(mapStoredMessages(storedMessages));
+          hydrateAgentState(session);
+          void loadAgentFiles({ sessionId: session.id });
         }
       })();
     }
@@ -807,6 +917,11 @@ export function ChatPage() {
     mapStoredMessages,
     selectedModel,
     setSelectedModel,
+    clearPlan,
+    clearTasks,
+    clearAgentFiles,
+    hydrateAgentState,
+    loadAgentFiles,
   ]);
 
   // Load MCP servers/tools when enabled
@@ -817,8 +932,18 @@ export function ChatPage() {
     }
   }, [mcpEnabled, loadMCPServers, loadMCPTools]);
 
-  // Load available models from OpenAI-compatible endpoint on mount
+  // Load agent files when agent mode is enabled
   useEffect(() => {
+    if (!agentMode || !currentSessionId) return;
+    void loadAgentFiles({ sessionId: currentSessionId });
+  }, [agentMode, currentSessionId, loadAgentFiles]);
+
+  // Load available models from OpenAI-compatible endpoint on mount (runs once)
+  const modelsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (modelsLoadedRef.current) return;
+    modelsLoadedRef.current = true;
+    
     const loadModels = async () => {
       try {
         const data = await api.getOpenAIModels();
@@ -856,24 +981,25 @@ export function ChatPage() {
 
         const lastModel = localStorage.getItem("vllm-studio-last-model");
         const fallbackModel = mappedModels[0]?.id || "";
-        let next = selectedModel;
+        const currentModel = selectedModel;
 
         if (mappedModels.length === 0) {
-          if (lastModel && !next) {
+          if (lastModel && !currentModel) {
             setSelectedModel(lastModel);
           }
           return;
         }
 
+        let next = currentModel;
         if (next && mappedModels.some((model) => model.id === next)) {
           // keep selected model
         } else if (lastModel && mappedModels.some((model) => model.id === lastModel)) {
           next = lastModel;
-        } else if (!next || !mappedModels.some((model) => model.id === next)) {
+        } else {
           next = fallbackModel;
         }
 
-        if (next && next !== selectedModel) {
+        if (next && next !== currentModel) {
           setSelectedModel(next);
         }
       } catch (err) {
@@ -881,7 +1007,7 @@ export function ChatPage() {
       }
     };
     loadModels();
-  }, [selectedModel, setAvailableModels, setSelectedModel]);
+  }, [setAvailableModels, setSelectedModel, selectedModel]);
 
   // Load MCP servers when settings modal opens
   useEffect(() => {
@@ -966,6 +1092,9 @@ export function ChatPage() {
       // Store for title generation
       lastUserInputRef.current = text;
 
+      // Reset agent continuation counter on manual user send
+      agentContinuationRef.current = 0;
+
       // Build message parts including attachments
       const parts: UIMessage["parts"] = [];
       if (text.trim()) {
@@ -991,8 +1120,9 @@ export function ChatPage() {
         }
       }
 
+      const messageId = `user-${Date.now()}`;
       const userMessage: UIMessage = {
-        id: `user-${Date.now()}`,
+        id: messageId,
         role: "user",
         parts,
       };
@@ -1005,33 +1135,8 @@ export function ChatPage() {
         await persistMessage(sessionId, userMessage);
       }
 
-      const toolDefinitions = await resolveToolDefinitions();
-      const trimmedSystem = effectiveSystemPrompt?.trim() || undefined;
-
-      console.info("[CHAT UI] context", {
-        model: selectedModel,
-        systemLength: trimmedSystem?.length ?? 0,
-        messageCount: messages.length + 1,
-        tools: toolDefinitions.map((tool) => tool.name),
-        mcpEnabled,
-      });
-
-      // Send the message via AI SDK - use simple text format
-      // Note: For image attachments, the files would need to be passed as FileList
-      // but our current attachment handling uses base64. For now, just send text.
-      sendMessage(
-        {
-          text,
-        },
-        {
-          body: {
-            model: selectedModel || undefined,
-            system: trimmedSystem,
-            tools: toolDefinitions,
-            toolChoice: "auto",
-          },
-        },
-      );
+      // Send the message via AI SDK — transport body provides system, model, tools
+      sendMessage({ parts });
     },
     [
       isLoading,
@@ -1039,17 +1144,55 @@ export function ChatPage() {
       currentSessionId,
       createSessionWithMessage,
       persistMessage,
-      selectedModel,
-      resolveToolDefinitions,
-      effectiveSystemPrompt,
-      messages.length,
-      mcpEnabled,
       setToolPanelOpen,
       setActivePanel,
       setStreamingStartTime,
       setInput,
     ],
   );
+
+  // Agent continuation: auto-send when model stops and plan has incomplete steps
+  const agentContinuationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (agentContinuationTimerRef.current) {
+      clearTimeout(agentContinuationTimerRef.current);
+      agentContinuationTimerRef.current = null;
+    }
+
+    // Basic guards
+    if (!agentMode || isLoading || messages.length === 0) return;
+    if (!agentPlan || agentPlan.steps.length === 0) return;
+
+    // All done?
+    const incomplete = agentPlan.steps.filter((s) => s.status !== "done");
+    if (incomplete.length === 0) return;
+
+    // Safety limit
+    if (agentContinuationRef.current >= 50) {
+      console.warn("[Agent] Hit continuation limit");
+      return;
+    }
+
+    // Only continue after assistant turn
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role !== "assistant") return;
+
+    // Schedule continuation
+    agentContinuationTimerRef.current = setTimeout(() => {
+      agentContinuationRef.current += 1;
+      const done = agentPlan.steps.filter((s) => s.status === "done").length;
+      const next = incomplete[0];
+      const prompt = `Continue: ${next?.title ?? "next step"} (${done}/${agentPlan.steps.length} complete)`;
+      console.info("[Agent] Continuing:", prompt);
+      void sendUserMessage(prompt);
+    }, 1000);
+
+    return () => {
+      if (agentContinuationTimerRef.current) {
+        clearTimeout(agentContinuationTimerRef.current);
+      }
+    };
+  }, [agentMode, agentPlan, isLoading, messages, sendUserMessage]);
 
   // Handle send with persistence and attachments
   const handleSend = useCallback(
@@ -1180,16 +1323,24 @@ export function ChatPage() {
     autoOpenedActivityRef.current = false;
   }, [currentSessionId]);
 
+  // Auto-open activity panel only on first activity (not every change)
+  const hadActivityRef = useRef(false);
+  const hasActivity = thinkingActive || executingTools.size > 0 || activityGroups.length > 0;
   useEffect(() => {
+    // Only trigger on transition from no-activity to has-activity
+    if (!hasActivity) {
+      hadActivityRef.current = false;
+      return;
+    }
+    if (hadActivityRef.current) return;
     if (autoOpenedActivityRef.current) return;
     if (sidebarOpen) return;
 
-    if (thinkingActive || executingTools.size > 0 || activityGroups.length > 0) {
-      setSidebarOpen(true);
-      setSidebarTab("activity");
-      autoOpenedActivityRef.current = true;
-    }
-  }, [activityGroups.length, executingTools.size, thinkingActive, sidebarOpen]);
+    hadActivityRef.current = true;
+    setSidebarOpen(true);
+    setSidebarTab("activity");
+    autoOpenedActivityRef.current = true;
+  }, [hasActivity, sidebarOpen]);
 
   return (
     <div className="relative h-full flex overflow-hidden w-full max-w-full bg-[#0a0a0a]">
@@ -1227,9 +1378,8 @@ export function ChatPage() {
           </div>
         }
         artifactsContent={<ArtifactPreviewPanel artifacts={sessionArtifacts} />}
-        filesContent={
-          <AgentFilesPanel files={[]} plan={agentPlan} />
-        }
+        tasksContent={<AgentTasksPanel tasks={agentTasks} />}
+        filesContent={<AgentFilesPanel files={agentFiles} plan={agentPlan} />}
       >
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden">
           <div className="flex-1 flex flex-col overflow-hidden relative min-w-0 bg-[hsl(30,5%,10.5%)]">

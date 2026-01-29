@@ -198,9 +198,9 @@ export default function Nav() {
     {
       id: "go-models",
       label: "Go to Models",
-      hint: "/models",
+      hint: "/discover",
       keywords: ["list", "discover"],
-      run: () => router.push("/models"),
+      run: () => router.push("/discover"),
     },
     {
       id: "refresh",

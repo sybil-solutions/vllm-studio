@@ -155,6 +155,9 @@ export function ArtifactPreviewPanel({ artifacts }: ArtifactPreviewPanelProps) {
             <span className="text-xs text-[#888] truncate">
               {selectedArtifact.title || `${selectedArtifact.type.toUpperCase()}`}
             </span>
+            {selectedArtifact.version && (
+              <span className="text-[10px] text-violet-300">v{selectedArtifact.version}</span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -184,6 +187,8 @@ function ArtifactPill({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const versionLabel = artifact.version ? `v${artifact.version}` : null;
+
   return (
     <button
       onClick={onClick}
@@ -197,6 +202,11 @@ function ArtifactPill({
       <span className="max-w-[100px] truncate">
         {artifact.title?.slice(0, 20) || artifact.type}
       </span>
+      {versionLabel && (
+        <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-[9px] text-violet-300">
+          {versionLabel}
+        </span>
+      )}
     </button>
   );
 }

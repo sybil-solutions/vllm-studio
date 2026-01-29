@@ -15,6 +15,8 @@ import type {
   ChatSessionDetail,
   ChatCompactionResponse,
   StoredMessage,
+  AgentFileEntry,
+  AgentState,
   LogSession,
   MCPServer,
   MCPTool,
@@ -22,6 +24,14 @@ import type {
   Metrics,
   VRAMCalculation,
   UsageStats,
+  VllmRuntimeConfig,
+  VllmRuntimeInfo,
+  VllmUpgradeResult,
+  ModelDownload,
+  StorageInfo,
+  ModelRecommendation,
+  StudioSettings,
+  StudioDiagnostics,
 } from "./types";
 import { getApiKey } from "./api-key";
 
@@ -31,6 +41,13 @@ const RETRY_DELAY = 1000; // 1 second base delay
 
 // Sleep helper
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const encodePathSegments = (path: string) =>
+  path
+    .split("/")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
 
 // Check if error is retryable
 function isRetryableError(error: unknown, status?: number): boolean {
@@ -222,11 +239,15 @@ class APIClient {
   async createChatSession(data: {
     title?: string;
     model?: string;
+    agent_state?: AgentState | null;
   }): Promise<{ session: ChatSessionDetail }> {
     return this.request("/chats", { method: "POST", body: JSON.stringify(data) });
   }
 
-  async updateChatSession(id: string, data: { title?: string; model?: string }): Promise<void> {
+  async updateChatSession(
+    id: string,
+    data: { title?: string; model?: string; agent_state?: AgentState | null },
+  ): Promise<void> {
     return this.request(`/chats/${id}`, { method: "PUT", body: JSON.stringify(data) });
   }
 
@@ -268,6 +289,61 @@ class APIClient {
     estimated_cost_usd?: number;
   }> {
     return this.request(`/chats/${sessionId}/usage`);
+  }
+
+  async getAgentFiles(
+    sessionId: string,
+    options?: { path?: string; recursive?: boolean },
+  ): Promise<{ files: AgentFileEntry[]; path?: string }> {
+    const params = new URLSearchParams();
+    if (options?.path) {
+      params.set("path", options.path);
+    }
+    if (options?.recursive === false) {
+      params.set("recursive", "false");
+    }
+    const query = params.toString();
+    return this.request(`/chats/${sessionId}/files${query ? `?${query}` : ""}`);
+  }
+
+  async readAgentFile(sessionId: string, path: string): Promise<{ path: string; content: string }> {
+    const encoded = encodePathSegments(path);
+    return this.request(`/chats/${sessionId}/files/${encoded}`);
+  }
+
+  async writeAgentFile(
+    sessionId: string,
+    path: string,
+    data: { content: string; encoding?: "utf8" | "base64" },
+  ): Promise<{ success: boolean }> {
+    const encoded = encodePathSegments(path);
+    return this.request(`/chats/${sessionId}/files/${encoded}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAgentFile(sessionId: string, path: string): Promise<{ success: boolean }> {
+    const encoded = encodePathSegments(path);
+    return this.request(`/chats/${sessionId}/files/${encoded}`, { method: "DELETE" });
+  }
+
+  async createAgentDirectory(sessionId: string, path: string): Promise<{ success: boolean }> {
+    return this.request(`/chats/${sessionId}/files/dir`, {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    });
+  }
+
+  async moveAgentFile(
+    sessionId: string,
+    from: string,
+    to: string,
+  ): Promise<{ success: boolean }> {
+    return this.request(`/chats/${sessionId}/files/move`, {
+      method: "POST",
+      body: JSON.stringify({ from, to }),
+    });
   }
 
   async getMCPServers(): Promise<{ servers: MCPServer[] }> {
@@ -376,6 +452,70 @@ class APIClient {
     configured_models_dir?: string;
   }> {
     return this.request("/v1/studio/models");
+  }
+
+  async getStudioSettings(): Promise<StudioSettings> {
+    return this.request("/studio/settings");
+  }
+
+  async updateStudioSettings(modelsDir: string): Promise<StudioSettings & { success: boolean }> {
+    return this.request("/studio/settings", {
+      method: "POST",
+      body: JSON.stringify({ models_dir: modelsDir }),
+    });
+  }
+
+  async getStudioDiagnostics(): Promise<StudioDiagnostics> {
+    return this.request("/studio/diagnostics");
+  }
+
+  async getStudioStorage(): Promise<StorageInfo> {
+    return this.request("/studio/storage");
+  }
+
+  async getModelRecommendations(): Promise<{ recommendations: ModelRecommendation[]; max_vram_gb: number }> {
+    return this.request("/studio/recommendations");
+  }
+
+  async getDownloads(): Promise<{ downloads: ModelDownload[] }> {
+    return this.request("/studio/downloads");
+  }
+
+  async startDownload(params: {
+    model_id: string;
+    revision?: string;
+    destination_dir?: string;
+    allow_patterns?: string[];
+    ignore_patterns?: string[];
+    hf_token?: string;
+  }): Promise<{ download: ModelDownload }> {
+    return this.request("/studio/downloads", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  async pauseDownload(id: string): Promise<{ download: ModelDownload }> {
+    return this.request(`/studio/downloads/${encodePathSegments(id)}/pause`, { method: "POST" });
+  }
+
+  async resumeDownload(id: string, hfToken?: string): Promise<{ download: ModelDownload }> {
+    return this.request(`/studio/downloads/${encodePathSegments(id)}/resume`, {
+      method: "POST",
+      body: hfToken ? JSON.stringify({ hf_token: hfToken }) : "{}",
+    });
+  }
+
+  async cancelDownload(id: string): Promise<{ download: ModelDownload }> {
+    return this.request(`/studio/downloads/${encodePathSegments(id)}/cancel`, { method: "POST" });
+  }
+
+  async deleteModel(path: string): Promise<{ success: boolean }> {
+    return this.request("/studio/models/delete", { method: "POST", body: JSON.stringify({ path }) });
+  }
+
+  async moveModel(sourcePath: string, targetRoot: string): Promise<{ success: boolean; target: string }> {
+    return this.request("/studio/models/move", {
+      method: "POST",
+      body: JSON.stringify({ source_path: sourcePath, target_root: targetRoot }),
+    });
   }
 
   async getGPUs(): Promise<{ gpus: GPU[] }> {
@@ -499,6 +639,21 @@ class APIClient {
     };
   }> {
     return this.request("/config");
+  }
+
+  async getVllmRuntime(): Promise<VllmRuntimeInfo> {
+    return this.request("/runtime/vllm");
+  }
+
+  async getVllmRuntimeConfig(): Promise<VllmRuntimeConfig> {
+    return this.request("/runtime/vllm/config");
+  }
+
+  async upgradeVllmRuntime(preferBundled = true): Promise<VllmUpgradeResult> {
+    return this.request("/runtime/vllm/upgrade", {
+      method: "POST",
+      body: JSON.stringify({ prefer_bundled: preferBundled }),
+    });
   }
 }
 

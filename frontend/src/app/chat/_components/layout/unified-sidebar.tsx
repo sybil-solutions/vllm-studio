@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import { PanelRightClose, Sparkles } from "lucide-react";
 
-export type SidebarTab = "activity" | "context" | "artifacts" | "files";
+export type SidebarTab = "activity" | "context" | "artifacts" | "tasks" | "files";
 
 interface UnifiedSidebarProps {
   children: ReactNode;
@@ -17,6 +17,7 @@ interface UnifiedSidebarProps {
   activityContent: ReactNode;
   contextContent: ReactNode;
   artifactsContent: ReactNode;
+  tasksContent?: ReactNode;
   filesContent?: ReactNode;
   defaultWidth?: number;
   minWidth?: number;
@@ -35,6 +36,7 @@ export function UnifiedSidebar({
   activityContent,
   contextContent,
   artifactsContent,
+  tasksContent,
   filesContent,
   defaultWidth = 380,
   minWidth = 280,
@@ -94,6 +96,8 @@ export function UnifiedSidebar({
         return contextContent;
       case "artifacts":
         return artifactsContent;
+      case "tasks":
+        return tasksContent ?? null;
       case "files":
         return filesContent ?? null;
       default:
@@ -140,6 +144,12 @@ export function UnifiedSidebar({
                 <>
                   <div className="w-px h-4 bg-white/[0.06] mx-1" />
                   <TabButton
+                    active={activeTab === "tasks"}
+                    onClick={() => onSetActiveTab("tasks")}
+                    label="Tasks"
+                    accent
+                  />
+                  <TabButton
                     active={activeTab === "files"}
                     onClick={() => onSetActiveTab("files")}
                     label="Files"
@@ -178,7 +188,11 @@ export function UnifiedSidebar({
           {/* Footer */}
           <div className="px-3 py-2 border-t border-white/[0.06] flex items-center justify-between">
             <span className="text-[10px] text-[#555]">
-              {activeTab === "files" ? "Agent Files" : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+              {activeTab === "files"
+                ? "Agent Files"
+                : activeTab === "tasks"
+                  ? "Agent Tasks"
+                  : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
             </span>
             <span className="text-[10px] text-[#444]">{width}px</span>
           </div>

@@ -14,14 +14,8 @@ import {
   Image as ImageIcon,
   Terminal,
 } from "lucide-react";
+import type { AgentFileEntry } from "@/lib/types";
 import type { AgentPlan } from "./agent-types";
-
-export interface AgentFileEntry {
-  name: string;
-  type: "file" | "dir";
-  size?: number;
-  children?: AgentFileEntry[];
-}
 
 interface AgentFilesPanelProps {
   files: AgentFileEntry[];

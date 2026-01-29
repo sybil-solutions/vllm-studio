@@ -177,3 +177,92 @@ export interface GpuInfo {
   power_draw: number;
   power_limit: number;
 }
+
+/**
+ * Model download status.
+ */
+export type DownloadStatus =
+  | "queued"
+  | "downloading"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+/**
+ * Download file status.
+ */
+export type DownloadFileStatus = "pending" | "downloading" | "completed" | "error";
+
+/**
+ * Download file payload.
+ */
+export interface DownloadFileInfo {
+  path: string;
+  size_bytes: number | null;
+  downloaded_bytes: number;
+  status: DownloadFileStatus;
+}
+
+/**
+ * Model download entry.
+ */
+export interface ModelDownload {
+  id: string;
+  model_id: string;
+  revision: string | null;
+  status: DownloadStatus;
+  created_at: string;
+  updated_at: string;
+  target_dir: string;
+  total_bytes: number | null;
+  downloaded_bytes: number;
+  files: DownloadFileInfo[];
+  error: string | null;
+}
+
+/**
+ * Disk usage summary.
+ */
+export interface DiskInfo {
+  path: string;
+  total_bytes: number | null;
+  free_bytes: number | null;
+  available_bytes: number | null;
+}
+
+/**
+ * Model recommendations.
+ */
+export interface ModelRecommendation {
+  id: string;
+  name: string;
+  size_gb: number | null;
+  min_vram_gb: number | null;
+  description: string;
+  tags: string[];
+}
+
+/**
+ * Diagnostics snapshot.
+ */
+export interface StudioDiagnostics {
+  app_version: string;
+  timestamp: string;
+  platform: string;
+  arch: string;
+  release: string;
+  cpu_model: string | null;
+  cpu_cores: number;
+  memory_total: number;
+  memory_free: number;
+  gpus: GpuInfo[];
+  runtime: {
+    vllm_installed: boolean;
+    vllm_version: string | null;
+    python_path: string | null;
+    vllm_bin: string | null;
+  };
+  disks: DiskInfo[];
+  config: SystemConfig;
+}

@@ -26,6 +26,8 @@ struct StreamOptions: Encodable {
 struct OpenAIMessage: Codable {
   let role: String
   let content: String?
+  let reasoningContent: String? = nil
+  let reasoning: String? = nil
   let toolCalls: [ToolCall]?
   let toolCallId: String?
   let name: String?

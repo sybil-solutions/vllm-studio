@@ -6,8 +6,10 @@ import { createEventManager } from "./services/event-manager";
 import { createLaunchState } from "./services/launch-state";
 import { createMetrics } from "./services/metrics";
 import { createProcessManager } from "./services/process-manager";
+import { DownloadManager } from "./services/download-manager";
 import { createLogger, resolveLogLevel } from "./core/logger";
 import { ChatStore } from "./stores/chat-store";
+import { DownloadStore } from "./stores/download-store";
 import { PeakMetricsStore, LifetimeMetricsStore } from "./stores/metrics-store";
 import { McpStore } from "./stores/mcp-store";
 import { RecipeStore } from "./stores/recipe-store";
@@ -25,6 +27,7 @@ export const createAppContext = (): AppContext => {
 
   const recipeStore = new RecipeStore(dbPath);
   const chatStore = new ChatStore(resolve(config.data_dir, "chats.db"));
+  const downloadStore = new DownloadStore(dbPath);
   const peakMetricsStore = new PeakMetricsStore(dbPath);
   const lifetimeMetricsStore = new LifetimeMetricsStore(dbPath);
   const mcpStore = new McpStore(dbPath);
@@ -32,6 +35,7 @@ export const createAppContext = (): AppContext => {
   const launchState = createLaunchState();
   const { registry: metricsRegistry, metrics } = createMetrics();
   const processManager = createProcessManager(config, logger, eventManager);
+  const downloadManager = new DownloadManager(config, downloadStore, eventManager, logger);
 
   lifetimeMetricsStore.ensureFirstStarted();
 
@@ -43,9 +47,11 @@ export const createAppContext = (): AppContext => {
     metrics,
     metricsRegistry,
     processManager,
+    downloadManager,
     stores: {
       recipeStore,
       chatStore,
+      downloadStore,
       peakMetricsStore,
       lifetimeMetricsStore,
       mcpStore,

@@ -4,22 +4,30 @@ import SwiftUI
 struct ChatListView: View {
   @EnvironmentObject private var container: AppContainer
   @StateObject private var model = ChatListViewModel()
-  @State private var newSessionId: String?
-  @State private var navigateToNew = false
+  @State private var selectedSessionId: String?
 
   var body: some View {
     List {
       ForEach(model.sessions) { session in
-        NavigationLink(destination: ChatDetailView(sessionId: session.id)) {
-          VStack(alignment: .leading, spacing: 4) {
-            Text(session.title.isEmpty ? "New chat" : session.title)
-              .font(AppTheme.bodyFont.weight(.semibold))
-              .lineLimit(1)
-            Text(session.updatedAt)
-              .font(AppTheme.captionFont)
-              .foregroundColor(AppTheme.muted)
+        Button {
+          selectedSessionId = session.id
+        } label: {
+          HStack {
+            VStack(alignment: .leading, spacing: 4) {
+              Text(session.title.isEmpty ? "New chat" : session.title)
+                .font(AppTheme.bodyFont.weight(.semibold))
+                .lineLimit(1)
+              Text(session.updatedAt)
+                .font(AppTheme.captionFont)
+                .foregroundColor(AppTheme.muted)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+              .font(.system(size: 13, weight: .medium))
+              .foregroundColor(AppTheme.muted.opacity(0.5))
           }
         }
+        .buttonStyle(.plain)
         .listRowBackground(AppTheme.card)
       }
       .onDelete { indexSet in
@@ -35,10 +43,8 @@ struct ChatListView: View {
     .toolbar {
       Button("New") { Task { await createSession() } }
     }
-    .navigationDestination(isPresented: $navigateToNew) {
-      if let newSessionId {
-        ChatDetailView(sessionId: newSessionId)
-      }
+    .navigationDestination(item: $selectedSessionId) { sessionId in
+      ChatDetailView(sessionId: sessionId)
     }
     .onAppear { model.connect(api: container.api) }
   }
@@ -46,8 +52,7 @@ struct ChatListView: View {
   @MainActor
   private func createSession() async {
     guard let session = await model.createSession() else { return }
-    newSessionId = session.id
-    await model.load()
-    navigateToNew = true
+    selectedSessionId = session.id
+    Task { await model.load() }
   }
 }

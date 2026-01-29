@@ -3,6 +3,8 @@
  * Type definitions for vLLM Studio
  */
 
+import type { UIMessage } from "ai";
+
 // Process info from controller
 export interface ProcessInfo {
   pid: number;
@@ -135,6 +137,7 @@ export interface Recipe {
 
   // Other
   python_path?: string;
+  cuda_visible_devices?: string;
   extra_args?: Record<string, unknown>;
   env_vars?: Record<string, string>;
 }
@@ -143,12 +146,48 @@ export interface RecipeWithStatus extends Recipe {
   status: "running" | "stopped" | "starting" | "error";
 }
 
+// Agent state
+export type AgentTaskStatus = "pending" | "running" | "done" | "blocked";
+
+export interface AgentTask {
+  id: string;
+  title: string;
+  status: AgentTaskStatus;
+  notes?: string;
+}
+
+export interface AgentPlanStep {
+  id: string;
+  title: string;
+  status: AgentTaskStatus;
+  notes?: string;
+}
+
+export interface AgentPlan {
+  steps: AgentPlanStep[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AgentFileEntry {
+  name: string;
+  type: "file" | "dir";
+  size?: number;
+  children?: AgentFileEntry[];
+}
+
+export interface AgentState {
+  plan?: AgentPlan | null;
+  tasks?: AgentTask[];
+}
+
 // Chat session
 export interface ChatSession {
   id: string;
   title: string;
   model?: string;
   parent_id?: string;
+  agent_state?: AgentState | null;
   created_at: string;
   updated_at: string;
 }
@@ -173,6 +212,8 @@ export interface ToolCall {
 }
 
 export interface StoredToolCall extends ToolCall {
+  providerExecuted?: boolean;
+  dynamic?: boolean;
   result?: { content?: string; isError?: boolean } | string | null;
 }
 
@@ -189,6 +230,8 @@ export interface StoredMessage {
   content: string;
   model?: string;
   tool_calls?: StoredToolCall[];
+  parts?: UIMessage["parts"];
+  metadata?: UIMessage["metadata"];
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
@@ -271,6 +314,94 @@ export interface StudioModelsRoot {
   exists: boolean;
   sources?: string[];
   recipe_ids?: string[];
+}
+
+export type DownloadStatus =
+  | "queued"
+  | "downloading"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export type DownloadFileStatus = "pending" | "downloading" | "completed" | "error";
+
+export interface DownloadFileInfo {
+  path: string;
+  size_bytes: number | null;
+  downloaded_bytes: number;
+  status: DownloadFileStatus;
+}
+
+export interface ModelDownload {
+  id: string;
+  model_id: string;
+  revision: string | null;
+  status: DownloadStatus;
+  created_at: string;
+  updated_at: string;
+  target_dir: string;
+  total_bytes: number | null;
+  downloaded_bytes: number;
+  files: DownloadFileInfo[];
+  error: string | null;
+}
+
+export interface StorageInfo {
+  models_dir: string;
+  model_count: number;
+  model_bytes: number;
+  disk: {
+    path: string;
+    total_bytes: number | null;
+    free_bytes: number | null;
+    available_bytes: number | null;
+  };
+}
+
+export interface ModelRecommendation {
+  id: string;
+  name: string;
+  size_gb: number | null;
+  min_vram_gb: number | null;
+  description: string;
+  tags: string[];
+}
+
+export interface StudioSettings {
+  config_path: string;
+  persisted: {
+    models_dir?: string;
+  };
+  effective: {
+    models_dir: string;
+  };
+}
+
+export interface StudioDiagnostics {
+  app_version: string;
+  timestamp: string;
+  platform: string;
+  arch: string;
+  release: string;
+  cpu_model: string | null;
+  cpu_cores: number;
+  memory_total: number;
+  memory_free: number;
+  gpus: GPU[];
+  runtime: {
+    vllm_installed: boolean;
+    vllm_version: string | null;
+    python_path: string | null;
+    vllm_bin: string | null;
+  };
+  disks: Array<{
+    path: string;
+    total_bytes: number | null;
+    free_bytes: number | null;
+    available_bytes: number | null;
+  }>;
+  config: SystemConfig;
 }
 
 // VRAM calculation
@@ -362,6 +493,8 @@ export interface Artifact {
   output?: string;
   error?: string;
   isRunning?: boolean;
+  groupId?: string;
+  version?: number;
   // For database storage
   session_id?: string;
   message_id?: string;
@@ -547,6 +680,30 @@ export interface ConfigData {
   config: SystemConfig;
   services: ServiceInfo[];
   environment: EnvironmentInfo;
+}
+
+export interface VllmRuntimeInfo {
+  installed: boolean;
+  version: string | null;
+  python_path: string | null;
+  vllm_bin: string | null;
+  bundled_wheel: {
+    path: string;
+    version: string | null;
+  } | null;
+}
+
+export interface VllmRuntimeConfig {
+  config: string | null;
+  error?: string | null;
+}
+
+export interface VllmUpgradeResult {
+  success: boolean;
+  version: string | null;
+  output: string | null;
+  error: string | null;
+  used_wheel: string | null;
 }
 
 // Chat UI types

@@ -10,6 +10,8 @@ import type {
   DeepResearchConfig,
   SessionUsage,
   ActivePanel,
+  AgentTask,
+  AgentFileEntry,
 } from "@/lib/types";
 import type { ModelOption, Attachment } from "@/app/chat/types";
 import type { AgentPlan } from "@/app/chat/_components/agent/agent-types";
@@ -130,6 +132,9 @@ export interface ChatState {
   // Agent mode
   agentMode: boolean;
   agentPlan: AgentPlan | null;
+  agentTasks: AgentTask[];
+  agentFiles: AgentFileEntry[];
+  agentFilesLoading: boolean;
 }
 
 export interface ChatActions {
@@ -270,6 +275,9 @@ export interface ChatActions {
   // Agent mode
   setAgentMode: (enabled: boolean) => void;
   setAgentPlan: (plan: AgentPlan | null) => void;
+  setAgentTasks: (tasks: AgentTask[]) => void;
+  setAgentFiles: (files: AgentFileEntry[]) => void;
+  setAgentFilesLoading: (loading: boolean) => void;
 }
 
 export type ChatSlice = ChatState & ChatActions;
@@ -361,6 +369,9 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   // Agent mode
   agentMode: false,
   agentPlan: null,
+  agentTasks: [],
+  agentFiles: [],
+  agentFilesLoading: false,
 
   // --- Actions ---
 
@@ -525,4 +536,7 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   // Agent mode
   setAgentMode: (enabled) => set({ agentMode: enabled }),
   setAgentPlan: (plan) => set({ agentPlan: plan }),
+  setAgentTasks: (tasks) => set({ agentTasks: tasks }),
+  setAgentFiles: (files) => set({ agentFiles: files }),
+  setAgentFilesLoading: (loading) => set({ agentFilesLoading: loading }),
 });

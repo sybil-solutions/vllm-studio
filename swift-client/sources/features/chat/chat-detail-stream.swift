@@ -53,6 +53,7 @@ extension ChatDetailViewModel {
         content: content,
         model: model,
         toolCalls: result.toolCalls.isEmpty ? nil : result.toolCalls,
+        reasoningContent: result.reasoning,
         promptTokens: tokenSnapshot.promptTokens,
         toolsTokens: tokenSnapshot.toolsTokens,
         totalInputTokens: tokenSnapshot.totalInputTokens,
@@ -109,9 +110,9 @@ extension ChatDetailViewModel {
       }
     }
 
-    if !finalAssistantContent.isEmpty {
-      await updateTitle(user: userContent, assistant: finalAssistantContent, api: api)
-    }
+    // Update title with final content or fallback to user message
+    let titleContent = finalAssistantContent.trimmingCharacters(in: .whitespacesAndNewlines)
+    await updateTitle(user: userContent, assistant: titleContent, api: api)
   }
 
   private func tokenizePrompt(

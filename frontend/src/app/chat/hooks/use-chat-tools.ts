@@ -1,7 +1,7 @@
 // CRITICAL
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { api } from "@/lib/api";
 import { safeJsonStringify } from "@/lib/safe-json";
 import type { MCPTool, MCPServer, ToolResult } from "@/lib/types";
@@ -22,6 +22,10 @@ export function useChatTools({ mcpEnabled }: UseChatToolsOptions) {
   const updateExecutingTools = useAppStore((state) => state.updateExecutingTools);
   const setToolResultsMap = useAppStore((state) => state.setToolResultsMap);
   const updateToolResultsMap = useAppStore((state) => state.updateToolResultsMap);
+
+  // Use ref to avoid re-creating loadMCPTools when mcpServers changes
+  const mcpServersRef = useRef(mcpServers);
+  useEffect(() => { mcpServersRef.current = mcpServers; }, [mcpServers]);
 
   const loadMCPServers = useCallback(async () => {
     try {
@@ -46,7 +50,9 @@ export function useChatTools({ mcpEnabled }: UseChatToolsOptions) {
       return [];
     }
     try {
-      const enabledServers = mcpServers.filter((server) => server.enabled ?? true);
+      // Use ref to avoid dependency on mcpServers (prevents infinite loop)
+      const currentServers = mcpServersRef.current;
+      const enabledServers = currentServers.filter((server) => server.enabled ?? true);
       let tools: MCPTool[] = [];
 
       if (enabledServers.length > 0) {
@@ -74,9 +80,9 @@ export function useChatTools({ mcpEnabled }: UseChatToolsOptions) {
 
         if (tools.length === 0) {
           const { servers } = await api.getMCPServers();
-          const enabledServers = servers.filter((server) => server.enabled ?? true);
+          const enabledFromApi = servers.filter((server) => server.enabled ?? true);
           const serverTools = await Promise.all(
-            enabledServers.map(async (server) => {
+            enabledFromApi.map(async (server) => {
               try {
                 const result = await api.getMCPServerTools(server.name);
                 return result.tools;
@@ -97,15 +103,17 @@ export function useChatTools({ mcpEnabled }: UseChatToolsOptions) {
       console.error("Failed to load MCP tools:", err);
       return [];
     }
-  }, [mcpEnabled, mcpServers, setMcpTools]);
+  }, [mcpEnabled, setMcpTools]);
 
   const getToolDefinitions = useCallback(
     (toolsOverride?: MCPTool[]): MCPTool[] => {
       if (!mcpEnabled) return [];
       const toolsList = toolsOverride ?? mcpTools;
+      // Use ref to avoid recreation on mcpServers changes
+      const currentServers = mcpServersRef.current;
       const enabledServers =
-        mcpServers.length > 0
-          ? new Set(mcpServers.filter((server) => server.enabled).map((server) => server.name))
+        currentServers.length > 0
+          ? new Set(currentServers.filter((server) => server.enabled).map((server) => server.name))
           : new Set<string>();
       const shouldFilter = enabledServers.size > 0;
       const filteredTools = shouldFilter
@@ -127,7 +135,7 @@ export function useChatTools({ mcpEnabled }: UseChatToolsOptions) {
         inputSchema: tool.inputSchema,
       }));
     },
-    [mcpEnabled, mcpTools, mcpServers],
+    [mcpEnabled, mcpTools],
   );
 
   const executeTool = useCallback(

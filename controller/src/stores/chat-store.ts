@@ -28,6 +28,7 @@ export class ChatStore {
         title TEXT NOT NULL DEFAULT 'New Chat',
         model TEXT,
         parent_id TEXT,
+        agent_state TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
@@ -40,6 +41,8 @@ export class ChatStore {
         content TEXT,
         model TEXT,
         tool_calls TEXT,
+        parts TEXT,
+        metadata TEXT,
         request_prompt_tokens INTEGER,
         request_tools_tokens INTEGER,
         request_total_input_tokens INTEGER,
@@ -49,6 +52,17 @@ export class ChatStore {
       )
     `);
     this.db.run("CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id)");
+    this.ensureColumn("chat_sessions", "agent_state", "TEXT");
+    this.ensureColumn("chat_messages", "parts", "TEXT");
+    this.ensureColumn("chat_messages", "metadata", "TEXT");
+  }
+
+  private ensureColumn(table: string, column: string, type: string): void {
+    const columns = this.db.query(`PRAGMA table_info(${table})`).all() as Array<Record<string, unknown>>;
+    const exists = columns.some((entry) => entry["name"] === column);
+    if (!exists) {
+      this.db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    }
   }
 
   /**
@@ -69,30 +83,54 @@ export class ChatStore {
    */
   public getSession(sessionId: string): Record<string, unknown> | null {
     const session = this.db
-      .query("SELECT id, title, model, parent_id, created_at, updated_at FROM chat_sessions WHERE id = ?")
+      .query("SELECT id, title, model, parent_id, agent_state, created_at, updated_at FROM chat_sessions WHERE id = ?")
       .get(sessionId) as Record<string, unknown> | null;
     if (!session) {
       return null;
     }
 
+    let agentState: unknown = session["agent_state"] ?? null;
+    if (typeof agentState === "string") {
+      try {
+        agentState = JSON.parse(agentState);
+      } catch {
+        agentState = null;
+      }
+    }
+
     const messages = this.db
-      .query(`SELECT id, role, content, model, tool_calls, request_prompt_tokens, request_tools_tokens,
+      .query(`SELECT id, role, content, model, tool_calls, parts, metadata, request_prompt_tokens, request_tools_tokens,
               request_total_input_tokens, request_completion_tokens, created_at
               FROM chat_messages WHERE session_id = ? ORDER BY created_at`)
       .all(sessionId) as Array<Record<string, unknown>>;
 
     const hydrated = messages.map((message) => {
-      if (typeof message["tool_calls"] === "string") {
+      const next: Record<string, unknown> = { ...message };
+      if (typeof next["tool_calls"] === "string") {
         try {
-          return { ...message, tool_calls: JSON.parse(String(message["tool_calls"])) };
+          next["tool_calls"] = JSON.parse(String(next["tool_calls"]));
         } catch {
-          return { ...message, tool_calls: null };
+          next["tool_calls"] = null;
         }
       }
-      return message;
+      if (typeof next["parts"] === "string") {
+        try {
+          next["parts"] = JSON.parse(String(next["parts"]));
+        } catch {
+          next["parts"] = null;
+        }
+      }
+      if (typeof next["metadata"] === "string") {
+        try {
+          next["metadata"] = JSON.parse(String(next["metadata"]));
+        } catch {
+          next["metadata"] = null;
+        }
+      }
+      return next;
     });
 
-    return { ...session, messages: hydrated };
+    return { ...session, agent_state: agentState, messages: hydrated };
   }
 
   /**
@@ -108,13 +146,24 @@ export class ChatStore {
     title = "New Chat",
     model?: string,
     parentId?: string,
+    agentState?: unknown,
   ): Record<string, unknown> {
+    const agentStateJson = agentState !== undefined && agentState !== null
+      ? JSON.stringify(agentState)
+      : null;
     this.db
-      .query("INSERT INTO chat_sessions (id, title, model, parent_id) VALUES (?, ?, ?, ?)")
-      .run(sessionId, title, model ?? null, parentId ?? null);
+      .query("INSERT INTO chat_sessions (id, title, model, parent_id, agent_state) VALUES (?, ?, ?, ?, ?)")
+      .run(sessionId, title, model ?? null, parentId ?? null, agentStateJson);
     const row = this.db
-      .query("SELECT id, title, model, parent_id, created_at, updated_at FROM chat_sessions WHERE id = ?")
+      .query("SELECT id, title, model, parent_id, agent_state, created_at, updated_at FROM chat_sessions WHERE id = ?")
       .get(sessionId) as Record<string, unknown>;
+    if (typeof row["agent_state"] === "string") {
+      try {
+        row["agent_state"] = JSON.parse(String(row["agent_state"]));
+      } catch {
+        row["agent_state"] = null;
+      }
+    }
     return { ...row };
   }
 
@@ -125,7 +174,12 @@ export class ChatStore {
    * @param model - New model.
    * @returns True if updated.
    */
-  public updateSession(sessionId: string, title?: string, model?: string): boolean {
+  public updateSession(
+    sessionId: string,
+    title?: string,
+    model?: string,
+    agentState?: unknown,
+  ): boolean {
     const updates: string[] = [];
     const params: Array<string | null> = [];
     if (title !== undefined) {
@@ -135,6 +189,10 @@ export class ChatStore {
     if (model !== undefined) {
       updates.push("model = ?");
       params.push(model);
+    }
+    if (agentState !== undefined) {
+      updates.push("agent_state = ?");
+      params.push(agentState === null ? null : JSON.stringify(agentState));
     }
     if (updates.length === 0) {
       return true;
@@ -183,16 +241,22 @@ export class ChatStore {
     toolsTokens?: number,
     totalInputTokens?: number,
     completionTokens?: number,
+    parts?: unknown[],
+    metadata?: unknown,
   ): Record<string, unknown> {
     const toolCallsJson = toolCalls ? JSON.stringify(toolCalls) : null;
+    const partsJson = parts ? JSON.stringify(parts) : null;
+    const metadataJson = metadata !== undefined && metadata !== null ? JSON.stringify(metadata) : null;
     this.db.query(
       `INSERT INTO chat_messages
-      (id, session_id, role, content, model, tool_calls, request_prompt_tokens, request_tools_tokens,
+      (id, session_id, role, content, model, tool_calls, parts, metadata, request_prompt_tokens, request_tools_tokens,
        request_total_input_tokens, request_completion_tokens)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         content = excluded.content,
         tool_calls = excluded.tool_calls,
+        parts = excluded.parts,
+        metadata = excluded.metadata,
         request_prompt_tokens = excluded.request_prompt_tokens,
         request_tools_tokens = excluded.request_tools_tokens,
         request_total_input_tokens = excluded.request_total_input_tokens,
@@ -204,6 +268,8 @@ export class ChatStore {
       content ?? null,
       model ?? null,
       toolCallsJson,
+      partsJson,
+      metadataJson,
       promptTokens ?? null,
       toolsTokens ?? null,
       totalInputTokens ?? null,
@@ -212,7 +278,7 @@ export class ChatStore {
     this.db.query("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(sessionId);
     const row = this.db
       .query(
-        `SELECT id, role, content, model, tool_calls, request_prompt_tokens, request_tools_tokens,
+        `SELECT id, role, content, model, tool_calls, parts, metadata, request_prompt_tokens, request_tools_tokens,
          request_total_input_tokens, request_completion_tokens, created_at
          FROM chat_messages WHERE id = ?`,
       )
@@ -222,6 +288,20 @@ export class ChatStore {
         row["tool_calls"] = JSON.parse(String(row["tool_calls"]));
       } catch {
         row["tool_calls"] = null;
+      }
+    }
+    if (typeof row["parts"] === "string") {
+      try {
+        row["parts"] = JSON.parse(String(row["parts"]));
+      } catch {
+        row["parts"] = null;
+      }
+    }
+    if (typeof row["metadata"] === "string") {
+      try {
+        row["metadata"] = JSON.parse(String(row["metadata"]));
+      } catch {
+        row["metadata"] = null;
       }
     }
     return row;
@@ -288,13 +368,17 @@ export class ChatStore {
     }
     const newTitle = title ?? `${String(original["title"])} (fork)`;
     const newModel = model ?? (original["model"] ? String(original["model"]) : undefined);
+    const agentState = original["agent_state"] ?? null;
+    const agentStateJson = agentState != null ? JSON.stringify(agentState) : null;
 
-    this.db.query("INSERT INTO chat_sessions (id, title, model, parent_id) VALUES (?, ?, ?, ?)")
-      .run(newId, newTitle, newModel ?? null, sessionId);
+    this.db.query("INSERT INTO chat_sessions (id, title, model, parent_id, agent_state) VALUES (?, ?, ?, ?, ?)")
+      .run(newId, newTitle, newModel ?? null, sessionId, agentStateJson);
 
     const messages = (original["messages"] ?? []) as Array<Record<string, unknown>>;
     for (const message of messages) {
       const toolCallsJson = message["tool_calls"] ? JSON.stringify(message["tool_calls"]) : null;
+      const partsJson = message["parts"] ? JSON.stringify(message["parts"]) : null;
+      const metadataJson = message["metadata"] ? JSON.stringify(message["metadata"]) : null;
       const newMessageId = `${newId}_${String(message["id"])}`;
       const role = String(message["role"] ?? "");
       const content = toNullableString(message["content"]);
@@ -305,9 +389,9 @@ export class ChatStore {
       const completionTokens = toNullableNumber(message["request_completion_tokens"]);
       this.db.query(
         `INSERT INTO chat_messages
-        (id, session_id, role, content, model, tool_calls, request_prompt_tokens, request_tools_tokens,
+        (id, session_id, role, content, model, tool_calls, parts, metadata, request_prompt_tokens, request_tools_tokens,
          request_total_input_tokens, request_completion_tokens)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         newMessageId,
         newId,
@@ -315,6 +399,8 @@ export class ChatStore {
         content,
         messageModel,
         toolCallsJson,
+        partsJson,
+        metadataJson,
         promptTokens,
         toolTokens,
         totalTokens,
@@ -326,8 +412,15 @@ export class ChatStore {
     }
 
     const row = this.db
-      .query("SELECT id, title, model, parent_id, created_at, updated_at FROM chat_sessions WHERE id = ?")
+      .query("SELECT id, title, model, parent_id, agent_state, created_at, updated_at FROM chat_sessions WHERE id = ?")
       .get(newId) as Record<string, unknown>;
+    if (typeof row["agent_state"] === "string") {
+      try {
+        row["agent_state"] = JSON.parse(String(row["agent_state"]));
+      } catch {
+        row["agent_state"] = null;
+      }
+    }
     return { ...row };
   }
 }

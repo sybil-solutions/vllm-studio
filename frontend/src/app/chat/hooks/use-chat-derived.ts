@@ -100,12 +100,24 @@ export function useChatDerived({
 
         // Determine state: prefer live ephemeral data, fall back to part state
         let itemState: "pending" | "running" | "complete" | "error" = "pending";
+        const pendingStates = new Set([
+          "input-streaming",
+          "input-available",
+          "approval-requested",
+          "approval-responded",
+        ]);
+        const errorStates = new Set(["output-error", "output-denied"]);
+
         if (isExecuting) {
           itemState = "running";
         } else if (result) {
           itemState = result.isError ? "error" : "complete";
-        } else if (partState === "result" || partState === "output-available" || partHasOutput) {
+        } else if (partState && errorStates.has(partState)) {
+          itemState = "error";
+        } else if (partState === "output-available" || partState === "result" || partHasOutput) {
           itemState = "complete";
+        } else if (partState && pendingStates.has(partState)) {
+          itemState = "running";
         }
 
         toolItems.push({

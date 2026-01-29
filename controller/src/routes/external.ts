@@ -1,4 +1,5 @@
 export * from "./chats";
+export * from "./agent-files";
 export * from "./lifecycle";
 export * from "./logs";
 export * from "./mcp";

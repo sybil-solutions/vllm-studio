@@ -5,6 +5,8 @@ import { cors } from "hono/cors";
 import type { AppContext } from "../types/context";
 import { isHttpStatus } from "../core/errors";
 import { registerChatsRoutes } from "../routes/chats";
+import { registerAgentFilesRoutes } from "../routes/agent-files";
+import { registerDownloadsRoutes } from "../routes/downloads";
 import { registerLifecycleRoutes } from "../routes/lifecycle";
 import { registerLogsRoutes } from "../routes/logs";
 import { registerMcpRoutes } from "../routes/mcp";
@@ -12,6 +14,8 @@ import { registerModelsRoutes } from "../routes/models";
 import { registerMonitoringRoutes } from "../routes/monitoring";
 import { registerProxyRoutes } from "../routes/proxy";
 import { registerProxyRoutesDebug } from "../routes/proxy-debug";
+import { registerRuntimeRoutes } from "../routes/runtime";
+import { registerStudioRoutes } from "../routes/studio";
 import { registerSystemRoutes } from "../routes/system";
 import { registerUsageRoutes } from "../routes/usage";
 import { registerTokenizationRoutes } from "../routes/tokenization";
@@ -40,9 +44,13 @@ export const createApp = (context: AppContext): Hono => {
 
   // Register all routes
   registerSystemRoutes(app, context);
+  registerRuntimeRoutes(app, context);
   registerModelsRoutes(app, context);
+  registerStudioRoutes(app, context);
+  registerDownloadsRoutes(app, context);
   registerLifecycleRoutes(app, context);
   registerChatsRoutes(app, context);
+  registerAgentFilesRoutes(app, context);
   registerLogsRoutes(app, context);
   registerMonitoringRoutes(app, context);
   registerMcpRoutes(app, context);
