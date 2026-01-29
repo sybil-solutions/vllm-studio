@@ -49,10 +49,17 @@ final class OpenAIChatService: ObservableObject {
 
     let completion = try ApiCodec.decoder.decode(ChatCompletionResponse.self, from: data)
     let msg = completion.choices.first?.message
-    let content = msg?.content ?? ""
+    var content = msg?.content ?? ""
+    var reasoning = msg?.reasoningContent ?? msg?.reasoning ?? ""
+    if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+       !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      content = reasoning
+      reasoning = ""
+    }
+    streamingReasoning = reasoning
     streamingContent = content
     return StreamResult(
-      content: content, reasoning: "",
+      content: content, reasoning: reasoning,
       toolCalls: msg?.toolCalls ?? [],
       finishReason: nil, usage: completion.usage
     )
@@ -156,9 +163,15 @@ final class OpenAIChatService: ObservableObject {
       if let data = raw.data(using: .utf8),
          let completion = try? ApiCodec.decoder.decode(ChatCompletionResponse.self, from: data),
          let msg = completion.choices.first?.message {
-        let content = msg.content ?? ""
+        var content = msg.content ?? ""
+        var reasoning = msg.reasoningContent ?? msg.reasoning ?? ""
+        if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+          content = reasoning
+          reasoning = ""
+        }
         return StreamResult(
-          content: content, reasoning: "",
+          content: content, reasoning: reasoning,
           toolCalls: msg.toolCalls ?? [],
           finishReason: nil, usage: completion.usage
         )

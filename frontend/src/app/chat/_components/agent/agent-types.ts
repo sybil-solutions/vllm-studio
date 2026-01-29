@@ -1,17 +1,17 @@
-export type AgentPlanStepStatus = "pending" | "running" | "done" | "blocked";
+// CRITICAL
+import type { AgentPlan, AgentPlanStep, AgentTask, AgentTaskStatus } from "@/lib/types";
 
-export interface AgentPlanStep {
-  id: string;
-  title: string;
-  status: AgentPlanStepStatus;
-  notes?: string;
-}
+export type AgentPlanStepStatus = AgentTaskStatus;
+export type { AgentPlan, AgentPlanStep, AgentTask, AgentTaskStatus };
 
-export interface AgentPlan {
-  steps: AgentPlanStep[];
-  createdAt: number;
-  updatedAt: number;
-}
+const normalizeStatus = (value: unknown): AgentTaskStatus => {
+  if (typeof value !== "string") return "pending";
+  const normalized = value.toLowerCase();
+  if (normalized === "running" || normalized === "done" || normalized === "blocked") {
+    return normalized;
+  }
+  return "pending";
+};
 
 export function normalizePlanSteps(
   input: unknown,
@@ -22,7 +22,7 @@ export function normalizePlanSteps(
 
   for (const step of rawSteps) {
     let title = "";
-    let status: AgentPlanStepStatus = "pending";
+    let status: AgentTaskStatus = "pending";
     let notes: string | undefined;
 
     if (typeof step === "string") {
@@ -30,12 +30,7 @@ export function normalizePlanSteps(
     } else if (step && typeof step === "object") {
       const s = step as Record<string, unknown>;
       if (typeof s.title === "string") title = s.title.trim();
-      if (typeof s.status === "string") {
-        const v = s.status.toLowerCase();
-        if (v === "running" || v === "done" || v === "blocked") {
-          status = v;
-        }
-      }
+      status = normalizeStatus(s.status);
       if (typeof s.notes === "string" && s.notes.trim()) {
         notes = s.notes.trim();
       }
@@ -49,6 +44,41 @@ export function normalizePlanSteps(
       ...(notes ? { notes } : {}),
     });
     if (normalized.length >= maxSteps) break;
+  }
+  return normalized;
+}
+
+export function normalizeTasks(
+  input: unknown,
+  maxTasks = 24,
+): AgentTask[] {
+  const rawTasks = Array.isArray(input) ? input : [];
+  const normalized: AgentTask[] = [];
+
+  for (const task of rawTasks) {
+    let title = "";
+    let status: AgentTaskStatus = "pending";
+    let notes: string | undefined;
+
+    if (typeof task === "string") {
+      title = task.trim();
+    } else if (task && typeof task === "object") {
+      const t = task as Record<string, unknown>;
+      if (typeof t.title === "string") title = t.title.trim();
+      status = normalizeStatus(t.status);
+      if (typeof t.notes === "string" && t.notes.trim()) {
+        notes = t.notes.trim();
+      }
+    }
+
+    if (!title) continue;
+    normalized.push({
+      id: `task-${normalized.length}`,
+      title,
+      status,
+      ...(notes ? { notes } : {}),
+    });
+    if (normalized.length >= maxTasks) break;
   }
   return normalized;
 }

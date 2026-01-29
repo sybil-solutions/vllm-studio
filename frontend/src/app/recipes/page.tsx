@@ -3,23 +3,57 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowUpCircle,
+  Brain,
   Calculator,
   ChevronDown,
+  Clock,
+  Code,
+  Cpu,
+  Database,
+  Eye,
+  GitBranch,
+  Info,
+  Layers,
+  MessageSquare,
   MoreVertical,
+  Package,
   Pin,
   PinOff,
   Play,
   Plus,
   RefreshCw,
+  Save,
   Search,
+  Server,
+  Settings,
+  Sparkles,
   Square,
+  Terminal,
+  Variable,
+  Wrench,
   X,
+  Zap,
 } from "lucide-react";
 import api from "@/lib/api";
-import type { Recipe, RecipeWithStatus, VRAMCalculation, ModelInfo } from "@/lib/types";
+import type {
+  ModelInfo,
+  Recipe,
+  RecipeWithStatus,
+  VRAMCalculation,
+  VllmRuntimeConfig,
+  VllmRuntimeInfo,
+  VllmUpgradeResult,
+} from "@/lib/types";
 import { useRealtimeStatus } from "@/hooks/use-realtime-status";
+import {
+  filterExtraArgsForEditor,
+  mergeExtraArgsFromEditor,
+  normalizeRecipeForEditor,
+  prepareRecipeForSave,
+} from "./recipe-utils";
 
-type Tab = "recipes" | "tools";
+type Tab = "recipes" | "tools" | "runtime";
 
 const DEFAULT_RECIPE: Recipe = {
   id: "",
@@ -28,9 +62,15 @@ const DEFAULT_RECIPE: Recipe = {
   backend: "vllm",
   tp: 1,
   pp: 1,
+  tensor_parallel_size: 1,
+  pipeline_parallel_size: 1,
   port: 8000,
   host: "0.0.0.0",
   gpu_memory_utilization: 0.9,
+  max_model_len: 32768,
+  max_num_seqs: 256,
+  kv_cache_dtype: "auto",
+  trust_remote_code: true,
   extra_args: {},
 };
 
@@ -61,6 +101,15 @@ function RecipesContent() {
 
   // Available models for selection
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+
+  // vLLM runtime state
+  const [runtimeInfo, setRuntimeInfo] = useState<VllmRuntimeInfo | null>(null);
+  const [runtimeConfig, setRuntimeConfig] = useState<VllmRuntimeConfig | null>(null);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [runtimeConfigLoading, setRuntimeConfigLoading] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [upgradeResult, setUpgradeResult] = useState<VllmUpgradeResult | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
 
   const { launchProgress } = useRealtimeStatus();
 
@@ -103,6 +152,52 @@ function RecipesContent() {
     }
   }, []);
 
+  const loadRuntime = useCallback(async () => {
+    setRuntimeLoading(true);
+    setRuntimeError(null);
+    try {
+      const info = await api.getVllmRuntime();
+      setRuntimeInfo(info);
+    } catch (e) {
+      setRuntimeError((e as Error).message);
+    } finally {
+      setRuntimeLoading(false);
+    }
+  }, []);
+
+  const loadRuntimeConfig = useCallback(async () => {
+    setRuntimeConfigLoading(true);
+    try {
+      const config = await api.getVllmRuntimeConfig();
+      setRuntimeConfig(config);
+    } catch (e) {
+      setRuntimeConfig({ config: null, error: (e as Error).message });
+    } finally {
+      setRuntimeConfigLoading(false);
+    }
+  }, []);
+
+  const handleUpgradeVllm = async () => {
+    setUpgrading(true);
+    setUpgradeResult(null);
+    try {
+      const result = await api.upgradeVllmRuntime(true);
+      setUpgradeResult(result);
+      await loadRuntime();
+      await loadRuntimeConfig();
+    } catch (e) {
+      setUpgradeResult({
+        success: false,
+        version: null,
+        output: null,
+        error: (e as Error).message,
+        used_wheel: null,
+      });
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -113,6 +208,13 @@ function RecipesContent() {
     })();
   }, [loadRecipes]);
 
+  useEffect(() => {
+    if (tab === "runtime") {
+      loadRuntime();
+      loadRuntimeConfig();
+    }
+  }, [tab, loadRuntime, loadRuntimeConfig]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadRecipes();
@@ -120,24 +222,12 @@ function RecipesContent() {
   };
 
   const handleNewRecipe = () => {
-    setModalRecipe({ ...DEFAULT_RECIPE });
+    setModalRecipe(normalizeRecipeForEditor({ ...DEFAULT_RECIPE }));
     setModalOpen(true);
   };
 
   const handleEditRecipe = (recipe: RecipeWithStatus) => {
-    // Clean up legacy extra_args keys when opening for edit
-    const cleanedRecipe = { ...recipe };
-    if (cleanedRecipe.extra_args) {
-      const extraArgs = { ...cleanedRecipe.extra_args } as Record<string, unknown>;
-      // Migrate enable_thinking to enable-reasoning
-      if (extraArgs["enable_thinking"] || extraArgs["enable-thinking"]) {
-        extraArgs["enable-reasoning"] = true;
-        delete extraArgs["enable_thinking"];
-        delete extraArgs["enable-thinking"];
-      }
-      cleanedRecipe.extra_args = extraArgs;
-    }
-    setModalRecipe(cleanedRecipe);
+    setModalRecipe(normalizeRecipeForEditor(recipe));
     setModalOpen(true);
     setRecipeMenuOpen(null);
   };
@@ -145,15 +235,7 @@ function RecipesContent() {
   const handleSaveRecipe = async () => {
     if (!modalRecipe) return;
 
-    // Clean up legacy extra_args before saving
-    const recipeToSave = { ...modalRecipe };
-    if (recipeToSave.extra_args) {
-      const extraArgs = { ...recipeToSave.extra_args } as Record<string, unknown>;
-      delete extraArgs["enable_thinking"];
-      delete extraArgs["enable-thinking"];
-      delete extraArgs["status"]; // Also clean up status from extra_args
-      recipeToSave.extra_args = extraArgs;
-    }
+    const recipeToSave = prepareRecipeForSave(modalRecipe);
 
     setSaving(true);
     try {
@@ -161,11 +243,11 @@ function RecipesContent() {
         await api.updateRecipe(recipeToSave.id, recipeToSave);
       } else {
         // Generate ID from name
-        const id = modalRecipe.name
+        const id = recipeToSave.name
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "");
-        await api.createRecipe({ ...modalRecipe, id });
+        await api.createRecipe({ ...recipeToSave, id });
       }
       await loadRecipes();
       setModalOpen(false);
@@ -319,6 +401,17 @@ function RecipesContent() {
         >
           <Calculator className="w-4 h-4 inline mr-2" />
           VRAM Calculator
+        </button>
+        <button
+          onClick={() => setTab("runtime")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+            tab === "runtime"
+              ? "text-[#e8e6e3] border-[#d97706]"
+              : "text-[#9a9088] border-transparent hover:text-[#e8e6e3]"
+          }`}
+        >
+          <Package className="w-4 h-4 inline mr-2" />
+          vLLM Runtime
         </button>
       </div>
 
@@ -614,6 +707,136 @@ function RecipesContent() {
             </div>
           </div>
         )}
+
+        {tab === "runtime" && (
+          <div style={{ padding: "1.5rem" }} className="space-y-6 max-w-3xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">vLLM Runtime</h2>
+                <p className="text-sm text-[#9a9088]">
+                  Manage the bundled vLLM wheel and inspect available CLI configuration.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    loadRuntime();
+                    loadRuntimeConfig();
+                  }}
+                  disabled={runtimeLoading || runtimeConfigLoading}
+                  className="flex items-center gap-2 px-3 py-2 bg-[#1b1b1b] hover:bg-[#2a2724] border border-[#363432] rounded-lg text-sm transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 ${runtimeLoading || runtimeConfigLoading ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </button>
+                <button
+                  onClick={handleUpgradeVllm}
+                  disabled={upgrading}
+                  className="flex items-center gap-2 px-3 py-2 bg-[#d97706] hover:bg-[#b45309] text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+                >
+                  <ArrowUpCircle className="w-4 h-4" />
+                  {upgrading ? "Upgrading..." : "Upgrade"}
+                </button>
+              </div>
+            </div>
+
+            {runtimeError && (
+              <div className="p-4 bg-[#dc2626]/10 border border-[#dc2626]/30 rounded-lg text-sm text-[#fca5a5]">
+                {runtimeError}
+              </div>
+            )}
+
+            {runtimeLoading && !runtimeInfo ? (
+              <div className="text-sm text-[#9a9088]">Loading runtime details...</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-[#1b1b1b] border border-[#363432] rounded-lg p-4">
+                  <div className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
+                    Installed Version
+                  </div>
+                  <div className="mt-2 text-lg font-semibold">
+                    {runtimeInfo?.version ?? "Not installed"}
+                  </div>
+                </div>
+                <div className="bg-[#1b1b1b] border border-[#363432] rounded-lg p-4">
+                  <div className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
+                    Bundled Wheel
+                  </div>
+                  <div className="mt-2 text-sm text-[#e8e6e3] break-all">
+                    {runtimeInfo?.bundled_wheel?.version
+                      ? `${runtimeInfo.bundled_wheel.version} (${runtimeInfo.bundled_wheel.path})`
+                      : "No bundled wheel found"}
+                  </div>
+                </div>
+                <div className="bg-[#1b1b1b] border border-[#363432] rounded-lg p-4">
+                  <div className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
+                    Python Runtime
+                  </div>
+                  <div className="mt-2 text-sm text-[#e8e6e3] break-all">
+                    {runtimeInfo?.python_path ?? "Not detected"}
+                  </div>
+                </div>
+                <div className="bg-[#1b1b1b] border border-[#363432] rounded-lg p-4">
+                  <div className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
+                    vLLM Binary
+                  </div>
+                  <div className="mt-2 text-sm text-[#e8e6e3] break-all">
+                    {runtimeInfo?.vllm_bin ?? "Not detected"}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-[#1b1b1b] border border-[#363432] rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">vLLM CLI Config (vllm serve --help)</h3>
+                <button
+                  onClick={loadRuntimeConfig}
+                  disabled={runtimeConfigLoading}
+                  className="px-3 py-1.5 bg-[#363432] hover:bg-[#494745] rounded-lg text-xs transition-colors disabled:opacity-50"
+                >
+                  {runtimeConfigLoading ? "Loading..." : "Refresh"}
+                </button>
+              </div>
+              {runtimeConfig?.error && (
+                <div className="text-xs text-[#fca5a5]">{runtimeConfig.error}</div>
+              )}
+              <pre className="max-h-72 overflow-auto text-xs text-[#e8e6e3] whitespace-pre-wrap">
+                {runtimeConfig?.config || "No config available."}
+              </pre>
+            </div>
+
+            {upgradeResult && (
+              <div
+                className={`p-4 border rounded-lg text-sm ${
+                  upgradeResult.success
+                    ? "bg-[#15803d]/10 border-[#15803d]/30 text-[#4ade80]"
+                    : "bg-[#dc2626]/10 border-[#dc2626]/30 text-[#fca5a5]"
+                }`}
+              >
+                <div className="font-medium">
+                  {upgradeResult.success ? "Upgrade complete" : "Upgrade failed"}
+                  {upgradeResult.version ? ` (vLLM ${upgradeResult.version})` : ""}
+                </div>
+                {upgradeResult.used_wheel && (
+                  <div className="text-xs mt-1">Wheel: {upgradeResult.used_wheel}</div>
+                )}
+                {upgradeResult.error && (
+                  <div className="text-xs mt-2 whitespace-pre-wrap text-[#fca5a5]">
+                    {upgradeResult.error}
+                  </div>
+                )}
+                {upgradeResult.output && (
+                  <pre className="text-xs mt-2 whitespace-pre-wrap text-[#e8e6e3]">
+                    {upgradeResult.output}
+                  </pre>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -662,9 +885,65 @@ function RecipesContent() {
   );
 }
 
+const appendExtraArgsToCommand = (
+  args: string[],
+  extraArgs: Record<string, unknown>,
+): string[] => {
+  const internalKeys = new Set(["venv_path", "env_vars", "cuda_visible_devices", "description", "tags", "status"]);
+  const jsonStringKeys = new Set(["speculative_config", "default_chat_template_kwargs"]);
+  const existingFlags = new Set(
+    args.flatMap((line) => line.split(" ").filter((part) => part.startsWith("--"))),
+  );
+
+  for (const [key, value] of Object.entries(extraArgs)) {
+    const normalizedKey = key.replace(/-/g, "_").toLowerCase();
+    if (internalKeys.has(normalizedKey)) {
+      continue;
+    }
+    const flag = `--${key.replace(/_/g, "-")}`;
+    if (existingFlags.has(flag)) {
+      continue;
+    }
+    if (value === true || value === false) {
+      args.push(flag);
+      existingFlags.add(flag);
+      continue;
+    }
+    if (value === undefined || value === null || value === "") {
+      continue;
+    }
+
+    if (typeof value === "string" && jsonStringKeys.has(normalizedKey)) {
+      const trimmed = value.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(trimmed) as unknown;
+          args.push(`${flag} '${JSON.stringify(parsed)}'`);
+          existingFlags.add(flag);
+          continue;
+        } catch {
+          args.push(`${flag} '${value}'`);
+          existingFlags.add(flag);
+          continue;
+        }
+      }
+    }
+
+    if (Array.isArray(value) || (value && typeof value === "object")) {
+      args.push(`${flag} '${JSON.stringify(value)}'`);
+      existingFlags.add(flag);
+      continue;
+    }
+    args.push(`${flag} ${value}`);
+    existingFlags.add(flag);
+  }
+  return args;
+};
+
 // Generate command from recipe
 function generateCommand(recipe: Recipe): string {
-  const backend = recipe.backend || "vllm";
+  const payload = prepareRecipeForSave(recipe);
+  const backend = payload.backend || "vllm";
   const args: string[] = [];
 
   // Base command
@@ -675,56 +954,52 @@ function generateCommand(recipe: Recipe): string {
   }
 
   // Model path (required)
-  if (recipe.model_path) {
-    args.push(recipe.model_path);
+  if (payload.model_path) {
+    args.push(payload.model_path);
   }
 
   // Server settings
-  if (recipe.host && recipe.host !== "0.0.0.0") args.push(`--host ${recipe.host}`);
-  if (recipe.port && recipe.port !== 8000) args.push(`--port ${recipe.port}`);
-  if (recipe.served_model_name) args.push(`--served-model-name ${recipe.served_model_name}`);
+  if (payload.host && payload.host !== "0.0.0.0") args.push(`--host ${payload.host}`);
+  if (payload.port && payload.port !== 8000) args.push(`--port ${payload.port}`);
+  if (payload.served_model_name) args.push(`--served-model-name ${payload.served_model_name}`);
 
   // Parallelism
-  const tp = recipe.tp || recipe.tensor_parallel_size;
-  const pp = recipe.pp || recipe.pipeline_parallel_size;
-  if (tp && tp > 1) args.push(`--tensor-parallel-size ${tp}`);
-  if (pp && pp > 1) args.push(`--pipeline-parallel-size ${pp}`);
+  if (payload.tensor_parallel_size && payload.tensor_parallel_size > 1) {
+    args.push(`--tensor-parallel-size ${payload.tensor_parallel_size}`);
+  }
+  if (payload.pipeline_parallel_size && payload.pipeline_parallel_size > 1) {
+    args.push(`--pipeline-parallel-size ${payload.pipeline_parallel_size}`);
+  }
 
   // Memory
-  if (recipe.gpu_memory_utilization && recipe.gpu_memory_utilization !== 0.9) {
-    args.push(`--gpu-memory-utilization ${recipe.gpu_memory_utilization}`);
+  if (payload.max_model_len) args.push(`--max-model-len ${payload.max_model_len}`);
+  if (payload.max_num_seqs) args.push(`--max-num-seqs ${payload.max_num_seqs}`);
+  if (payload.gpu_memory_utilization !== undefined && payload.gpu_memory_utilization !== null) {
+    args.push(`--gpu-memory-utilization ${payload.gpu_memory_utilization}`);
   }
-  if (recipe.max_model_len) args.push(`--max-model-len ${recipe.max_model_len}`);
-  if (recipe.kv_cache_dtype && recipe.kv_cache_dtype !== "auto") {
-    args.push(`--kv-cache-dtype ${recipe.kv_cache_dtype}`);
+  if (payload.kv_cache_dtype && payload.kv_cache_dtype !== "auto") {
+    args.push(`--kv-cache-dtype ${payload.kv_cache_dtype}`);
   }
-  if (recipe.block_size && recipe.block_size !== 16) args.push(`--block-size ${recipe.block_size}`);
 
   // Quantization
-  if (recipe.quantization) args.push(`--quantization ${recipe.quantization}`);
-  if (recipe.dtype && recipe.dtype !== "auto") args.push(`--dtype ${recipe.dtype}`);
+  if (payload.quantization) args.push(`--quantization ${payload.quantization}`);
+  if (payload.dtype && payload.dtype !== "auto") args.push(`--dtype ${payload.dtype}`);
 
   // Flags
-  if (recipe.trust_remote_code) args.push("--trust-remote-code");
-  if (recipe.enable_prefix_caching) args.push("--enable-prefix-caching");
-  if (recipe.enable_chunked_prefill) args.push("--enable-chunked-prefill");
-  if (recipe.enforce_eager) args.push("--enforce-eager");
+  if (payload.trust_remote_code) args.push("--trust-remote-code");
 
   // Tool calling
-  if (recipe.tool_call_parser) args.push(`--tool-call-parser ${recipe.tool_call_parser}`);
-  if (recipe.enable_auto_tool_choice) args.push("--enable-auto-tool-choice");
-
-  // Reasoning
-  if (recipe.reasoning_parser) args.push(`--reasoning-parser ${recipe.reasoning_parser}`);
-  // enable-reasoning is stored in extra_args, handled by extra_args processing below
-
-  // Thinking budget via chat template kwargs
-  if (recipe.thinking_budget) {
-    args.push(`--default-chat-template-kwargs '{"thinking_budget": ${recipe.thinking_budget}}'`);
+  if (payload.tool_call_parser) {
+    args.push(`--tool-call-parser ${payload.tool_call_parser}`);
+    args.push("--enable-auto-tool-choice");
+  } else if (payload.enable_auto_tool_choice) {
+    args.push("--enable-auto-tool-choice");
   }
 
-  // Chat
-  if (recipe.chat_template) args.push(`--chat-template ${recipe.chat_template}`);
+  // Reasoning
+  if (payload.reasoning_parser) args.push(`--reasoning-parser ${payload.reasoning_parser}`);
+
+  appendExtraArgsToCommand(args, payload.extra_args ?? {});
 
   return args.join(" \\\n  ");
 }
@@ -750,6 +1025,17 @@ function RecipeModal({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [mode, setMode] = useState<"form" | "command">("form");
   const [editedCommand, setEditedCommand] = useState<string | null>(null);
+  const [extraArgsText, setExtraArgsText] = useState(() =>
+    JSON.stringify(filterExtraArgsForEditor(recipe.extra_args ?? {}), null, 2),
+  );
+  const [extraArgsError, setExtraArgsError] = useState<string | null>(null);
+  const [envVarEntries, setEnvVarEntries] = useState(() => {
+    const entries = Object.entries(recipe.env_vars ?? {}).map(([key, value]) => ({
+      key,
+      value: String(value),
+    }));
+    return entries.length ? entries : [{ key: "", value: "" }];
+  });
 
   // Build a lookup: model_path -> served_model_name (from first recipe that uses it)
   const modelServedNames = useMemo(() => {
@@ -772,6 +1058,56 @@ function RecipeModal({
     setEditedCommand(value);
   };
 
+  const handleExtraArgsChange = (value: string) => {
+    setExtraArgsText(value);
+    if (!value.trim()) {
+      const merged = mergeExtraArgsFromEditor(recipe.extra_args ?? {}, {});
+      onChange({ ...recipe, extra_args: merged });
+      setExtraArgsError(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setExtraArgsError("Extra args must be a JSON object.");
+        return;
+      }
+      const merged = mergeExtraArgsFromEditor(recipe.extra_args ?? {}, parsed as Record<string, unknown>);
+      onChange({ ...recipe, extra_args: merged });
+      setExtraArgsError(null);
+    } catch {
+      setExtraArgsError("Extra args must be valid JSON.");
+    }
+  };
+
+  const updateEnvVarEntries = (nextEntries: Array<{ key: string; value: string }>) => {
+    setEnvVarEntries(nextEntries);
+    const envVars = nextEntries.reduce<Record<string, string>>((acc, entry) => {
+      const key = entry.key.trim();
+      if (key) {
+        acc[key] = entry.value;
+      }
+      return acc;
+    }, {});
+    onChange({ ...recipe, env_vars: Object.keys(envVars).length ? envVars : undefined });
+  };
+
+  const handleEnvVarChange = (index: number, field: "key" | "value", value: string) => {
+    const next = envVarEntries.map((entry, idx) =>
+      idx === index ? { ...entry, [field]: value } : entry,
+    );
+    updateEnvVarEntries(next);
+  };
+
+  const handleAddEnvVar = () => {
+    updateEnvVarEntries([...envVarEntries, { key: "", value: "" }]);
+  };
+
+  const handleRemoveEnvVar = (index: number) => {
+    const next = envVarEntries.filter((_, idx) => idx !== index);
+    updateEnvVarEntries(next.length ? next : [{ key: "", value: "" }]);
+  };
+
   const handleModeSwitch = (newMode: "form" | "command") => {
     if (newMode === "form") {
       // Reset edits when switching back to form
@@ -780,545 +1116,1056 @@ function RecipeModal({
     setMode(newMode);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
-      <button
-        className="flex-1 bg-black/50"
-        onClick={onClose}
-        aria-label="Close"
-      />
-      {/* Drawer */}
-      <div className="w-full max-w-lg bg-[#1b1b1b] border-l border-[#363432] flex flex-col h-full animate-in slide-in-from-right duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#363432] shrink-0">
-          <h3 className="text-lg font-semibold">{recipe.id ? "Edit Recipe" : "New Recipe"}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-[#363432] rounded transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  type TabId = "general" | "model" | "resources" | "performance" | "features" | "environment" | "command";
+  const [activeTab, setActiveTab] = useState<TabId>("general");
 
-        {/* Mode Toggle */}
-        <div className="flex gap-1 px-6 py-3 border-b border-[#363432] shrink-0 bg-[#0d0d0d]">
-          <button
-            onClick={() => handleModeSwitch("form")}
-            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-              mode === "form"
-                ? "bg-[#d97706] text-white"
-                : "text-[#9a9088] hover:text-[#e8e6e3] hover:bg-[#1b1b1b]"
-            }`}
-          >
-            Form
-          </button>
-          <button
-            onClick={() => handleModeSwitch("command")}
-            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-              mode === "command"
-                ? "bg-[#d97706] text-white"
-                : "text-[#9a9088] hover:text-[#e8e6e3] hover:bg-[#1b1b1b]"
-            }`}
-          >
-            Command
-          </button>
-        </div>
+  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    { id: "general", label: "General", icon: <Settings className="w-4 h-4" /> },
+    { id: "model", label: "Model", icon: <Layers className="w-4 h-4" /> },
+    { id: "resources", label: "Resources", icon: <Cpu className="w-4 h-4" /> },
+    { id: "performance", label: "Performance", icon: <Zap className="w-4 h-4" /> },
+    { id: "features", label: "Features", icon: <Sparkles className="w-4 h-4" /> },
+    { id: "environment", label: "Environment", icon: <Terminal className="w-4 h-4" /> },
+    { id: "command", label: "Command", icon: <Code className="w-4 h-4" /> },
+  ];
 
-        {/* Content - scrollable */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {mode === "command" ? (
-            /* Command Mode */
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "general":
+        return (
+          <div className="space-y-5">
+            {/* Basic Info */}
             <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Info className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Basic Information</span>
+              </div>
+              
               <div>
-                <label className="block text-sm text-[#9a9088] mb-2">Name *</label>
+                <label className="block text-xs font-medium text-[#9a9088] uppercase tracking-wider mb-2">
+                  Recipe Name <span className="text-[#d97706]">*</span>
+                </label>
                 <input
                   type="text"
                   value={recipe.name ?? ""}
                   onChange={(e) => onChange({ ...recipe, name: e.target.value })}
-                  placeholder="My Recipe"
+                  placeholder="e.g., Llama 3.1 8B Instruct"
+                  className="w-full px-3 py-2.5 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706] focus:ring-1 focus:ring-[#d97706]/20 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] uppercase tracking-wider mb-2">
+                  Model Path <span className="text-[#d97706]">*</span>
+                </label>
+                <select
+                  value={recipe.model_path ?? ""}
+                  onChange={(e) => onChange({ ...recipe, model_path: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706] focus:ring-1 focus:ring-[#d97706]/20 transition-all"
+                >
+                  <option value="">Select a model...</option>
+                  {availableModels.map((model) => {
+                    const servedName = modelServedNames[model.path];
+                    return (
+                      <option key={model.path} value={model.path}>
+                        {servedName ? `${servedName} (${model.name})` : model.name}
+                      </option>
+                    );
+                  })}
+                </select>
+                {recipe.model_path && !availableModels.some(m => m.path === recipe.model_path) && (
+                  <p className="mt-1.5 text-xs text-[#6a6560]">
+                    Custom: {recipe.model_path}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Server Config */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Server className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Server Configuration</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Backend</label>
+                  <select
+                    value={recipe.backend ?? "vllm"}
+                    onChange={(e) => onChange({ ...recipe, backend: e.target.value as "vllm" | "sglang" })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  >
+                    <option value="vllm">vLLM</option>
+                    <option value="sglang">SGLang</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Host</label>
+                  <input
+                    type="text"
+                    value={recipe.host ?? "0.0.0.0"}
+                    onChange={(e) => onChange({ ...recipe, host: e.target.value || undefined })}
+                    placeholder="0.0.0.0"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Port</label>
+                  <input
+                    type="number"
+                    value={recipe.port ?? 8000}
+                    onChange={(e) => onChange({ ...recipe, port: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Served Model Name (Optional)</label>
+                <input
+                  type="text"
+                  value={recipe.served_model_name || ""}
+                  onChange={(e) => onChange({ ...recipe, served_model_name: e.target.value || undefined })}
+                  placeholder="Custom name exposed in API"
                   className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
                 />
               </div>
+            </div>
+          </div>
+        );
+
+      case "model":
+        return (
+          <div className="space-y-5">
+            {/* Model Loading */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Layers className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Model Loading</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Max Model Length</label>
+                  <input
+                    type="number"
+                    value={recipe.max_model_len || ""}
+                    onChange={(e) => onChange({ ...recipe, max_model_len: Number(e.target.value) || undefined })}
+                    placeholder="32768"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Seed</label>
+                  <input
+                    type="number"
+                    value={recipe.seed || ""}
+                    onChange={(e) => onChange({ ...recipe, seed: Number(e.target.value) || undefined })}
+                    placeholder="Random"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Tokenizer</label>
+                  <input
+                    type="text"
+                    value={recipe.tokenizer || ""}
+                    onChange={(e) => onChange({ ...recipe, tokenizer: e.target.value || undefined })}
+                    placeholder="Path or name"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Tokenizer Mode</label>
+                  <select
+                    value={recipe.tokenizer_mode || "auto"}
+                    onChange={(e) => onChange({ ...recipe, tokenizer_mode: e.target.value === "auto" ? undefined : (e.target.value as "auto" | "slow" | "mistral") })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="slow">Slow</option>
+                    <option value="mistral">Mistral</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Revision</label>
+                  <input
+                    type="text"
+                    value={recipe.revision || ""}
+                    onChange={(e) => onChange({ ...recipe, revision: e.target.value || undefined })}
+                    placeholder="e.g., main"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Code Revision</label>
+                  <input
+                    type="text"
+                    value={recipe.code_revision || ""}
+                    onChange={(e) => onChange({ ...recipe, code_revision: e.target.value || undefined })}
+                    placeholder="Optional"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Load Format</label>
+                  <input
+                    type="text"
+                    value={recipe.load_format || ""}
+                    onChange={(e) => onChange({ ...recipe, load_format: e.target.value || undefined })}
+                    placeholder="auto, safetensors"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Quantization</label>
+                  <input
+                    type="text"
+                    value={recipe.quantization || ""}
+                    onChange={(e) => onChange({ ...recipe, quantization: e.target.value || undefined })}
+                    placeholder="awq, gptq, fp8"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-sm text-[#9a9088] mb-2">
-                  Command
-                  <span className="ml-2 text-xs text-[#6a6560]">
-                    (edit directly - will be used as-is)
-                  </span>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Quantization Param Path</label>
+                <input
+                  type="text"
+                  value={recipe.quantization_param_path || ""}
+                  onChange={(e) => onChange({ ...recipe, quantization_param_path: e.target.value || undefined })}
+                  placeholder="Path to calibration file"
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Dtype</label>
+                  <select
+                    value={recipe.dtype || "auto"}
+                    onChange={(e) => onChange({ ...recipe, dtype: e.target.value === "auto" ? undefined : e.target.value })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="float16">float16</option>
+                    <option value="bfloat16">bfloat16</option>
+                    <option value="float32">float32</option>
+                  </select>
+                </div>
+                <div className="flex items-center pt-6">
+                  <label className="flex items-center gap-2 text-sm text-[#9a9088] cursor-pointer hover:text-[#e8e6e3] transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={recipe.trust_remote_code || false}
+                      onChange={(e) => onChange({ ...recipe, trust_remote_code: e.target.checked })}
+                      className="rounded border-[#363432] bg-[#0d0d0d] w-4 h-4"
+                    />
+                    Trust Remote Code
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "resources":
+        return (
+          <div className="space-y-5">
+            {/* Parallelism */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <GitBranch className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Parallelism</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Tensor Parallel (TP)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={recipe.tp ?? recipe.tensor_parallel_size ?? 1}
+                    onChange={(e) => onChange({ ...recipe, tp: Number(e.target.value), tensor_parallel_size: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Pipeline Parallel (PP)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={recipe.pp ?? recipe.pipeline_parallel_size ?? 1}
+                    onChange={(e) => onChange({ ...recipe, pp: Number(e.target.value), pipeline_parallel_size: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Data Parallel</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={recipe.data_parallel_size || ""}
+                    onChange={(e) => onChange({ ...recipe, data_parallel_size: Number(e.target.value) || undefined })}
+                    placeholder="1"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Distributed Executor</label>
+                  <select
+                    value={recipe.distributed_executor_backend || ""}
+                    onChange={(e) => onChange({ ...recipe, distributed_executor_backend: e.target.value ? (e.target.value as "ray" | "mp") : undefined })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  >
+                    <option value="">Default</option>
+                    <option value="ray">Ray</option>
+                    <option value="mp">MP (Multiprocessing)</option>
+                  </select>
+                </div>
+                <div className="flex items-center pt-6">
+                  <label className="flex items-center gap-2 text-sm text-[#9a9088] cursor-pointer hover:text-[#e8e6e3] transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={recipe.enable_expert_parallel || false}
+                      onChange={(e) => onChange({ ...recipe, enable_expert_parallel: e.target.checked })}
+                      className="rounded border-[#363432] bg-[#0d0d0d] w-4 h-4"
+                    />
+                    Expert Parallel (MoE)
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* GPU Settings */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Cpu className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">GPU Settings</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">
+                  GPU Memory Utilization
                 </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={recipe.gpu_memory_utilization ?? 0.9}
+                    onChange={(e) => onChange({ ...recipe, gpu_memory_utilization: Number(e.target.value) })}
+                    className="flex-1 h-2 bg-[#363432] rounded-lg appearance-none cursor-pointer accent-[#d97706]"
+                  />
+                  <span className="text-sm font-mono w-12 text-right">
+                    {Math.round((recipe.gpu_memory_utilization ?? 0.9) * 100)}%
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">
+                  CUDA Visible Devices
+                </label>
+                <input
+                  type="text"
+                  value={recipe.cuda_visible_devices || ""}
+                  onChange={(e) => onChange({ ...recipe, cuda_visible_devices: e.target.value || undefined })}
+                  placeholder="0,1,2,3 or all"
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                />
+              </div>
+            </div>
+
+            {/* Memory Management */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Database className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Memory Management</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Swap Space (GB)</label>
+                  <input
+                    type="number"
+                    value={recipe.swap_space || ""}
+                    onChange={(e) => onChange({ ...recipe, swap_space: Number(e.target.value) || undefined })}
+                    placeholder="0"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">CPU Offload (GB)</label>
+                  <input
+                    type="number"
+                    value={recipe.cpu_offload_gb || ""}
+                    onChange={(e) => onChange({ ...recipe, cpu_offload_gb: Number(e.target.value) || undefined })}
+                    placeholder="0"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">GPU Blocks Override</label>
+                  <input
+                    type="number"
+                    value={recipe.num_gpu_blocks_override || ""}
+                    onChange={(e) => onChange({ ...recipe, num_gpu_blocks_override: Number(e.target.value) || undefined })}
+                    placeholder="Auto"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "performance":
+        return (
+          <div className="space-y-5">
+            {/* CUDA Graphs */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Zap className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">CUDA Graphs & Compilation</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 p-3 bg-[#0d0d0d] border border-[#363432] rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="enforce_eager"
+                    checked={recipe.enforce_eager || false}
+                    onChange={(e) => onChange({ ...recipe, enforce_eager: e.target.checked })}
+                    className="rounded border-[#363432] bg-[#1b1b1b] w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="enforce_eager" className="text-sm font-medium text-[#e8e6e3] cursor-pointer">
+                      Enforce Eager Mode
+                    </label>
+                    <p className="text-xs text-[#6a6560]">Disables CUDA graphs for debugging</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-[#0d0d0d] border border-[#363432] rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="disable_cuda_graph"
+                    checked={recipe.disable_cuda_graph || false}
+                    onChange={(e) => onChange({ ...recipe, disable_cuda_graph: e.target.checked })}
+                    className="rounded border-[#363432] bg-[#1b1b1b] w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="disable_cuda_graph" className="text-sm font-medium text-[#e8e6e3] cursor-pointer">
+                      Disable CUDA Graph
+                    </label>
+                    <p className="text-xs text-[#6a6560]">Skip graph capture for dynamic shapes</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-[#0d0d0d] border border-[#363432] rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="use_v2_block_manager"
+                    checked={recipe.use_v2_block_manager || false}
+                    onChange={(e) => onChange({ ...recipe, use_v2_block_manager: e.target.checked })}
+                    className="rounded border-[#363432] bg-[#1b1b1b] w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="use_v2_block_manager" className="text-sm font-medium text-[#e8e6e3] cursor-pointer">
+                      v2 Block Manager
+                    </label>
+                    <p className="text-xs text-[#6a6560]">New memory management</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-[#0d0d0d] border border-[#363432] rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="disable_custom_all_reduce"
+                    checked={recipe.disable_custom_all_reduce || false}
+                    onChange={(e) => onChange({ ...recipe, disable_custom_all_reduce: e.target.checked })}
+                    className="rounded border-[#363432] bg-[#1b1b1b] w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="disable_custom_all_reduce" className="text-sm font-medium text-[#e8e6e3] cursor-pointer">
+                      Disable Custom AllReduce
+                    </label>
+                    <p className="text-xs text-[#6a6560]">Use default NCCL collectives</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">CUDA Graph Max Batch Size</label>
+                  <input
+                    type="number"
+                    value={recipe.cuda_graph_max_bs || ""}
+                    onChange={(e) => onChange({ ...recipe, cuda_graph_max_bs: Number(e.target.value) || undefined })}
+                    placeholder="Default"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Compilation Config</label>
+                  <input
+                    type="text"
+                    value={recipe.compilation_config || ""}
+                    onChange={(e) => onChange({ ...recipe, compilation_config: e.target.value || undefined })}
+                    placeholder={`e.g., {"level": 3}`}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* KV Cache */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Database className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">KV Cache & Memory</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">KV Cache Dtype</label>
+                  <select
+                    value={recipe.kv_cache_dtype || "auto"}
+                    onChange={(e) => onChange({ ...recipe, kv_cache_dtype: e.target.value === "auto" ? undefined : e.target.value })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="fp8">FP8</option>
+                    <option value="fp8_e5m2">FP8 E5M2</option>
+                    <option value="fp8_e4m3">FP8 E4M3</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Block Size</label>
+                  <select
+                    value={recipe.block_size || "16"}
+                    onChange={(e) => onChange({ ...recipe, block_size: Number(e.target.value) || undefined })}
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  >
+                    <option value="8">8</option>
+                    <option value="16">16</option>
+                    <option value="32">32</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 p-3 bg-[#0d0d0d] border border-[#363432] rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="enable_prefix_caching"
+                    checked={recipe.enable_prefix_caching || false}
+                    onChange={(e) => onChange({ ...recipe, enable_prefix_caching: e.target.checked })}
+                    className="rounded border-[#363432] bg-[#1b1b1b] w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="enable_prefix_caching" className="text-sm font-medium text-[#e8e6e3] cursor-pointer">
+                      Prefix Caching
+                    </label>
+                    <p className="text-xs text-[#6a6560]">Cache shared prefixes</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-[#0d0d0d] border border-[#363432] rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="enable_chunked_prefill"
+                    checked={recipe.enable_chunked_prefill || false}
+                    onChange={(e) => onChange({ ...recipe, enable_chunked_prefill: e.target.checked })}
+                    className="rounded border-[#363432] bg-[#1b1b1b] w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="enable_chunked_prefill" className="text-sm font-medium text-[#e8e6e3] cursor-pointer">
+                      Chunked Prefill
+                    </label>
+                    <p className="text-xs text-[#6a6560]">Interleave prefill/decode</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Scheduling */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Clock className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Scheduler & Batching</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Max Sequences</label>
+                  <input
+                    type="number"
+                    value={recipe.max_num_seqs || ""}
+                    onChange={(e) => onChange({ ...recipe, max_num_seqs: Number(e.target.value) || undefined })}
+                    placeholder="256"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Max Batched Tokens</label>
+                  <input
+                    type="number"
+                    value={recipe.max_num_batched_tokens || ""}
+                    onChange={(e) => onChange({ ...recipe, max_num_batched_tokens: Number(e.target.value) || undefined })}
+                    placeholder="Auto"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Max Paddings</label>
+                  <input
+                    type="number"
+                    value={recipe.max_paddings || ""}
+                    onChange={(e) => onChange({ ...recipe, max_paddings: Number(e.target.value) || undefined })}
+                    placeholder="Auto"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Scheduling Policy</label>
+                <select
+                  value={recipe.scheduling_policy || ""}
+                  onChange={(e) => onChange({ ...recipe, scheduling_policy: e.target.value ? (e.target.value as "fcfs" | "priority") : undefined })}
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                >
+                  <option value="">Default</option>
+                  <option value="fcfs">FCFS (First Come First Serve)</option>
+                  <option value="priority">Priority</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "features":
+        return (
+          <div className="space-y-5">
+            {/* Tool Calling */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Wrench className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Tool Calling</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Tool Call Parser</label>
+                <select
+                  value={recipe.tool_call_parser || ""}
+                  onChange={(e) => onChange({ ...recipe, tool_call_parser: e.target.value || undefined })}
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                >
+                  <option value="">None</option>
+                  <optgroup label="General">
+                    <option value="hermes">Hermes</option>
+                    <option value="pythonic">Pythonic</option>
+                    <option value="openai">OpenAI</option>
+                  </optgroup>
+                  <optgroup label="Llama">
+                    <option value="llama3_json">Llama 3 JSON</option>
+                    <option value="llama4_json">Llama 4 JSON</option>
+                    <option value="llama4_pythonic">Llama 4 Pythonic</option>
+                  </optgroup>
+                  <optgroup label="DeepSeek">
+                    <option value="deepseek_v3">DeepSeek V3</option>
+                    <option value="deepseek_v31">DeepSeek V3.1</option>
+                    <option value="deepseek_v32">DeepSeek V3.2</option>
+                  </optgroup>
+                  <optgroup label="Qwen">
+                    <option value="qwen3_xml">Qwen3 XML</option>
+                    <option value="qwen3_coder">Qwen3 Coder</option>
+                  </optgroup>
+                  <optgroup label="GLM">
+                    <option value="glm45">GLM-4.5</option>
+                    <option value="glm47">GLM-4.7</option>
+                  </optgroup>
+                  <optgroup label="Other">
+                    <option value="mistral">Mistral</option>
+                    <option value="granite">Granite</option>
+                    <option value="minimax">MiniMax</option>
+                    <option value="kimi_k2">Kimi K2</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Tool Parser Plugin</label>
+                <input
+                  type="text"
+                  value={recipe.tool_parser_plugin || ""}
+                  onChange={(e) => onChange({ ...recipe, tool_parser_plugin: e.target.value || undefined })}
+                  placeholder="Path to custom parser module"
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-[#0d0d0d] border border-[#363432] rounded-lg">
+                <input
+                  type="checkbox"
+                  id="enable_auto_tool_choice"
+                  checked={recipe.enable_auto_tool_choice || false}
+                  onChange={(e) => onChange({ ...recipe, enable_auto_tool_choice: e.target.checked })}
+                  className="rounded border-[#363432] bg-[#1b1b1b] w-4 h-4"
+                />
+                <div className="flex-1">
+                  <label htmlFor="enable_auto_tool_choice" className="text-sm font-medium text-[#e8e6e3] cursor-pointer">
+                    Enable Auto Tool Choice
+                  </label>
+                  <p className="text-xs text-[#6a6560]">Automatically decide when to use tools</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Reasoning */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Brain className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Reasoning & Thinking</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Reasoning Parser</label>
+                <select
+                  value={recipe.reasoning_parser || ""}
+                  onChange={(e) => onChange({ ...recipe, reasoning_parser: e.target.value || undefined })}
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                >
+                  <option value="">None</option>
+                  <optgroup label="DeepSeek">
+                    <option value="deepseek_r1">DeepSeek R1</option>
+                    <option value="deepseek_v3">DeepSeek V3</option>
+                  </optgroup>
+                  <optgroup label="Others">
+                    <option value="qwen3">Qwen3</option>
+                    <option value="glm45">GLM-4.5</option>
+                    <option value="granite">Granite</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Guided Decoding Backend</label>
+                <input
+                  type="text"
+                  value={recipe.guided_decoding_backend || ""}
+                  onChange={(e) => onChange({ ...recipe, guided_decoding_backend: e.target.value || undefined })}
+                  placeholder="e.g., xgrammar, outlines"
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-[#0d0d0d] border border-[#363432] rounded-lg">
+                <input
+                  type="checkbox"
+                  id="enable_thinking"
+                  checked={recipe.enable_thinking || false}
+                  onChange={(e) => onChange({ ...recipe, enable_thinking: e.target.checked })}
+                  className="rounded border-[#363432] bg-[#1b1b1b] w-4 h-4"
+                />
+                <div className="flex-1">
+                  <label htmlFor="enable_thinking" className="text-sm font-medium text-[#e8e6e3] cursor-pointer">
+                    Enable Thinking Mode
+                  </label>
+                  <p className="text-xs text-[#6a6560]">Show model&apos;s thinking process</p>
+                </div>
+              </div>
+
+              {recipe.enable_thinking && (
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Thinking Budget (tokens)</label>
+                  <input
+                    type="number"
+                    value={recipe.thinking_budget || ""}
+                    onChange={(e) => onChange({ ...recipe, thinking_budget: Number(e.target.value) || undefined })}
+                    placeholder="1024"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Chat & Server */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <MessageSquare className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Chat & Templates</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Chat Template</label>
+                  <input
+                    type="text"
+                    value={recipe.chat_template || ""}
+                    onChange={(e) => onChange({ ...recipe, chat_template: e.target.value || undefined })}
+                    placeholder="Path or name"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#9a9088] mb-2">Response Role</label>
+                  <input
+                    type="text"
+                    value={recipe.response_role || ""}
+                    onChange={(e) => onChange({ ...recipe, response_role: e.target.value || undefined })}
+                    placeholder="assistant"
+                    className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Chat Template Format</label>
+                <select
+                  value={recipe.chat_template_content_format || "auto"}
+                  onChange={(e) => onChange({ ...recipe, chat_template_content_format: e.target.value === "auto" ? undefined : (e.target.value as "auto" | "string" | "openai") })}
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                >
+                  <option value="auto">Auto</option>
+                  <option value="string">String</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "environment":
+        return (
+          <div className="space-y-5">
+            {/* Runtime */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Terminal className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Runtime Configuration</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#9a9088] mb-2">Python Path</label>
+                <input
+                  type="text"
+                  value={recipe.python_path || ""}
+                  onChange={(e) => onChange({ ...recipe, python_path: e.target.value || undefined })}
+                  placeholder="/usr/bin/python or venv/bin/python"
+                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                />
+              </div>
+            </div>
+
+            {/* Environment Variables */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <div className="flex items-center gap-2">
+                  <Variable className="w-4 h-4 text-[#d97706]" />
+                  <span className="text-sm font-medium">Environment Variables</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddEnvVar}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-[#363432] hover:bg-[#494745] rounded-lg text-xs transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {envVarEntries.map((entry, index) => (
+                  <div key={`${entry.key}-${index}`} className="grid grid-cols-[1fr,1fr,auto] gap-2">
+                    <input
+                      type="text"
+                      value={entry.key}
+                      onChange={(e) => handleEnvVarChange(index, "key", e.target.value)}
+                      placeholder="KEY"
+                      className="px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm font-mono focus:outline-none focus:border-[#d97706]"
+                    />
+                    <input
+                      type="text"
+                      value={entry.value}
+                      onChange={(e) => handleEnvVarChange(index, "value", e.target.value)}
+                      placeholder="value"
+                      className="px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveEnvVar(index)}
+                      className="px-3 py-2 bg-[#2a2724] hover:bg-[#363432] rounded-lg text-xs transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Extra Args */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+                <Code className="w-4 h-4 text-[#d97706]" />
+                <span className="text-sm font-medium">Extra CLI Arguments</span>
+              </div>
+
+              <div className="bg-[#0d0d0d] border border-[#363432] rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 bg-[#1b1b1b] border-b border-[#363432]">
+                  <span className="text-xs text-[#9a9088]">JSON Editor</span>
+                  {extraArgsError && <span className="text-xs text-[#fca5a5]">Invalid JSON</span>}
+                </div>
                 <textarea
-                  value={commandText}
-                  onChange={(e) => handleCommandChange(e.target.value)}
-                  rows={20}
+                  value={extraArgsText}
+                  onChange={(e) => handleExtraArgsChange(e.target.value)}
+                  rows={10}
                   spellCheck={false}
-                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm font-mono focus:outline-none focus:border-[#d97706] resize-none"
-                  style={{ lineHeight: "1.6" }}
+                  className="w-full px-3 py-2 bg-transparent border-0 text-xs font-mono focus:outline-none resize-none"
+                  placeholder='{"custom-flag": true}'
                 />
               </div>
               <p className="text-xs text-[#6a6560]">
-                Note: In command mode, the command above will be stored and used directly when launching.
-                Form fields won&apos;t be synced back from command edits.
+                Extra arguments are passed directly to the CLI. These override form fields.
               </p>
             </div>
-          ) : (
-            /* Form Mode */
-            <>
-          {/* Basic fields */}
-          <div>
-            <label className="block text-sm text-[#9a9088] mb-2">Name *</label>
-            <input
-              type="text"
-              value={recipe.name ?? ""}
-              onChange={(e) => onChange({ ...recipe, name: e.target.value })}
-              placeholder="My Recipe"
-              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-            />
           </div>
+        );
 
-          <div>
-            <label className="block text-sm text-[#9a9088] mb-2">Model *</label>
-            <select
-              value={recipe.model_path ?? ""}
-              onChange={(e) => onChange({ ...recipe, model_path: e.target.value })}
-              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-            >
-              <option value="">Select a model...</option>
-              {availableModels.map((model) => {
-                const servedName = modelServedNames[model.path];
-                return (
-                  <option key={model.path} value={model.path}>
-                    {servedName ? `${servedName} (${model.name})` : model.name}
-                  </option>
-                );
-              })}
-            </select>
-            {recipe.model_path && !availableModels.some(m => m.path === recipe.model_path) && (
-              <p className="mt-1 text-xs text-[#9a9088]">
-                Custom path: {recipe.model_path}
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-[#9a9088] mb-2">Backend</label>
-              <select
-                value={recipe.backend ?? "vllm"}
-                onChange={(e) =>
-                  onChange({ ...recipe, backend: e.target.value as "vllm" | "sglang" })
-                }
-                className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-              >
-                <option value="vllm">vLLM</option>
-                <option value="sglang">SGLang</option>
-              </select>
+      case "command":
+        return (
+          <div className="space-y-4 h-full flex flex-col">
+            <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
+              <Eye className="w-4 h-4 text-[#d97706]" />
+              <span className="text-sm font-medium">Command Preview</span>
             </div>
-            <div>
-              <label className="block text-sm text-[#9a9088] mb-2">Port</label>
-              <input
-                type="number"
-                value={recipe.port ?? 8000}
-                onChange={(e) => onChange({ ...recipe, port: Number(e.target.value) })}
-                className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-[#9a9088] mb-2">Tensor Parallel (TP)</label>
-              <input
-                type="number"
-                value={recipe.tp ?? recipe.tensor_parallel_size ?? 1}
-                onChange={(e) => onChange({ ...recipe, tp: Number(e.target.value), tensor_parallel_size: Number(e.target.value) })}
-                min={1}
-                className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-[#9a9088] mb-2">Pipeline Parallel (PP)</label>
-              <input
-                type="number"
-                value={recipe.pp ?? recipe.pipeline_parallel_size ?? 1}
-                onChange={(e) => onChange({ ...recipe, pp: Number(e.target.value), pipeline_parallel_size: Number(e.target.value) })}
-                min={1}
-                className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-              />
-            </div>
-          </div>
+            <p className="text-xs text-[#9a9088]">
+              This is the generated command. You can copy it for reference or edit it directly.
+              <strong className="text-[#d97706]"> Note: Direct edits here are not saved yet.</strong>
+            </p>
 
-          <div>
-            <label className="block text-sm text-[#9a9088] mb-2">GPU Memory Utilization</label>
-            <input
-              type="number"
-              value={recipe.gpu_memory_utilization ?? 0.9}
-              onChange={(e) =>
-                onChange({ ...recipe, gpu_memory_utilization: Number(e.target.value) })
-              }
-              min={0}
-              max={1}
-              step={0.05}
-              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-            />
-          </div>
-
-          {/* Advanced section */}
-          <div>
-            <button
-              onClick={() => setAdvancedOpen(!advancedOpen)}
-              className="flex items-center gap-2 text-sm text-[#9a9088] hover:text-[#e8e6e3] transition-colors"
-            >
-              <ChevronDown
-                className={`w-4 h-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
-              />
-              Advanced Options
-            </button>
-            {advancedOpen && (
-              <div className="mt-4 space-y-6">
-                {/* Model Loading */}
-                <div className="space-y-4">
-                  <h4 className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
-                    Model Loading
-                  </h4>
-                  <div>
-                    <label className="block text-sm text-[#9a9088] mb-2">Max Model Length</label>
-                    <input
-                      type="number"
-                      value={recipe.max_model_len || ""}
-                      onChange={(e) =>
-                        onChange({ ...recipe, max_model_len: Number(e.target.value) || undefined })
-                      }
-                      placeholder="32768"
-                      className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-[#9a9088] mb-2">Quantization</label>
-                      <input
-                        type="text"
-                        value={recipe.quantization || ""}
-                        onChange={(e) =>
-                          onChange({ ...recipe, quantization: e.target.value || undefined })
-                        }
-                        placeholder="awq, gptq, fp8"
-                        className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-[#9a9088] mb-2">Dtype</label>
-                      <select
-                        value={recipe.dtype || "auto"}
-                        onChange={(e) =>
-                          onChange({ ...recipe, dtype: e.target.value === "auto" ? undefined : e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                      >
-                        <option value="auto">Auto</option>
-                        <option value="float16">float16</option>
-                        <option value="bfloat16">bfloat16</option>
-                        <option value="float32">float32</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="flex items-center gap-2 text-sm text-[#9a9088]">
-                      <input
-                        type="checkbox"
-                        checked={recipe.trust_remote_code || false}
-                        onChange={(e) => onChange({ ...recipe, trust_remote_code: e.target.checked })}
-                        className="rounded border-[#363432] bg-[#0d0d0d]"
-                      />
-                      Trust Remote Code
-                    </label>
-                  </div>
-                </div>
-
-                {/* Memory & KV Cache */}
-                <div className="space-y-4 pt-4 border-t border-[#363432]/50">
-                  <h4 className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
-                    Memory & KV Cache
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-[#9a9088] mb-2">KV Cache Dtype</label>
-                      <select
-                        value={recipe.kv_cache_dtype || "auto"}
-                        onChange={(e) =>
-                          onChange({ ...recipe, kv_cache_dtype: e.target.value === "auto" ? undefined : e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                      >
-                        <option value="auto">Auto</option>
-                        <option value="fp8">FP8</option>
-                        <option value="fp8_e5m2">FP8 E5M2</option>
-                        <option value="fp8_e4m3">FP8 E4M3</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-[#9a9088] mb-2">Block Size</label>
-                      <select
-                        value={recipe.block_size || "16"}
-                        onChange={(e) =>
-                          onChange({ ...recipe, block_size: Number(e.target.value) || undefined })
-                        }
-                        className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                      >
-                        <option value="8">8</option>
-                        <option value="16">16</option>
-                        <option value="32">32</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="flex items-center gap-2 text-sm text-[#9a9088]">
-                      <input
-                        type="checkbox"
-                        checked={recipe.enable_prefix_caching || false}
-                        onChange={(e) =>
-                          onChange({ ...recipe, enable_prefix_caching: e.target.checked })
-                        }
-                        className="rounded border-[#363432] bg-[#0d0d0d]"
-                      />
-                      Enable Prefix Caching
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-[#9a9088]">
-                      <input
-                        type="checkbox"
-                        checked={recipe.enable_chunked_prefill || false}
-                        onChange={(e) =>
-                          onChange({ ...recipe, enable_chunked_prefill: e.target.checked })
-                        }
-                        className="rounded border-[#363432] bg-[#0d0d0d]"
-                      />
-                      Enable Chunked Prefill
-                    </label>
-                  </div>
-                </div>
-
-                {/* Performance */}
-                <div className="space-y-4 pt-4 border-t border-[#363432]/50">
-                  <h4 className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
-                    Performance
-                  </h4>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="flex items-center gap-2 text-sm text-[#9a9088]">
-                      <input
-                        type="checkbox"
-                        checked={recipe.enforce_eager || false}
-                        onChange={(e) => onChange({ ...recipe, enforce_eager: e.target.checked })}
-                        className="rounded border-[#363432] bg-[#0d0d0d]"
-                      />
-                      Enforce Eager Mode
-                      <span className="text-[10px] text-[#6a6560]">(disables CUDA graphs)</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Tool Calling & Reasoning */}
-                <div className="space-y-4 pt-4 border-t border-[#363432]/50">
-                  <h4 className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
-                    Tool Calling & Reasoning
-                  </h4>
-                  <div>
-                    <label className="block text-sm text-[#9a9088] mb-2">Tool Call Parser</label>
-                    <select
-                      value={recipe.tool_call_parser || ""}
-                      onChange={(e) =>
-                        onChange({ ...recipe, tool_call_parser: e.target.value || undefined })
-                      }
-                      className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                    >
-                      <option value="">None</option>
-                      <optgroup label="General">
-                        <option value="hermes">hermes</option>
-                        <option value="pythonic">pythonic</option>
-                        <option value="openai">openai</option>
-                      </optgroup>
-                      <optgroup label="Llama">
-                        <option value="llama3_json">llama3_json</option>
-                        <option value="llama4_json">llama4_json</option>
-                        <option value="llama4_pythonic">llama4_pythonic</option>
-                      </optgroup>
-                      <optgroup label="DeepSeek">
-                        <option value="deepseek_v3">deepseek_v3</option>
-                        <option value="deepseek_v31">deepseek_v31</option>
-                        <option value="deepseek_v32">deepseek_v32</option>
-                      </optgroup>
-                      <optgroup label="Qwen">
-                        <option value="qwen3_xml">qwen3_xml</option>
-                        <option value="qwen3_coder">qwen3_coder</option>
-                      </optgroup>
-                      <optgroup label="GLM">
-                        <option value="glm45">glm45</option>
-                        <option value="glm47">glm47</option>
-                      </optgroup>
-                      <optgroup label="MiniMax">
-                        <option value="minimax">minimax</option>
-                        <option value="minimax_m2">minimax_m2</option>
-                      </optgroup>
-                      <optgroup label="Granite">
-                        <option value="granite">granite</option>
-                        <option value="granite-20b-fc">granite-20b-fc</option>
-                      </optgroup>
-                      <optgroup label="Other">
-                        <option value="mistral">mistral</option>
-                        <option value="internlm">internlm</option>
-                        <option value="jamba">jamba</option>
-                        <option value="xlam">xlam</option>
-                        <option value="kimi_k2">kimi_k2</option>
-                        <option value="hunyuan_a13b">hunyuan_a13b</option>
-                        <option value="longcat">longcat</option>
-                        <option value="functiongemma">functiongemma</option>
-                        <option value="olmo3">olmo3</option>
-                        <option value="gigachat3">gigachat3</option>
-                        <option value="phi4_mini_json">phi4_mini_json</option>
-                        <option value="ernie45">ernie45</option>
-                        <option value="seed_oss">seed_oss</option>
-                        <option value="step3">step3</option>
-                      </optgroup>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-[#9a9088] mb-2">Reasoning Parser</label>
-                    <select
-                      value={recipe.reasoning_parser || ""}
-                      onChange={(e) =>
-                        onChange({ ...recipe, reasoning_parser: e.target.value || undefined })
-                      }
-                      className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                    >
-                      <option value="">None</option>
-                      <optgroup label="DeepSeek">
-                        <option value="deepseek_r1">deepseek_r1</option>
-                        <option value="deepseek_v3">deepseek_v3</option>
-                      </optgroup>
-                      <optgroup label="Qwen">
-                        <option value="qwen3">qwen3</option>
-                      </optgroup>
-                      <optgroup label="GLM">
-                        <option value="glm45">glm45</option>
-                      </optgroup>
-                      <optgroup label="MiniMax">
-                        <option value="minimax_m2">minimax_m2</option>
-                        <option value="minimax_m2_append_think">minimax_m2_append_think</option>
-                      </optgroup>
-                      <optgroup label="Other">
-                        <option value="granite">granite</option>
-                        <option value="mistral">mistral</option>
-                        <option value="hunyuan_a13b">hunyuan_a13b</option>
-                        <option value="kimi_k2">kimi_k2</option>
-                        <option value="olmo3">olmo3</option>
-                        <option value="holo2">holo2</option>
-                        <option value="ernie45">ernie45</option>
-                        <option value="openai_gptoss">openai_gptoss</option>
-                        <option value="seed_oss">seed_oss</option>
-                        <option value="step3">step3</option>
-                      </optgroup>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="flex items-center gap-2 text-sm text-[#9a9088]">
-                      <input
-                        type="checkbox"
-                        checked={recipe.enable_auto_tool_choice || false}
-                        onChange={(e) =>
-                          onChange({ ...recipe, enable_auto_tool_choice: e.target.checked })
-                        }
-                        className="rounded border-[#363432] bg-[#0d0d0d]"
-                      />
-                      Enable Auto Tool Choice
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-[#9a9088]">
-                      <input
-                        type="checkbox"
-                        checked={!!(recipe.extra_args as Record<string, unknown>)?.["enable-reasoning"] || !!(recipe.extra_args as Record<string, unknown>)?.["enable_thinking"]}
-                        onChange={(e) => {
-                          const newExtraArgs = { ...(recipe.extra_args || {}) } as Record<string, unknown>;
-                          // Always remove old wrong keys
-                          delete newExtraArgs["enable_thinking"];
-                          delete newExtraArgs["enable-thinking"];
-                          if (e.target.checked) {
-                            newExtraArgs["enable-reasoning"] = true;
-                          } else {
-                            delete newExtraArgs["enable-reasoning"];
-                          }
-                          onChange({ ...recipe, extra_args: newExtraArgs });
-                        }}
-                        className="rounded border-[#363432] bg-[#0d0d0d]"
-                      />
-                      Enable Thinking
-                    </label>
-                  </div>
-                  {!!(recipe.extra_args as Record<string, unknown>)?.["enable-reasoning"] && (
-                    <div>
-                      <label className="block text-sm text-[#9a9088] mb-2">Thinking Budget</label>
-                      <input
-                        type="number"
-                        value={recipe.thinking_budget || ""}
-                        onChange={(e) =>
-                          onChange({ ...recipe, thinking_budget: Number(e.target.value) || undefined })
-                        }
-                        placeholder="1024"
-                        className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Chat & Server */}
-                <div className="space-y-4 pt-4 border-t border-[#363432]/50">
-                  <h4 className="text-xs uppercase tracking-wider text-[#6a6560] font-medium">
-                    Chat & Server
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-[#9a9088] mb-2">Served Model Name</label>
-                      <input
-                        type="text"
-                        value={recipe.served_model_name || ""}
-                        onChange={(e) =>
-                          onChange({ ...recipe, served_model_name: e.target.value || undefined })
-                        }
-                        placeholder="Optional alias"
-                        className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-[#9a9088] mb-2">Chat Template</label>
-                      <input
-                        type="text"
-                        value={recipe.chat_template || ""}
-                        onChange={(e) =>
-                          onChange({ ...recipe, chat_template: e.target.value || undefined })
-                        }
-                        placeholder="Path or template name"
-                        className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
-                      />
-                    </div>
-                  </div>
-                </div>
+            <div className="flex-1 bg-[#0d0d0d] border border-[#363432] rounded-lg overflow-hidden flex flex-col">
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#1b1b1b] border-b border-[#363432]">
+                <Terminal className="w-4 h-4 text-[#6a6560]" />
+                <span className="text-xs text-[#9a9088]">Generated Command</span>
               </div>
-            )}
+              <textarea
+                value={commandText}
+                onChange={(e) => handleCommandChange(e.target.value)}
+                spellCheck={false}
+                className="flex-1 w-full px-3 py-3 bg-transparent border-0 text-xs font-mono text-[#4ade80] focus:outline-none resize-none leading-relaxed"
+                placeholder="Command will appear here..."
+              />
+            </div>
+
+            <div className="flex items-start gap-2 p-3 bg-[#1b1b1b] border border-[#363432] rounded-lg">
+              <Info className="w-4 h-4 text-[#d97706] mt-0.5 shrink-0" />
+              <div className="text-xs text-[#9a9088] space-y-1">
+                <p>Use the form tabs to configure the recipe. This preview updates automatically.</p>
+                <p>If you edit this command directly, those changes won&apos;t be saved with the recipe.</p>
+              </div>
+            </div>
           </div>
-          </>
-          )}
+        );
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      {/* Backdrop */}
+      <button className="flex-1 bg-black/60" onClick={onClose} aria-label="Close" />
+      
+      {/* Drawer */}
+      <div className="w-full max-w-2xl bg-[#1b1b1b] border-l border-[#363432] flex flex-col h-full animate-in slide-in-from-right duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#363432] shrink-0 bg-[#1b1b1b]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#d97706]/10 rounded-lg flex items-center justify-center">
+              <Layers className="w-5 h-5 text-[#d97706]" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">{recipe.id ? "Edit Recipe" : "New Recipe"}</h3>
+              <p className="text-xs text-[#6a6560]">{recipe.backend === "vllm" ? "vLLM" : "SGLang"} configuration</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-[#363432] rounded-lg transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 px-4 py-3 border-b border-[#363432] shrink-0 bg-[#0d0d0d] overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? "bg-[#d97706] text-white shadow-lg shadow-[#d97706]/20"
+                  : "text-[#9a9088] hover:text-[#e8e6e3] hover:bg-[#1b1b1b]"
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {renderTabContent()}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#363432] shrink-0 bg-[#1b1b1b]">
-          <button
-            onClick={onClose}
-            disabled={saving}
-            className="px-4 py-2 bg-[#363432] hover:bg-[#494745] rounded-lg text-sm transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onSave}
-            disabled={saving || !(recipe.name ?? "").trim() || !(recipe.model_path ?? "").trim()}
-            className="px-4 py-2 bg-[#d97706] hover:bg-[#b45309] text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? "Saving..." : "Save Recipe"}
-          </button>
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[#363432] shrink-0 bg-[#1b1b1b]">
+          <div className="text-xs text-[#6a6560]">
+            {recipe.id ? `Editing ${recipe.name}` : "Creating new recipe"}
+            {extraArgsError && <span className="ml-3 text-[#fca5a5]">Extra args has errors</span>}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="px-4 py-2 bg-[#363432] hover:bg-[#494745] rounded-lg text-sm transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onSave}
+              disabled={saving || !!extraArgsError || !(recipe.name ?? "").trim() || !(recipe.model_path ?? "").trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-[#d97706] hover:bg-[#b45309] text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Recipe
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

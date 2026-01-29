@@ -92,9 +92,9 @@ export function ToolBeltToolbar({
     <div className="flex items-center justify-between px-3 py-2">
       <div className="flex items-center gap-1 min-w-0">
         {isLoading && elapsedSeconds !== undefined && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <Clock className="h-3.5 w-3.5 text-blue-400 animate-pulse" />
-            <span className="text-xs font-mono text-blue-400">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-blue-500/30">
+            <Clock className="h-3 w-3 text-blue-400 animate-pulse" />
+            <span className="text-xs font-mono font-medium text-blue-400">
               {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, "0")}
             </span>
           </div>
@@ -123,11 +123,11 @@ export function ToolBeltToolbar({
         <button
           onClick={isRecording ? onStopRecording : onStartRecording}
           disabled={disabled || isTranscribing}
-          className={`flex items-center justify-center p-2 rounded-lg transition-all disabled:opacity-50 ${
+          className={`flex items-center justify-center p-2 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
             isRecording
-              ? "bg-(--error)/20 text-(--error)"
+              ? "bg-(--error) text-(--error)"
               : isTranscribing
-                ? "bg-(--link)/20 text-(--link)"
+                ? "bg-(--link) text-(--link)"
                 : "hover:bg-(--accent) text-[#9a9590]"
           }`}
           title={
@@ -135,11 +135,11 @@ export function ToolBeltToolbar({
           }
         >
           {isTranscribing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : isRecording ? (
-            <MicOff className="h-4 w-4" />
+            <MicOff className="h-3.5 w-3.5" />
           ) : (
-            <Mic className="h-4 w-4" />
+            <Mic className="h-3.5 w-3.5" />
           )}
         </button>
 
@@ -147,17 +147,17 @@ export function ToolBeltToolbar({
           <button
             onClick={onTTSToggle}
             disabled={disabled}
-            className={`hidden md:flex items-center justify-center p-2 rounded-lg transition-all disabled:opacity-50 ${
+            className={`hidden md:flex items-center justify-center p-2 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
               isTTSEnabled
-                ? "bg-(--success)/20 text-(--success)"
+                ? "bg-(--success) text-(--success)"
                 : "hover:bg-(--accent) text-[#9a9590]"
             }`}
             title={isTTSEnabled ? "Disable TTS" : "Enable TTS"}
           >
             {isTTSEnabled ? (
-              <Volume2 className="h-4 w-4" />
+              <Volume2 className="h-3.5 w-3.5" />
             ) : (
-              <VolumeX className="h-4 w-4" />
+              <VolumeX className="h-3.5 w-3.5" />
             )}
           </button>
         )}
@@ -209,14 +209,14 @@ export function ToolBeltToolbar({
           <button
             onClick={onOpenChatSettings}
             disabled={disabled}
-            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all disabled:opacity-50 ${
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
               hasSystemPrompt
-                ? "bg-(--card-hover) text-[#e8e4dd] border border-(--border)/50"
+                ? "bg-(--card-hover) text-[#e8e4dd] border border-(--border)"
                 : "hover:bg-(--accent) text-[#9a9590]"
             }`}
             title={hasSystemPrompt ? "System prompt (active)" : "System prompt"}
           >
-            <SlidersHorizontal className="h-4 w-4" />
+            <SlidersHorizontal className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
@@ -227,11 +227,11 @@ export function ToolBeltToolbar({
             value={selectedModel || ""}
             onChange={(e) => onModelChange(e.target.value)}
             disabled={disabled || isLoading}
-            className="max-w-[140px] md:max-w-[180px] px-2 py-1 text-xs bg-transparent border border-(--border) rounded-lg text-[#9a9590] focus:outline-none disabled:opacity-50 truncate appearance-none cursor-pointer hover:border-[#4a4745] transition-colors"
+            className="max-w-[140px] md:max-w-[180px] px-2 py-1 font-sans font-medium text-xs bg-transparent border border-(--border) rounded-lg text-[#9a9590] focus:outline-none disabled:opacity-50 truncate appearance-none cursor-pointer hover:border-[#4a4745] transition-colors:ease-in:200ms"
             title={selectedModel || "Select model"}
           >
-            {availableModels.map((model) => (
-              <option key={model.id} value={model.id}>
+            {availableModels.map((model, idx) => (
+              <option key={`${model.id}-${idx}`} value={model.id}>
                 {model.id}
               </option>
             ))}
@@ -241,23 +241,23 @@ export function ToolBeltToolbar({
         {isLoading ? (
           <button
             onClick={onStop}
-            className="h-8 w-8 flex items-center justify-center rounded-full bg-(--error) text-white hover:bg-(--error)/90 transition-colors flex-shrink-0"
+            className="h-8 w-8 flex items-center justify-center rounded-full bg-(--error) text-white transition-colors:ease-in:200ms flex-shrink-0"
             title="Stop"
           >
-            <Square className="h-3.5 w-3.5 fill-current" />
+            <Square className="h-3 w-3 fill-current" />
           </button>
         ) : (
           <button
             onClick={onSubmit}
             disabled={!canSend}
-            className={`h-8 w-8 flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
+            className={`h-8 w-8 flex items-center justify-center rounded-full transition-colors:ease-in:200ms flex-shrink-0 ${
               canSend
-                ? "bg-[#e8e4dd] text-[#1a1918] hover:bg-[#d4d0c9]"
+                ? "bg-[#e8e4dd] text-[#1a1918]"
                 : "bg-(--accent) text-[#9a9590]/50 cursor-not-allowed"
             }`}
             title="Send"
           >
-            <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
+            <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
         )}
       </div>

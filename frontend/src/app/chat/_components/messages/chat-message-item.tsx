@@ -100,22 +100,27 @@ function ToolCallSummary({
     type: string;
     toolCallId: string;
     state?: string;
+    toolName?: string;
   }>;
   isStreaming?: boolean;
 }) {
   const hasError = toolParts.some(
-    (t) => t.state === "output-error" || t.state === "error",
+    (t) => t.state === "output-error" || t.state === "error" || t.state === "output-denied",
   );
+  const pendingStates = new Set([
+    "input-streaming",
+    "input-available",
+    "approval-requested",
+    "approval-responded",
+  ]);
   // Only "running" if this message is still streaming AND has pending calls
-  const hasPendingCalls = toolParts.some(
-    (t) => t.state === "call" || t.state === "input-streaming",
-  );
+  const hasPendingCalls = toolParts.some((t) => t.state && pendingStates.has(t.state));
   const isRunning = Boolean(isStreaming) && hasPendingCalls;
   const total = toolParts.length;
 
   // Last tool name (strip server__ prefix)
   const lastTool = toolParts[toolParts.length - 1];
-  const lastToolRaw = lastTool?.type.replace(/^tool-/, "") ?? "";
+  const lastToolRaw = lastTool?.toolName ?? lastTool?.type.replace(/^tool-/, "") ?? "";
   const lastToolName = lastToolRaw.includes("__")
     ? lastToolRaw.split("__").slice(1).join("__")
     : lastToolRaw;
@@ -154,6 +159,7 @@ function InlineToolCalls({
     type: string;
     toolCallId: string;
     state?: string;
+    toolName?: string;
     input?: unknown;
     output?: unknown;
   }>;
@@ -163,7 +169,20 @@ function InlineToolCalls({
 
   if (toolParts.length === 0) return null;
 
-  const activeTools = toolParts.filter((t) => t.state === "call" || t.state === "input-streaming");
+  const pendingStates = new Set([
+    "input-streaming",
+    "input-available",
+    "approval-requested",
+    "approval-responded",
+  ]);
+  const completeStates = new Set([
+    "output-available",
+    "output-error",
+    "output-denied",
+    "result",
+  ]);
+
+  const activeTools = toolParts.filter((t) => t.state && pendingStates.has(t.state));
   const hasActiveTools = activeTools.length > 0;
 
   return (
@@ -191,9 +210,9 @@ function InlineToolCalls({
       {expanded && (
         <div className="mt-1 space-y-1 pl-5">
           {toolParts.map((tool) => {
-            const toolName = tool.type.replace(/^tool-/, "");
-            const isRunning = tool.state === "call" || tool.state === "input-streaming";
-            const isComplete = tool.state === "result" || tool.state === "output-available";
+            const toolName = tool.toolName ?? tool.type.replace(/^tool-/, "");
+            const isRunning = tool.state ? pendingStates.has(tool.state) : false;
+            const isComplete = tool.state ? completeStates.has(tool.state) : false;
 
             return (
               <div key={tool.toolCallId} className="flex items-center gap-2 text-xs text-[#6a6560]">
@@ -255,17 +274,32 @@ function ChatMessageItemBase({
   const thinkingContent = aiSdkReasoning || parsedThinking?.thinkingContent || "";
   const isThinkingActive = isStreaming && !textContent && !!thinkingContent;
 
-  // Extract tool parts (they have type starting with "tool-")
-  const toolParts = message.parts.filter(
-    (
-      part,
-    ): part is typeof part & {
-      toolCallId: string;
-      state?: string;
-      input?: unknown;
-      output?: unknown;
-    } => part.type.startsWith("tool-") && "toolCallId" in part,
-  );
+  // Extract tool parts (static + dynamic tools)
+  const toolParts = message.parts
+    .filter(
+      (
+        part,
+      ): part is typeof part & {
+        toolCallId: string;
+        state?: string;
+        input?: unknown;
+        output?: unknown;
+        toolName?: string;
+      } => {
+        if (part.type === "dynamic-tool") return "toolCallId" in part;
+        return typeof part.type === "string" && part.type.startsWith("tool-") && "toolCallId" in part;
+      },
+    )
+    .map((part) => {
+      if (part.type === "dynamic-tool") {
+        return { ...part, toolName: "toolName" in part ? String(part.toolName) : "tool" };
+      }
+      const rawName = part.type.replace(/^tool-/, "");
+      const toolName = rawName.includes("__")
+        ? rawName.split("__").slice(1).join("__")
+        : rawName;
+      return { ...part, toolName };
+    });
 
   const metadata = message.metadata as MessageMetadata | undefined;
   const usage = metadata?.usage;

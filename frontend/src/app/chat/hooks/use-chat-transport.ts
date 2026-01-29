@@ -52,15 +52,56 @@ export function useChatTransport({
 
         // Extract tool calls from parts
         const toolCalls = message.parts
-          .filter((p) => p.type.startsWith("tool-") && "toolCallId" in p)
-          .map((p) => ({
-            id: (p as { toolCallId: string }).toolCallId,
-            type: "function" as const,
-            function: {
-              name: p.type.replace(/^tool-/, ""),
-              arguments: "input" in p ? safeJsonStringify(p.input, "{}") : "{}",
-            },
-          }));
+          .filter((part) => {
+            if (part.type === "dynamic-tool") return "toolCallId" in part;
+            return typeof part.type === "string" && part.type.startsWith("tool-") && "toolCallId" in part;
+          })
+          .map((part) => {
+            const toolName =
+              part.type === "dynamic-tool"
+                ? "toolName" in part
+                  ? String(part.toolName)
+                  : "tool"
+                : part.type.replace(/^tool-/, "");
+            const input = "input" in part ? part.input : undefined;
+            const output = "output" in part ? part.output : undefined;
+            const errorText = "errorText" in part ? part.errorText : undefined;
+            const state = "state" in part ? part.state : undefined;
+            const hasResult =
+              state === "output-available" ||
+              state === "output-error" ||
+              state === "output-denied" ||
+              output != null ||
+              errorText != null;
+
+            let result: { content?: string; isError?: boolean } | undefined;
+            if (hasResult) {
+              const payload = errorText ?? output;
+              if (payload != null) {
+                result = {
+                  content:
+                    typeof payload === "string"
+                      ? payload
+                      : safeJsonStringify(payload, ""),
+                  isError: state === "output-error" || state === "output-denied",
+                };
+              }
+            }
+
+            return {
+              id: (part as { toolCallId: string }).toolCallId,
+              type: "function" as const,
+              function: {
+                name: toolName,
+                arguments: input != null ? safeJsonStringify(input, "{}") : "{}",
+              },
+              ...(part.type === "dynamic-tool" ? { dynamic: true } : {}),
+              ...("providerExecuted" in part && part.providerExecuted != null
+                ? { providerExecuted: part.providerExecuted }
+                : {}),
+              ...(result ? { result } : {}),
+            };
+          });
 
         const role = message.role === "system" ? "assistant" : message.role;
         await api.addChatMessage(sessionId, {
@@ -69,6 +110,8 @@ export function useChatTransport({
           content: textContent,
           model: metadata?.model ?? selectedModel,
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+          parts: message.parts,
+          metadata: message.metadata,
           prompt_tokens: promptTokens,
           completion_tokens: completionTokens,
           total_tokens: totalTokens,

@@ -4,7 +4,9 @@ import type { EventManager } from "../services/event-manager";
 import type { LaunchState } from "../services/launch-state";
 import type { ControllerMetrics, MetricsRegistry } from "../services/metrics";
 import type { ProcessManager } from "../services/process-manager";
+import type { DownloadManager } from "../services/download-manager";
 import type { ChatStore } from "../stores/chat-store";
+import type { DownloadStore } from "../stores/download-store";
 import type { LifetimeMetricsStore, PeakMetricsStore } from "../stores/metrics-store";
 import type { McpStore } from "../stores/mcp-store";
 import type { RecipeStore } from "../stores/recipe-store";
@@ -20,9 +22,11 @@ export interface AppContext {
   metrics: ControllerMetrics;
   metricsRegistry: MetricsRegistry;
   processManager: ProcessManager;
+  downloadManager: DownloadManager;
   stores: {
     recipeStore: RecipeStore;
     chatStore: ChatStore;
+    downloadStore: DownloadStore;
     peakMetricsStore: PeakMetricsStore;
     lifetimeMetricsStore: LifetimeMetricsStore;
     mcpStore: McpStore;

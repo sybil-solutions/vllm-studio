@@ -33,43 +33,45 @@ struct ChatMessageRow: View {
   private var userBubble: some View {
     HStack {
       Spacer(minLength: 40)
-      VStack(alignment: .trailing, spacing: 4) {
-        Text(message.content ?? "")
-          .font(AppTheme.bodyFont)
-          .foregroundColor(AppTheme.foreground)
-          .padding(.horizontal, 16)
-          .padding(.vertical, 12)
-          .background(AppTheme.accent.opacity(0.25))
-          .cornerRadius(18)
-          .overlay(
-            RoundedRectangle(cornerRadius: 18)
-              .stroke(AppTheme.accent.opacity(0.4), lineWidth: 1)
-          )
-      }
+      Text(message.content ?? "")
+        .font(AppTheme.bodyFont)
+        .lineSpacing(4)
+        .multilineTextAlignment(.leading)
+        .foregroundColor(AppTheme.foreground)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(AppTheme.card)
+        .cornerRadius(18)
     }
   }
 
   // MARK: - Assistant message
 
   private var assistantBlock: some View {
-    HStack {
-      VStack(alignment: .leading, spacing: 12) {
-        // Assistant header
-        HStack(spacing: 6) {
-          Image(systemName: "sparkles")
-            .font(.system(size: 12))
-            .foregroundColor(AppTheme.accentStrong)
-          Text("Assistant")
-            .font(AppTheme.captionFont.weight(.medium))
-            .foregroundColor(AppTheme.muted)
-          Spacer()
+    let hasContent = !artifactResult.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    let hasToolCalls = meta?.toolCalls.isEmpty == false
+    let isToolCallOnly = !hasContent && hasToolCalls && !isStreaming
+
+    return HStack {
+      VStack(alignment: .leading, spacing: isToolCallOnly ? 0 : 12) {
+        // Assistant header (hide for tool-call-only messages)
+        if !isToolCallOnly {
+          HStack(spacing: 6) {
+            Image(systemName: "sparkles")
+              .font(.system(size: 11))
+              .foregroundColor(AppTheme.muted)
+            Text("Assistant")
+              .font(AppTheme.captionFont.weight(.medium))
+              .foregroundColor(AppTheme.muted)
+            Spacer()
+          }
         }
 
         // Message content
         if isStreaming {
           MarkdownText(content: parsed.main)
             .foregroundColor(AppTheme.foreground)
-        } else {
+        } else if hasContent {
           MarkdownText(content: artifactResult.text)
             .foregroundColor(AppTheme.foreground)
 
@@ -115,8 +117,16 @@ struct ChatMessageRow: View {
     }
   }
 
+  private var assistantContent: String {
+    guard message.role == "assistant" else { return message.content ?? "" }
+    let base = message.content ?? ""
+    if !base.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return base }
+    let reasoning = message.reasoningContent ?? message.reasoning ?? ""
+    return reasoning
+  }
+
   private var parsed: ThinkingResult {
-    ThinkingParser.parse(message.content ?? "")
+    ThinkingParser.parse(assistantContent)
   }
 
   private var artifactResult: ArtifactParseResult {
@@ -182,6 +192,11 @@ extension ChatMessageRow: Equatable {
   static func == (lhs: ChatMessageRow, rhs: ChatMessageRow) -> Bool {
     lhs.message.id == rhs.message.id
       && lhs.message.content == rhs.message.content
+      && lhs.message.reasoningContent == rhs.message.reasoningContent
+      && lhs.message.reasoning == rhs.message.reasoning
       && lhs.isStreaming == rhs.isStreaming
+      && lhs.meta?.thinkingBlocks == rhs.meta?.thinkingBlocks
+      && (lhs.meta?.toolCalls.count ?? 0) == (rhs.meta?.toolCalls.count ?? 0)
+      && (lhs.meta?.toolResults.count ?? 0) == (rhs.meta?.toolResults.count ?? 0)
   }
 }

@@ -1,42 +1,30 @@
-// CRITICAL
 import SwiftUI
 
 struct ChatUsageBar: View {
   let usage: ChatUsage?
 
   var body: some View {
-    if let usage {
+    if let usage, usage.totalTokens > 0 {
       HStack(spacing: 8) {
-        UsagePill(label: "Input", value: usage.promptTokens, color: AppTheme.accentStrong)
-        UsagePill(label: "Output", value: usage.completionTokens, color: AppTheme.success)
-        UsagePill(label: "Total", value: usage.totalTokens, color: AppTheme.foreground)
+        usagePill("In", value: usage.promptTokens)
+        usagePill("Out", value: usage.completionTokens)
+        usagePill("Total", value: usage.totalTokens)
       }
-      .padding(.horizontal, 4)
     }
   }
-}
 
-struct UsagePill: View {
-  let label: String
-  let value: Int
-  let color: Color
-
-  var body: some View {
-    HStack(spacing: 4) {
+  private func usagePill(_ label: String, value: Int) -> some View {
+    HStack(spacing: 3) {
       Text(label)
         .font(AppTheme.captionFont)
         .foregroundColor(AppTheme.muted)
       Text("\(value)")
-        .font(AppTheme.monoFont.weight(.medium))
-        .foregroundColor(color)
+        .font(AppTheme.monoFont)
+        .foregroundColor(AppTheme.foreground.opacity(0.7))
     }
-    .padding(.vertical, 6)
-    .padding(.horizontal, 10)
+    .padding(.horizontal, 8)
+    .padding(.vertical, 5)
     .background(AppTheme.card)
-    .cornerRadius(8)
-    .overlay(
-      RoundedRectangle(cornerRadius: 8)
-        .stroke(AppTheme.border, lineWidth: 1)
-    )
+    .cornerRadius(6)
   }
 }

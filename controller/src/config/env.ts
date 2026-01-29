@@ -3,6 +3,7 @@ import { config as loadEnvironment } from "dotenv";
 import { z } from "zod";
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { loadPersistedConfig } from "./persisted-config";
 
 /**
  * Runtime configuration for the controller.
@@ -96,6 +97,11 @@ export const createConfig = (): Config => {
   }
   if (parsed.VLLM_STUDIO_TABBY_API_DIR) {
     config.tabby_api_dir = parsed.VLLM_STUDIO_TABBY_API_DIR;
+  }
+
+  const persisted = loadPersistedConfig(config.data_dir);
+  if (persisted.models_dir) {
+    config.models_dir = resolve(persisted.models_dir);
   }
 
   return config;

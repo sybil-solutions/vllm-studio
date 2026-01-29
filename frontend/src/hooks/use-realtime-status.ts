@@ -93,6 +93,11 @@ export function useRealtimeStatus(
           }
           break;
 
+        case "download_progress":
+        case "download_state":
+          lastSSEUpdate.current = Date.now();
+          break;
+
         default:
           // Don't update lastSSEUpdate for unknown events - keep polling active
           console.log("[SSE] Unknown event type:", eventType);
@@ -138,6 +143,8 @@ export function useRealtimeStatus(
       es.addEventListener("metrics", (event) => handleMessage(event as MessageEvent));
       es.addEventListener("launch_progress", (event) => handleMessage(event as MessageEvent));
       es.addEventListener("log", (event) => handleMessage(event as MessageEvent));
+      es.addEventListener("download_progress", (event) => handleMessage(event as MessageEvent));
+      es.addEventListener("download_state", (event) => handleMessage(event as MessageEvent));
 
       // Fallback for unnamed events
       es.onmessage = (event) => {

@@ -289,7 +289,7 @@ export function ToolBelt({
         />
 
         <div
-          className={`relative flex flex-col bg-[#1a1a1a] rounded-xl border border-white/[0.08] shadow-lg overflow-hidden ${
+          className={`relative flex flex-col bg-[#1a1a1a] rounded-xl border border-white/[0.08] shadow-lg ${
             isLoading ? "ring-1 ring-blue-500/30" : ""
           }`}
           style={{

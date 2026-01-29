@@ -43,7 +43,36 @@ const formatToolCalls = (toolCalls: unknown[]): string => {
       const fn = record["function"] as Record<string, unknown> | undefined;
       const name = getString(fn?.["name"]) ?? "tool";
       const args = getString(fn?.["arguments"]);
-      return args ? `${name}(${args})` : `${name}()`;
+      const callLabel = args ? `${name}(${args})` : `${name}()`;
+      const rawResult = record["result"];
+      if (rawResult === undefined || rawResult === null) {
+        return callLabel;
+      }
+      let resultText = "";
+      let isError = false;
+      if (typeof rawResult === "string") {
+        resultText = rawResult;
+      } else if (typeof rawResult === "object") {
+        const resultRecord = rawResult as Record<string, unknown>;
+        const content = getString(resultRecord["content"]);
+        if (content) {
+          resultText = content;
+        } else {
+          try {
+            resultText = JSON.stringify(rawResult);
+          } catch {
+            resultText = String(rawResult);
+          }
+        }
+        isError = resultRecord["isError"] === true;
+      } else {
+        resultText = String(rawResult);
+      }
+      if (!resultText) {
+        return callLabel;
+      }
+      const errorSuffix = isError ? " (error)" : "";
+      return `${callLabel} => ${resultText}${errorSuffix}`;
     })
     .filter((value): value is string => Boolean(value));
   return formatted.length > 0 ? `\n\n[Tool calls]: ${formatted.join("; ")}` : "";
@@ -114,17 +143,21 @@ const requestSummary = async (
   return summary;
 };
 
-const createSummaryMessage = (summary: string, model?: string): MessageRecord => ({
-  role: "assistant",
-  content: `Context summary (compacted on ${new Date().toLocaleString()}):\n\n${summary}`,
-  model: model ?? null,
-});
+const createSummaryMessage = (summary: string, model?: string): MessageRecord => {
+  const content = `Context summary (compacted on ${new Date().toLocaleString()}):\n\n${summary}`;
+  return {
+    role: "assistant",
+    content,
+    model: model ?? null,
+    parts: [{ type: "text", text: content }],
+  };
+};
 
 const pickFirstUserMessage = (messages: MessageRecord[]): MessageRecord | null =>
   messages.find((message) => getString(message["role"]) === "user") ?? null;
 
 const pickLastMessage = (messages: MessageRecord[]): MessageRecord | null =>
-  messages.length > 0 ? messages[messages.length - 1] : null;
+  messages.length > 0 ? (messages[messages.length - 1] ?? null) : null;
 
 const cloneMessageToSession = (
   context: AppContext,
@@ -135,6 +168,10 @@ const cloneMessageToSession = (
   const content = getString(message["content"]) ?? undefined;
   const model = getString(message["model"]) ?? undefined;
   const toolCalls = Array.isArray(message["tool_calls"]) ? message["tool_calls"] : undefined;
+  const parts = Array.isArray(message["parts"]) ? message["parts"] : undefined;
+  const metadata = Object.prototype.hasOwnProperty.call(message, "metadata")
+    ? message["metadata"]
+    : undefined;
   const promptTokens = getNumber(message["request_prompt_tokens"]);
   const toolsTokens = getNumber(message["request_tools_tokens"]);
   const totalInputTokens = getNumber(message["request_total_input_tokens"]);
@@ -151,6 +188,8 @@ const cloneMessageToSession = (
     toolsTokens,
     totalInputTokens,
     completionTokens,
+    parts,
+    metadata,
   );
 };
 
@@ -189,7 +228,16 @@ export const compactChatSession = async (
   const titleBase = getString(session["title"]) ?? "Chat";
   const newTitle = options.title ?? `${titleBase} (Compacted)`;
   const newSessionId = randomUUID();
-  const newSession = context.stores.chatStore.createSession(newSessionId, newTitle, model, sessionId);
+  const agentState = Object.prototype.hasOwnProperty.call(session, "agent_state")
+    ? session["agent_state"]
+    : undefined;
+  const newSession = context.stores.chatStore.createSession(
+    newSessionId,
+    newTitle,
+    model,
+    sessionId,
+    agentState,
+  );
 
   if (firstUser) {
     cloneMessageToSession(context, newSessionId, firstUser);
