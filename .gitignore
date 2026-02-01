@@ -20,7 +20,6 @@ build/
 data/
 *.db
 *.sqlite
-docs
 # Logs
 *.log
 logs/
