@@ -56,11 +56,12 @@ final class OpenAIChatService: ObservableObject {
       content = reasoning
       reasoning = ""
     }
-    streamingReasoning = reasoning
-    streamingContent = content
+    let toolCalls = msg?.toolCalls ?? []
+    streamingToolCalls = toolCalls
+    await simulateStreamingOutput(content: content, reasoning: reasoning)
     return StreamResult(
       content: content, reasoning: reasoning,
-      toolCalls: msg?.toolCalls ?? [],
+      toolCalls: toolCalls,
       finishReason: nil, usage: completion.usage
     )
   }
@@ -170,9 +171,12 @@ final class OpenAIChatService: ObservableObject {
           content = reasoning
           reasoning = ""
         }
+        let toolCalls = msg.toolCalls ?? []
+        streamingToolCalls = toolCalls
+        await simulateStreamingOutput(content: content, reasoning: reasoning)
         return StreamResult(
           content: content, reasoning: reasoning,
-          toolCalls: msg.toolCalls ?? [],
+          toolCalls: toolCalls,
           finishReason: nil, usage: completion.usage
         )
       }
@@ -234,6 +238,57 @@ final class OpenAIChatService: ObservableObject {
         function: ToolFunction(name: buffer.name, arguments: buffer.arguments)
       )
     }
+  }
+
+  private func simulateStreamingOutput(content: String, reasoning: String) async {
+    if !reasoning.isEmpty {
+      await streamChunks(text: reasoning, maxDuration: 0.7, maxChunks: 40) { chunk in
+        streamingReasoning = chunk
+      }
+    }
+    if !content.isEmpty {
+      let duration = reasoning.isEmpty ? 0.9 : 0.6
+      await streamChunks(text: content, maxDuration: duration, maxChunks: 50) { chunk in
+        streamingContent = chunk
+      }
+    }
+  }
+
+  private func streamChunks(
+    text: String,
+    maxDuration: Double,
+    maxChunks: Int,
+    assign: (String) -> Void
+  ) async {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      assign("")
+      return
+    }
+    let segments = chunked(text, maxChunks: maxChunks, minChunkSize: 24)
+    let duration = max(0.12, min(maxDuration, Double(segments.count) * 0.02))
+    let delay = UInt64((duration / Double(max(segments.count, 1))) * 1_000_000_000)
+    var acc = ""
+    for segment in segments {
+      acc.append(segment)
+      assign(acc)
+      if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
+    }
+  }
+
+  private func chunked(_ text: String, maxChunks: Int, minChunkSize: Int) -> [String] {
+    let count = text.count
+    guard count > 0 else { return [] }
+    let targetChunks = max(1, min(maxChunks, count / minChunkSize))
+    let chunkSize = max(minChunkSize, Int(ceil(Double(count) / Double(targetChunks))))
+    var results: [String] = []
+    var index = text.startIndex
+    while index < text.endIndex {
+      let nextIndex = text.index(index, offsetBy: chunkSize, limitedBy: text.endIndex) ?? text.endIndex
+      results.append(String(text[index..<nextIndex]))
+      index = nextIndex
+    }
+    return results
   }
 }
 

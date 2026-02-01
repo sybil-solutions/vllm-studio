@@ -77,7 +77,10 @@ export function UnifiedSidebar({
       if (!resizeRef.current) return;
       // Dragging left increases width, dragging right decreases
       const delta = resizeRef.current.startX - e.clientX;
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizeRef.current.startWidth + delta));
+      const newWidth = Math.min(
+        MAX_WIDTH,
+        Math.max(MIN_WIDTH, resizeRef.current.startWidth + delta),
+      );
       setWidth(newWidth);
     };
 
@@ -115,7 +118,7 @@ export function UnifiedSidebar({
 
       {isOpen && (
         <div
-          className="hidden md:flex shrink-0 flex-col h-full border-l border-white/[0.06] bg-[#0a0a0a] relative"
+          className="hidden md:flex shrink-0 flex-col h-full border-l border-white/6 bg-[#0a0a0a] relative"
           style={{ width: `${width}px` }}
         >
           {/* Resize handle */}
@@ -133,8 +136,11 @@ export function UnifiedSidebar({
           </div>
 
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06]">
-            <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/6">
+            <div
+              className="flex items-center gap-0.5 overflow-x-auto no-scrollbar"
+              style={{ scrollbarWidth: "none" }}
+            >
               <TabButton
                 active={activeTab === "activity"}
                 onClick={() => onSetActiveTab("activity")}
@@ -154,7 +160,7 @@ export function UnifiedSidebar({
               )}
               {agentMode && (
                 <>
-                  <div className="w-px h-4 bg-white/[0.06] mx-1" />
+                  <div className="w-px h-4 bg-white/6 mx-1" />
                   <TabButton
                     active={activeTab === "files"}
                     onClick={() => onSetActiveTab("files")}
@@ -171,7 +177,7 @@ export function UnifiedSidebar({
                 className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
                   agentMode
                     ? "bg-violet-500/20 text-violet-300 border border-violet-500/30"
-                    : "bg-white/[0.03] text-[#666] border border-white/[0.06] hover:text-[#888]"
+                    : "bg-white/3 text-neutral-500 border border-white/5 hover:text-neutral-400"
                 }`}
                 title={agentMode ? "Agent mode on" : "Enable agent mode"}
               >
@@ -180,7 +186,7 @@ export function UnifiedSidebar({
               </button>
               <button
                 onClick={onToggle}
-                className="p-1.5 rounded hover:bg-white/[0.06] text-[#555]"
+                className="p-1.5 rounded hover:bg-white/5 text-neutral-500"
                 title="Close sidebar"
               >
                 <PanelRightClose className="h-4 w-4" />
@@ -192,8 +198,8 @@ export function UnifiedSidebar({
           <div className="flex-1 overflow-hidden">{getActiveContent()}</div>
 
           {/* Footer */}
-          <div className="px-3 py-2 border-t border-white/[0.06] flex items-center justify-center">
-            <span className="text-[10px] text-[#555]">
+          <div className="px-3 py-2 border-t border-white/6 flex items-center justify-center">
+            <span className="text-[10px] text-neutral-500">
               {activeTab === "files"
                 ? "Agent Files"
                 : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
@@ -202,15 +208,18 @@ export function UnifiedSidebar({
         </div>
       )}
 
-      {/* Global resize cursor when dragging */}
-      {isResizing && (
-        <style jsx global>{`
+      {/* Global styles for resize cursor and scrollbar hiding */}
+      <style jsx global>{`
+        ${isResizing ? `
           body {
             cursor: col-resize !important;
             user-select: none !important;
           }
-        `}</style>
-      )}
+        ` : ""}
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 }
@@ -233,10 +242,10 @@ function TabButton({
         active
           ? accent
             ? "bg-violet-500/15 text-violet-300"
-            : "bg-white/[0.08] text-foreground"
+            : "bg-white/8 text-foreground"
           : accent
             ? "text-violet-400/50 hover:text-violet-300/70 hover:bg-violet-500/5"
-            : "text-[#666] hover:text-[#888] hover:bg-white/[0.03]"
+            : "text-neutral-500 hover:text-neutral-400 hover:bg-white/3"
       }`}
     >
       {label}

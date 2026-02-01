@@ -5,11 +5,7 @@ import { useEffect, useRef, useId, useMemo } from "react";
 import { AlertCircle } from "lucide-react";
 import { EnhancedCodeBlock } from "../code/enhanced-code-block";
 import { TypingIndicator, StreamingCursor } from "./typing-indicator";
-import {
-  useMessageParsingService,
-  useMessageParsing,
-  thinkingParser,
-} from "@/lib/services/message-parsing";
+import { useMessageParsing, thinkingParser } from "@/lib/services/message-parsing";
 import type { MarkdownSegment, ThinkingResult } from "@/lib/services/message-parsing";
 import { useAppStore } from "@/store";
 
@@ -206,8 +202,7 @@ function MarkdownBlock({ html }: MarkdownBlockProps) {
 }
 
 export function MessageRenderer({ content, isStreaming }: MessageRendererProps) {
-  const parsingService = useMessageParsingService();
-  const { renderMarkdown } = useMessageParsing();
+  const { service: parsingService, renderMarkdown } = useMessageParsing();
 
   const parsed = useMemo(() => {
     if (isStreaming) return null;

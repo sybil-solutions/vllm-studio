@@ -14,10 +14,6 @@ export class BoxTagsParser implements IBoxTagsParser {
     if (!input) return input;
     return input.replace(BOX_TAGS_PATTERN, "");
   }
-
-  canParse(input: string): boolean {
-    return BOX_TAGS_PATTERN.test(input);
-  }
 }
 
 export const boxTagsParser = new BoxTagsParser();

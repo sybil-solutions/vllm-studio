@@ -4,11 +4,11 @@
  * Defines all types specific to message parsing functionality
  */
 
-import type { IParser, ICacheableService, IServiceFactory } from "../types";
+import type { IParser, IService } from "../types";
 
-// ============================================================================
+ 
 // Artifact Types
-// ============================================================================
+
 
 export type ArtifactType = "html" | "react" | "javascript" | "svg" | "python" | "mermaid";
 
@@ -26,17 +26,13 @@ export interface ArtifactsResult {
   artifacts: Artifact[];
 }
 
-// ============================================================================
 // Thinking Types
-// ============================================================================
 
 export interface ThinkingResult {
   thinkingContent: string | null;
   mainContent: string;
   isThinkingComplete: boolean;
 }
-
-// ============================================================================
 // Markdown Types
 // ============================================================================
 
@@ -129,8 +125,6 @@ export const DEFAULT_CONFIG: MessageParsingConfig = {
 export interface ParseOptions {
   /** Whether the message is currently streaming */
   isStreaming?: boolean;
-  /** Skip cache lookup */
-  skipCache?: boolean;
   /** Override artifact extraction for this call */
   extractArtifacts?: boolean;
   /** Override thinking extraction for this call */
@@ -141,7 +135,7 @@ export interface ParseOptions {
 // Service Interface
 // ============================================================================
 
-export interface IMessageParsingService extends ICacheableService<string, ParsedMessage> {
+export interface IMessageParsingService extends IService {
   readonly name: "message-parsing";
   readonly config: MessageParsingConfig;
 
@@ -185,25 +179,4 @@ export interface IMessageParsingService extends ICacheableService<string, Parsed
    * Determine artifact type from language
    */
   getArtifactType(language: string): ArtifactType | null;
-}
-
-// ============================================================================
-// Factory Interface
-// ============================================================================
-
-export interface IMessageParsingServiceFactory extends IServiceFactory<
-  Partial<MessageParsingConfig>,
-  IMessageParsingService
-> {
-  create(config: Partial<MessageParsingConfig>): IMessageParsingService;
-  createDefault(): IMessageParsingService;
-}
-
-// ============================================================================
-// React Context Types
-// ============================================================================
-
-export interface MessageParsingContextValue {
-  service: IMessageParsingService;
-  config: MessageParsingConfig;
 }

@@ -408,13 +408,13 @@ export function ChatSplashCanvas({ active }: { active: boolean }) {
       // Cap canvas size to prevent exceeding browser limits
       const scaledWidth = width * nextScale;
       const scaledHeight = height * nextScale;
-      const effectiveScale = Math.min(
-        nextScale,
-        MAX_CANVAS_SIZE / width,
-        MAX_CANVAS_SIZE / height
-      );
+      const effectiveScale = Math.min(nextScale, MAX_CANVAS_SIZE / width, MAX_CANVAS_SIZE / height);
 
-      if (width === lastWidth && height === lastHeight && Math.abs(effectiveScale - lastScale) < 0.01) {
+      if (
+        width === lastWidth &&
+        height === lastHeight &&
+        Math.abs(effectiveScale - lastScale) < 0.01
+      ) {
         return;
       }
 
@@ -476,7 +476,7 @@ export function ChatSplashCanvas({ active }: { active: boolean }) {
     >
       <canvas ref={canvasRef} className="h-full w-full" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,hsla(30,8%,10%,0.92),hsla(30,8%,10%,0.7)_35%,transparent_70%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[hsla(30,5%,10.5%,0.28)]" />
+      <div className="pointer-events-none absolute inset-0 `bg-linear-to-b from-transparent via-transparent to-[hsla(30,5%,10.5%,0.28)]" />
     </div>
   );
 }

@@ -18,17 +18,6 @@ export interface IParser<TInput, TResult> extends IService {
   parse(input: TInput): TResult;
 }
 
-export interface ICacheableService<TKey, TValue> extends IService {
-  getCached(key: TKey): TValue | null;
-  invalidateCache(key?: TKey): void;
-  readonly cacheSize: number;
-}
-
-export interface IServiceFactory<TConfig, TService extends IService> {
-  create(config: TConfig): TService;
-  createDefault?(): TService;
-}
-
 export class LRUCache<TKey, TValue> {
   private readonly maxSize: number;
   private readonly cache = new Map<TKey, TValue>();

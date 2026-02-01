@@ -17,7 +17,7 @@ export function ArtifactModal({ artifact, onClose }: ArtifactModalProps) {
       <div className="relative w-full max-w-5xl max-h-[90vh] overflow-auto rounded-xl border border-(--border) bg-(--card)">
         <button
           onClick={onClose}
-          className="absolute right-2 top-2 z-10 p-1.5 rounded-full bg-(--background) border border-(--border) hover:bg-(--accent)"
+          className="absolute right-2 top-2 z-10 p-1.5 rounded-full bg-background border border-(--border) hover:bg-(--accent)"
           title="Close"
         >
           <Icons.X className="h-4 w-4" />

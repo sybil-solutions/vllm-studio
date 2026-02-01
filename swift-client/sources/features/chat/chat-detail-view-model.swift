@@ -13,7 +13,6 @@ final class ChatDetailViewModel: ObservableObject {
   @Published var availableModels: [OpenAIModelInfo] = []
   @Published var chatUsage: ChatUsage?
   @Published var systemPrompt = ""
-  @Published var deepResearchEnabled = false
   @Published var error: String?
   @Published var agentMeta: [String: AgentMeta] = [:]
   @Published var currentPlan: [PlanTask]?
@@ -32,11 +31,15 @@ final class ChatDetailViewModel: ObservableObject {
       .sink { [weak self] _ in self?.objectWillChange.send() }
       .store(in: &cancellables)
     service.$streamingContent
-      .throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)
+      .throttle(for: .milliseconds(16), scheduler: RunLoop.main, latest: true)
       .sink { [weak self] _ in self?.objectWillChange.send() }
       .store(in: &cancellables)
     service.$streamingReasoning
-      .throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)
+      .throttle(for: .milliseconds(16), scheduler: RunLoop.main, latest: true)
+      .sink { [weak self] _ in self?.objectWillChange.send() }
+      .store(in: &cancellables)
+    service.$streamingToolCalls
+      .throttle(for: .milliseconds(16), scheduler: RunLoop.main, latest: true)
       .sink { [weak self] _ in self?.objectWillChange.send() }
       .store(in: &cancellables)
   }
@@ -125,6 +128,10 @@ final class ChatDetailViewModel: ObservableObject {
     let lastUser = messages.last(where: { $0.role == "user" })
     let retryTitle = title.isEmpty ? "Retry" : "\(title) (Retry)"
     return await forkSession(messageId: lastUser?.id, title: retryTitle)
+  }
+
+  func clearPlan() {
+    currentPlan = nil
   }
 
   func refreshUsageSnapshot() {

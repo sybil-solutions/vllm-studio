@@ -34,8 +34,9 @@ extension ChatDetailViewModel {
   }
 
   private func toolResults(for calls: [ToolCall]) -> [String] {
-    let ids = Set(calls.map { $0.id })
-    return messages.filter { $0.role == "tool" && ($0.toolCallId.map { ids.contains($0) } ?? false) }
-      .compactMap { $0.content }
+    guard !calls.isEmpty else { return [] }
+    return calls.map { call in
+      messages.first(where: { $0.role == "tool" && $0.toolCallId == call.id })?.content ?? ""
+    }
   }
 }

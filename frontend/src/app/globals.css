@@ -118,7 +118,6 @@ body {
 
   /* Constrain artifact and code containers */
   .artifact-container,
-  .code-sandbox,
   iframe {
     max-width: calc(100vw - 2rem) !important;
   }

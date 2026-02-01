@@ -16,6 +16,7 @@ interface ChatMessageListProps {
   artifactsByMessage?: Map<string, Artifact[]>;
   selectedModel?: string;
   contextUsageLabel?: string | null;
+  onOpenContext?: () => void;
   onFork?: (messageId: string) => void;
   onReprompt?: (messageId: string) => void;
 }
@@ -28,6 +29,7 @@ export function ChatMessageList({
   artifactsByMessage,
   selectedModel,
   contextUsageLabel,
+  onOpenContext,
   onFork,
   onReprompt,
 }: ChatMessageListProps) {
@@ -101,6 +103,7 @@ export function ChatMessageList({
           artifacts={artifactsByMessage?.get(message.id)}
           selectedModel={selectedModel}
           contextUsageLabel={contextUsageLabel}
+          onOpenContext={onOpenContext}
           copied={copiedMessageId === message.id}
           onCopy={handleCopy}
           onFork={message.role === "assistant" ? onFork : undefined}

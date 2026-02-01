@@ -11,11 +11,6 @@
  *
  * @example
  * ```tsx
- * // Wrap your app/page with the provider
- * <MessageParsingProvider>
- *   <ChatComponent />
- * </MessageParsingProvider>
- *
  * // Use the hook in components
  * function ChatComponent() {
  *   const { parse, parseThinking } = useMessageParsing();
@@ -38,8 +33,6 @@ export type {
   ParseOptions,
   MessageParsingConfig,
   IMessageParsingService,
-  IMessageParsingServiceFactory,
-  MessageParsingContextValue,
   IBoxTagsParser,
   IThinkingParser,
   IMcpXmlParser,
@@ -54,25 +47,10 @@ export { DEFAULT_CONFIG } from "./types";
 export { MessageParsingService } from "./service";
 
 // Factory
-export {
-  MessageParsingServiceFactory,
-  messageParsingServiceFactory,
-  getMessageParsingService,
-} from "./factory";
-
-// Context
-export { MessageParsingContext, MessageParsingProvider } from "./context";
+export { createMessageParsingService, getMessageParsingService } from "./factory";
 
 // Hooks
-export {
-  useMessageParsingService,
-  useMessageParsingConfig,
-  useMessageParsing,
-  useParsedMessage,
-  useThinkingContent,
-  useArtifacts,
-  useMarkdownSegments,
-} from "./hooks";
+export { useMessageParsing } from "./hooks";
 
 // Individual parsers (for advanced use cases)
 export {

@@ -37,7 +37,25 @@ function getFileExtension(name: string): string {
 
 function fileIcon(name: string) {
   const ext = getFileExtension(name);
-  if (["ts", "tsx", "js", "jsx", "py", "rs", "go", "rb", "java", "c", "cpp", "h", "css", "scss", "html"].includes(ext))
+  if (
+    [
+      "ts",
+      "tsx",
+      "js",
+      "jsx",
+      "py",
+      "rs",
+      "go",
+      "rb",
+      "java",
+      "c",
+      "cpp",
+      "h",
+      "css",
+      "scss",
+      "html",
+    ].includes(ext)
+  )
     return FileCode;
   if (["json", "yaml", "yml", "toml", "xml"].includes(ext)) return FileJson;
   if (["md", "txt", "csv", "log", "env"].includes(ext)) return FileText;
@@ -221,9 +239,7 @@ function FileContentViewer({
           <FileCode className="h-3.5 w-3.5 text-violet-400 shrink-0" />
           <span className="text-[11px] text-[#aaa] truncate font-mono">{fileName}</span>
           {!loading && content && (
-            <span className="text-[9px] text-[#555] shrink-0">
-              {lineCount} lines
-            </span>
+            <span className="text-[9px] text-[#555] shrink-0">{lineCount} lines</span>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -233,7 +249,11 @@ function FileContentViewer({
               className="p-1 rounded hover:bg-white/5 text-[#555] hover:text-[#888] transition-colors"
               title="Copy content"
             >
-              {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-green-400" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
             </button>
           )}
           <button
@@ -267,25 +287,23 @@ function FileContentViewer({
                 <p className="text-xs text-[#555]">SVG preview disabled</p>
                 <p className="text-[10px] text-[#444]">Open the file contents instead.</p>
               </div>
+            ) : // Other images - check if content looks like base64
+            isBase64(content) ? (
+              <img
+                src={`data:image/${ext};base64,${content}`}
+                alt={fileName}
+                className="max-w-full max-h-full object-contain"
+              />
             ) : (
-              // Other images - check if content looks like base64
-              isBase64(content) ? (
-                <img
-                  src={`data:image/${ext};base64,${content}`}
-                  alt={fileName}
-                  className="max-w-full max-h-full object-contain"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center text-center px-4">
-                  <ImageIcon className="h-8 w-8 text-[#2a2725] mb-3" />
-                  <p className="text-xs text-[#555]">Binary image file</p>
-                  <p className="text-[10px] text-[#444]">Preview not available</p>
-                </div>
-              )
+              <div className="flex flex-col items-center justify-center text-center px-4">
+                <ImageIcon className="h-8 w-8 text-[#2a2725] mb-3" />
+                <p className="text-xs text-[#555]">Binary image file</p>
+                <p className="text-[10px] text-[#444]">Preview not available</p>
+              </div>
             )}
           </div>
         ) : (
-          <pre className="p-3 text-[11px] leading-relaxed font-mono text-[#ccc] whitespace-pre-wrap break-words">
+          <pre className="p-3 text-[11px] leading-relaxed font-mono text-[#ccc] whitespace-pre-wrap wrap-break-word">
             <code className={`language-${language}`}>{content}</code>
           </pre>
         )}
@@ -316,7 +334,7 @@ export function AgentFilesPanel({
 
       {/* File tree - takes remaining space when no file selected, or fixed height when file selected */}
       <div
-        className={`overflow-y-auto py-1 ${hasSelectedFile ? "h-[180px] shrink-0 border-b border-white/6" : "flex-1"}`}
+        className={`overflow-y-auto py-1 ${hasSelectedFile ? "h-45 shrink-0 border-b border-white/6" : "flex-1"}`}
       >
         {hasFiles ? (
           files.map((entry) => (

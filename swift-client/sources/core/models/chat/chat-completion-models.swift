@@ -26,11 +26,29 @@ struct StreamOptions: Encodable {
 struct OpenAIMessage: Codable {
   let role: String
   let content: String?
-  let reasoningContent: String? = nil
-  let reasoning: String? = nil
+  let reasoningContent: String?
+  let reasoning: String?
   let toolCalls: [ToolCall]?
   let toolCallId: String?
   let name: String?
+
+  init(
+    role: String,
+    content: String?,
+    reasoningContent: String? = nil,
+    reasoning: String? = nil,
+    toolCalls: [ToolCall]? = nil,
+    toolCallId: String? = nil,
+    name: String? = nil
+  ) {
+    self.role = role
+    self.content = content
+    self.reasoningContent = reasoningContent
+    self.reasoning = reasoning
+    self.toolCalls = toolCalls
+    self.toolCallId = toolCallId
+    self.name = name
+  }
 }
 
 struct ToolDefinition: Encodable {

@@ -75,10 +75,12 @@ export function ToolDropdown({
           title={label}
         >
           <Icon className="h-3.5 w-3.5" />
-          <ChevronDown className={`h-2.5 w-2.5 transition-transform:ease-in:150ms ${open ? "rotate-180" : ""}`} />
+          <ChevronDown
+            className={`h-2.5 w-2.5 transition-transform:ease-in:150ms ${open ? "rotate-180" : ""}`}
+          />
         </button>
         {open && (
-          <div className="absolute bottom-full left-0 mb-1 min-w-[160px] bg-(--card) border border-(--border) rounded-lg shadow-xl transition-all:ease-in:200ms py-1 z-50">
+          <div className="absolute bottom-full left-0 mb-1 min-w-40 bg-(--card) border border-(--border) rounded-lg shadow-xl transition-all:ease-in:200ms py-1 z-50">
             {children}
           </div>
         )}
@@ -120,7 +122,9 @@ export function DropdownItem({
       onClick={handleClick}
       disabled={disabled}
       className={`w-full flex items-center gap-2 px-3 py-1.5 font-sans font-medium text-xs transition-colors:ease-in:200ms disabled:opacity-50 ${
-        isActive ? "bg-(--accent) text-[#e8e4dd]" : "hover:bg-(--accent) focus:bg-(--accent) text-[#9a9590]"
+        isActive
+          ? "bg-(--accent) text-[#e8e4dd]"
+          : "hover:bg-(--accent) focus:bg-(--accent) text-[#9a9590]"
       }`}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />

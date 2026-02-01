@@ -17,9 +17,15 @@ struct ChatListView: View {
               Text(session.title.isEmpty ? "New chat" : session.title)
                 .font(AppTheme.bodyFont.weight(.semibold))
                 .lineLimit(1)
-              Text(session.updatedAt)
+              Text(session.updatedAt.isEmpty ? "Just now" : session.updatedAt)
                 .font(AppTheme.captionFont)
                 .foregroundColor(AppTheme.muted)
+              if let model = session.model, !model.isEmpty {
+                Text(model)
+                  .font(AppTheme.captionFont)
+                  .foregroundColor(AppTheme.foreground.opacity(0.7))
+                  .lineLimit(1)
+              }
             }
             Spacer()
             Image(systemName: "chevron.right")
@@ -36,18 +42,38 @@ struct ChatListView: View {
     }
     .listStyle(.plain)
     .scrollContentBackground(.hidden)
-    .background(AppTheme.background)
+    .background(chatBackground)
     .overlay(model.loading ? LoadingView() : nil)
     .navigationTitle("Chats")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      Button("New") { Task { await createSession() } }
+      ToolbarItemGroup(placement: .navigationBarTrailing) {
+        if model.creating {
+          ProgressView()
+        }
+        Button("New") { Task { await createSession() } }
+          .disabled(model.creating)
+      }
     }
     .navigationDestination(item: $selectedSessionId) { sessionId in
       ChatDetailView(sessionId: sessionId)
     }
     .onAppear { model.connect(api: container.api) }
   }
+
+  private var chatBackground: some View {
+    LinearGradient(
+      colors: [
+        AppTheme.background,
+        AppTheme.card.opacity(0.3),
+        AppTheme.background,
+      ],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
+    .ignoresSafeArea()
+  }
+
 
   @MainActor
   private func createSession() async {

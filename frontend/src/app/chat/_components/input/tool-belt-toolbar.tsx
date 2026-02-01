@@ -227,7 +227,7 @@ export function ToolBeltToolbar({
             value={selectedModel || ""}
             onChange={(e) => onModelChange(e.target.value)}
             disabled={disabled || isLoading}
-            className="max-w-[140px] md:max-w-[180px] px-2 py-1 font-sans font-medium text-xs bg-transparent border border-(--border) rounded-lg text-[#9a9590] focus:outline-none disabled:opacity-50 truncate appearance-none cursor-pointer hover:border-[#4a4745] transition-colors:ease-in:200ms"
+            className="max-w-35 md:max-w-45 px-2 py-1 font-sans font-medium text-xs bg-transparent border border-(--border) rounded-lg text-[#9a9590] focus:outline-none disabled:opacity-50 truncate appearance-none cursor-pointer hover:border-[#4a4745] transition-colors:ease-in:200ms"
             title={selectedModel || "Select model"}
           >
             {availableModels.map((model, idx) => (

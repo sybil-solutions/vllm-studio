@@ -83,19 +83,6 @@ export class ThinkingParser implements IThinkingParser {
     };
   }
 
-  canParse(input: string): boolean {
-    const lower = input.toLowerCase();
-    return OPEN_TAGS.some((t) => lower.includes(t)) || CLOSE_TAGS.some((t) => lower.includes(t));
-  }
-
-  /**
-   * Strip thinking tags but keep the text content inside
-   */
-  stripTagsKeepText(input: string): string {
-    if (!input) return "";
-    return input.replace(/<\/?think(?:ing)?>/gi, "");
-  }
-
   /**
    * Extract all thinking blocks from content
    * Returns array of blocks with content and completion status

@@ -45,8 +45,8 @@ export class MessageParsingService implements IMessageParsingService {
 
     const hash = this.createHash(content, options);
 
-    // Check cache unless explicitly skipped or streaming
-    if (!options.skipCache && !options.isStreaming) {
+    // Check cache for non-streaming messages
+    if (!options.isStreaming) {
       const cached = this.cache.get(hash);
       if (cached) {
         return cached;
@@ -198,33 +198,6 @@ export class MessageParsingService implements IMessageParsingService {
    */
   getArtifactType(language: string): ArtifactType | null {
     return artifactsParser.getArtifactType(language);
-  }
-
-  /**
-   * Get cached result by content
-   */
-  getCached(content: string): ParsedMessage | null {
-    const hash = hashString(content);
-    return this.cache.get(hash);
-  }
-
-  /**
-   * Invalidate cache
-   */
-  invalidateCache(content?: string): void {
-    if (content) {
-      const hash = hashString(content);
-      this.cache.delete(hash);
-    } else {
-      this.cache.clear();
-    }
-  }
-
-  /**
-   * Get current cache size
-   */
-  get cacheSize(): number {
-    return this.cache.size;
   }
 
   /**

@@ -8,6 +8,7 @@ struct ConfigsView: View {
   var body: some View {
     Form {
       ConfigsApiSection(settings: container.settings)
+      ConfigsDeepResearchSection(settings: container.settings)
       ConfigsServicesSection(services: model.config?.services)
       ConfigsMcpSection(servers: model.servers, onToggle: { server in
         Task { await model.toggle(server: server) }

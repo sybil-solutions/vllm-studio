@@ -34,14 +34,6 @@ export class McpXmlParser implements IMcpXmlParser {
 
     return result.trim();
   }
-
-  canParse(input: string): boolean {
-    return (
-      MCP_TOOL_PATTERN.test(input) ||
-      MCP_INCOMPLETE_PATTERN.test(input) ||
-      input.includes("use_mcp_tool")
-    );
-  }
 }
 
 export const mcpXmlParser = new McpXmlParser();

@@ -7,7 +7,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import { api } from "@/lib/api";
 import { safeJsonStringify } from "@/lib/safe-json";
-import { extractArtifacts } from "../artifacts/artifact-renderer";
+import { extractArtifacts } from "../artifacts/artifact-utils";
 import { ArtifactModal } from "../artifacts/artifact-modal";
 import { ArtifactPreviewPanel } from "../artifacts/artifact-preview-panel";
 import { ToolBelt } from "../input/tool-belt";
@@ -90,8 +90,6 @@ export function ChatPage() {
   const setSelectedModel = useAppStore((state) => state.setSelectedModel);
   const systemPrompt = useAppStore((state) => state.systemPrompt);
   const setSystemPrompt = useAppStore((state) => state.setSystemPrompt);
-  const setToolPanelOpen = useAppStore((state) => state.setToolPanelOpen);
-  const setActivePanel = useAppStore((state) => state.setActivePanel);
   const mcpEnabled = useAppStore((state) => state.mcpEnabled);
   const setMcpEnabled = useAppStore((state) => state.setMcpEnabled);
   const artifactsEnabled = useAppStore((state) => state.artifactsEnabled);
@@ -232,6 +230,16 @@ export function ChatPage() {
   const [compacting, setCompacting] = useState(false);
   const [compactionError, setCompactionError] = useState<string | null>(null);
   const lastCompactionSignatureRef = useRef<string | null>(null);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("activity");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const openSidebarTab = useCallback(
+    (tab: SidebarTab) => {
+      setSidebarOpen(true);
+      setSidebarTab(tab);
+    },
+    [setSidebarOpen, setSidebarTab],
+  );
+  const openContextPanel = useCallback(() => openSidebarTab("context"), [openSidebarTab]);
 
   const mapStoredToolCalls = useCallback((toolCalls?: StoredToolCall[]) => {
     if (!toolCalls?.length) return [];
@@ -1395,8 +1403,7 @@ export function ChatPage() {
 
       // Only open side panel on desktop (but not for internal/continuation messages)
       if (!options?.internal && window.innerWidth >= 768) {
-        setToolPanelOpen(true);
-        setActivePanel("activity");
+        openSidebarTab("activity");
       }
       setStreamingStartTime(Date.now());
 
@@ -1485,8 +1492,7 @@ export function ChatPage() {
       currentSessionId,
       createSessionWithMessage,
       persistMessage,
-      setToolPanelOpen,
-      setActivePanel,
+      openSidebarTab,
       setStreamingStartTime,
       setInput,
     ],
@@ -1511,7 +1517,7 @@ export function ChatPage() {
     if (incomplete.length === 0) return;
 
     // Safety limit
-    if (agentContinuationRef.current >= 50) {
+    if (agentContinuationRef.current >= agentContinuationMaxRef.current) {
       console.warn("[Agent] Hit continuation limit");
       return;
     }
@@ -1660,8 +1666,6 @@ export function ChatPage() {
   // (plan processing removed — activity panel shows thinking + tool calls directly)
 
   // Sidebar state
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("activity");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const autoOpenedActivityRef = useRef(false);
 
   useEffect(() => {
@@ -1748,6 +1752,7 @@ export function ChatPage() {
               artifactsByMessage={artifactsByMessage}
               selectedModel={selectedModel}
               contextUsageLabel={contextUsageLabel}
+              onOpenContext={openContextPanel}
               onFork={handleForkMessage}
               onReprompt={handleReprompt}
               showEmptyState={showEmptyState}
@@ -1768,14 +1773,8 @@ export function ChatPage() {
 
             <ChatActionButtons
               activityCount={activityCount}
-              onOpenActivity={() => {
-                setSidebarOpen(true);
-                setSidebarTab("activity");
-              }}
-              onOpenContext={() => {
-                setSidebarOpen(true);
-                setSidebarTab("context");
-              }}
+              onOpenActivity={() => openSidebarTab("activity")}
+              onOpenContext={() => openSidebarTab("context")}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenMcpSettings={() => setMcpSettingsOpen(true)}
               onOpenUsage={() => setUsageOpen(true)}

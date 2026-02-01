@@ -25,16 +25,6 @@ const LANGUAGE_TYPE_MAP: Record<string, ArtifactType> = {
   "artifact-mermaid": "mermaid",
 };
 
-// Languages that are explicitly artifact-prefixed
-const ARTIFACT_LANGUAGES = [
-  "artifact-html",
-  "artifact-react",
-  "artifact-javascript",
-  "artifact-python",
-  "artifact-svg",
-  "artifact-mermaid",
-];
-
 export class ArtifactsParser implements IArtifactsParser {
   readonly name = "artifacts" as const;
 
@@ -87,20 +77,9 @@ export class ArtifactsParser implements IArtifactsParser {
     return { text, artifacts };
   }
 
-  canParse(input: string): boolean {
-    return ARTIFACT_TAG_REGEX.test(input) || ARTIFACT_CODE_BLOCK_REGEX.test(input);
-  }
-
   getArtifactType(language: string): ArtifactType | null {
     const normalized = language.toLowerCase().trim();
     return LANGUAGE_TYPE_MAP[normalized] || null;
-  }
-
-  /**
-   * Check if a language identifier is explicitly an artifact type
-   */
-  isArtifactLanguage(language: string): boolean {
-    return ARTIFACT_LANGUAGES.includes(language.toLowerCase().trim());
   }
 
   /**

@@ -6,11 +6,6 @@
  *
  * @example
  * ```tsx
- * // Wrap your app/page with the provider
- * <ContextManagementProvider>
- *   <ChatComponent />
- * </ContextManagementProvider>
- *
  * // Use the hook in components
  * function ChatComponent() {
  *   const { calculateStats, compactMessages, formatTokenCount } = useContextManagement();
@@ -31,7 +26,6 @@ export type {
   UtilizationLevel,
   ContextMessage,
   IContextManagementService,
-  ContextManagementContextValue,
 } from "./types";
 
 export { DEFAULT_CONTEXT_CONFIG } from "./types";
@@ -40,18 +34,7 @@ export { DEFAULT_CONTEXT_CONFIG } from "./types";
 export { ContextManagementService } from "./service";
 
 // Factory
-export {
-  ContextManagementServiceFactory,
-  contextManagementServiceFactory,
-  getContextManagementService,
-} from "./factory";
-
-// Context
-export { ContextManagementContext, ContextManagementProvider } from "./context";
+export { createContextManagementService, getContextManagementService } from "./factory";
 
 // Hooks
-export {
-  useContextManagementService,
-  useContextManagementConfig,
-  useContextManagement,
-} from "./hooks";
+export { useContextManagement } from "./hooks";

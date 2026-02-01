@@ -38,7 +38,7 @@ export function AttachmentsPreview({
                 />
               )}
               <div className="text-xs font-medium">
-                <p className="font-medium truncate max-w-[100px]">{attachment.name}</p>
+                <p className="font-medium truncate max-w-25">{attachment.name}</p>
                 <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
               </div>
             </div>
@@ -54,7 +54,7 @@ export function AttachmentsPreview({
             <div className="flex items-center gap-2">
               <FileText className="h-3.5 w-3.5 text-[#9a9590]" />
               <div className="text-xs font-medium">
-                <p className="font-medium truncate max-w-[100px]">{attachment.name}</p>
+                <p className="font-medium truncate max-w-25">{attachment.name}</p>
                 <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
               </div>
             </div>

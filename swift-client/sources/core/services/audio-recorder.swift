@@ -10,7 +10,11 @@ final class AudioRecorder: ObservableObject {
 
   func start() async {
     let session = AVAudioSession.sharedInstance()
-    session.requestRecordPermission { _ in }
+    if #available(iOS 17.0, *) {
+      AVAudioApplication.requestRecordPermission { _ in }
+    } else {
+      session.requestRecordPermission { _ in }
+    }
     try? session.setCategory(.record, mode: .default)
     try? session.setActive(true, options: .notifyOthersOnDeactivation)
 
@@ -28,8 +32,10 @@ final class AudioRecorder: ObservableObject {
     elapsed = 0
     isRecording = true
     timer?.invalidate()
-    timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-      self.elapsed += 1
+    timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+      Task { @MainActor in
+        self?.elapsed += 1
+      }
     }
   }
 

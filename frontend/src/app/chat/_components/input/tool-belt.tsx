@@ -89,17 +89,14 @@ export function ToolBelt({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       const scrollHeight = textareaRef.current.scrollHeight;
-      const minHeight = Number.parseFloat(
-        window.getComputedStyle(textareaRef.current).minHeight,
-      );
+      const minHeight = Number.parseFloat(window.getComputedStyle(textareaRef.current).minHeight);
       const baseHeight = Number.isFinite(minHeight) && minHeight > 0 ? minHeight : 44;
       const shouldCap = window.innerWidth >= 768;
       const newHeight = shouldCap
         ? Math.min(Math.max(scrollHeight, baseHeight), 200)
         : Math.max(scrollHeight, baseHeight);
       textareaRef.current.style.height = newHeight + "px";
-      textareaRef.current.style.overflowY =
-        shouldCap && scrollHeight > 200 ? "auto" : "hidden";
+      textareaRef.current.style.overflowY = shouldCap && scrollHeight > 200 ? "auto" : "hidden";
     }
   }, [value, isLoading, queuedContext]);
 
@@ -289,11 +286,11 @@ export function ToolBelt({
         />
 
         <div
-          className={`relative flex flex-col bg-[#1a1a1a] rounded-xl border border-white/[0.08] shadow-lg ${
+          className={`relative flex flex-col bg-[#1a1a1a] rounded-xl border border-white/8 shadow-lg ${
             isLoading ? "ring-1 ring-blue-500/30" : ""
           }`}
           style={{
-            boxShadow: "0 0 0 1px rgba(255,255,255,0.03), 0 4px 20px rgba(0,0,0,0.4)"
+            boxShadow: "0 0 0 1px rgba(255,255,255,0.03), 0 4px 20px rgba(0,0,0,0.4)",
           }}
         >
           {planDrawer}
@@ -315,7 +312,7 @@ export function ToolBelt({
             }
             disabled={isDisabled}
             rows={1}
-            className="w-full px-3 py-2 md:px-4 md:py-3 bg-transparent text-[15px] md:text-sm resize-none focus:outline-none disabled:opacity-50 placeholder:text-[#9a9590] overflow-y-hidden min-h-[52px] md:min-h-[44px]"
+            className="w-full px-3 py-2 md:px-4 md:py-3 bg-transparent text-[15px] md:text-sm resize-none focus:outline-none disabled:opacity-50 placeholder:text-[#9a9590] overflow-y-hidden min-h-13 md:min-h-11"
             style={{ fontSize: "16px", lineHeight: "1.5" }}
           />
 

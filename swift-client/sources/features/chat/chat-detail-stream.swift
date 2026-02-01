@@ -16,7 +16,9 @@ extension ChatDetailViewModel {
       // Build tools: MCP defs (if enabled) + plan defs (if enabled)
       var toolDefs: [ToolDefinition] = []
       if settings?.mcpEnabled == true { toolDefs.append(contentsOf: tools.map { toolDef(for: $0) }) }
-      if settings?.planModeEnabled == true { toolDefs.append(contentsOf: PlanTools.definitions) }
+      if settings?.planModeEnabled == true || settings?.deepResearchEnabled == true {
+        toolDefs.append(contentsOf: PlanTools.definitions)
+      }
       let activeTools = toolDefs.isEmpty ? nil : toolDefs
 
       let promptMessages = buildPromptMessages()
@@ -77,6 +79,7 @@ extension ChatDetailViewModel {
       // Split calls: plan vs MCP
       let planCalls = result.toolCalls.filter { PlanTools.names.contains($0.function.name) }
       let mcpCalls = result.toolCalls.filter { !PlanTools.names.contains($0.function.name) }
+      var toolResultsById: [String: String] = [:]
 
       // Handle plan calls locally
       for call in planCalls {
@@ -88,6 +91,7 @@ extension ChatDetailViewModel {
         )
         self.messages.append(toolMsg)
         _ = try? await api.addMessage(sessionId: sessionId, message: toolMsg)
+        toolResultsById[call.id] = planResult.resultContent
       }
 
       // Handle MCP calls via runner
@@ -96,11 +100,16 @@ extension ChatDetailViewModel {
         for toolMessage in mcpResults {
           self.messages.append(toolMessage)
           _ = try? await api.addMessage(sessionId: sessionId, message: toolMessage)
+          if let id = toolMessage.toolCallId, let content = toolMessage.content {
+            toolResultsById[id] = content
+          }
         }
-        if var meta = agentMeta[assistantId] {
-          meta.toolResults.append(contentsOf: mcpResults.compactMap { $0.content })
-          agentMeta[assistantId] = meta
-        }
+      }
+
+      let orderedResults = result.toolCalls.map { toolResultsById[$0.id] ?? "" }
+      if var meta = agentMeta[assistantId] {
+        meta.toolResults = orderedResults
+        agentMeta[assistantId] = meta
       }
 
       rounds += 1

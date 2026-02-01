@@ -17,6 +17,7 @@ interface ChatMessageItemProps {
   artifacts?: Artifact[];
   selectedModel?: string;
   contextUsageLabel?: string | null;
+  onOpenContext?: () => void;
   copied: boolean;
   onCopy: (text: string, messageId: string) => void;
   onFork?: (messageId: string) => void;
@@ -226,6 +227,7 @@ function ChatMessageItemBase({
   artifacts,
   selectedModel,
   contextUsageLabel,
+  onOpenContext,
   copied,
   onCopy,
   onFork,
@@ -234,8 +236,6 @@ function ChatMessageItemBase({
 }: ChatMessageItemProps) {
   const isUser = message.role === "user";
   const setActiveArtifactId = useAppStore((state) => state.setActiveArtifactId);
-  const setToolPanelOpen = useAppStore((state) => state.setToolPanelOpen);
-  const setActivePanel = useAppStore((state) => state.setActivePanel);
 
   // Extract text content from parts
   const rawTextContent = message.parts
@@ -381,10 +381,7 @@ function ChatMessageItemBase({
           )}
           {contextUsageLabel && (
             <button
-              onClick={() => {
-                setToolPanelOpen(true);
-                setActivePanel("context");
-              }}
+              onClick={() => onOpenContext?.()}
               className="hidden md:inline text-[10px] text-[#6a6560] font-mono hover:text-[#9a9590] transition-colors cursor-pointer"
             >
               ctx {contextUsageLabel}

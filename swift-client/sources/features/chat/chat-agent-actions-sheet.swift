@@ -53,36 +53,28 @@ struct ChatAgentActionsSheet: View {
 
           // Tool calls
           if !toolCalls.isEmpty {
-            sectionHeader("Tool calls", icon: "wrench.and.screwdriver")
-            ForEach(toolCalls) { call in
-              VStack(alignment: .leading, spacing: 4) {
-                Text(call.function.name)
-                  .font(AppTheme.captionFont.weight(.semibold))
-                  .foregroundColor(AppTheme.foreground)
-                Text(call.function.arguments)
-                  .font(AppTheme.monoFont)
-                  .foregroundColor(AppTheme.muted)
-                  .lineLimit(8)
+            sectionHeader("Tool timeline", icon: "wrench.and.screwdriver")
+            ForEach(Array(toolCalls.enumerated()), id: \.element.id) { idx, call in
+              VStack(alignment: .leading, spacing: 8) {
+                ToolCallCard(call: call)
+                if idx < actions.meta.toolResults.count {
+                  let result = actions.meta.toolResults[idx].trimmingCharacters(in: .whitespacesAndNewlines)
+                  if !result.isEmpty {
+                    ToolResultCard(result: result)
+                  }
+                }
               }
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(12)
-              .background(AppTheme.card)
-              .cornerRadius(8)
             }
           }
 
           // Results
-          if !actions.meta.toolResults.isEmpty {
-            sectionHeader("Results", icon: "checkmark.circle")
-            ForEach(Array(actions.meta.toolResults.enumerated()), id: \.offset) { _, result in
-              Text(result)
-                .font(AppTheme.monoFont)
-                .foregroundColor(AppTheme.foreground.opacity(0.85))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(AppTheme.card)
-                .cornerRadius(8)
-                .lineLimit(20)
+          if actions.meta.toolResults.count > toolCalls.count {
+            sectionHeader("Additional results", icon: "checkmark.circle")
+            ForEach(Array(actions.meta.toolResults.dropFirst(toolCalls.count).enumerated()), id: \.offset) { _, result in
+              let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
+              if !trimmed.isEmpty {
+                ToolResultCard(result: trimmed)
+              }
             }
           }
 

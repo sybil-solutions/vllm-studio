@@ -55,8 +55,6 @@ export interface CompactionResult {
   messages: ContextMessage[];
   removed: number;
 }
-
-// ============================================================================
 // Stats Types
 // ============================================================================
 
@@ -125,13 +123,4 @@ export interface IContextManagementService extends IService {
     ContextStats,
     "compactionHistory" | "lastCompaction" | "totalCompactions" | "totalTokensCompacted"
   >;
-}
-
-// ============================================================================
-// React Context Types
-// ============================================================================
-
-export interface ContextManagementContextValue {
-  service: IContextManagementService;
-  config: ContextConfig;
 }

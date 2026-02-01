@@ -1,12 +1,13 @@
 // CRITICAL
 import SwiftUI
+import UIKit
 
 struct MarkdownText: View {
   let content: String
 
   var body: some View {
     let blocks = MarkdownBlockParser.parse(content)
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 12) {
       ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
         blockView(block)
       }
@@ -22,7 +23,7 @@ struct MarkdownText: View {
     case .paragraph(let text):
       inlineText(text)
         .font(AppTheme.bodyFont)
-        .lineSpacing(4)
+        .lineSpacing(5)
         .multilineTextAlignment(.leading)
         .foregroundColor(AppTheme.foreground)
     case .code(let lang, let code):
@@ -61,14 +62,29 @@ struct MarkdownText: View {
 
   private func codeBlockView(lang: String, code: String) -> some View {
     VStack(alignment: .leading, spacing: 0) {
-      if !lang.isEmpty {
-        Text(lang)
+      HStack(spacing: 8) {
+        Text(lang.isEmpty ? "Code" : lang)
           .font(.system(size: 11, weight: .medium, design: .monospaced))
           .foregroundColor(AppTheme.muted)
-          .padding(.horizontal, 12)
-          .padding(.top, 8)
-          .padding(.bottom, 4)
+        Spacer()
+        Button(action: {
+          UIPasteboard.general.string = code
+          UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }) {
+          Image(systemName: "doc.on.doc")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(AppTheme.muted)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(AppTheme.card.opacity(0.6))
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Copy code")
       }
+      .padding(.horizontal, 12)
+      .padding(.top, 8)
+      .padding(.bottom, 4)
       Text(code)
         .font(AppTheme.monoFont)
         .foregroundColor(AppTheme.foreground.opacity(0.9))
@@ -94,7 +110,7 @@ struct MarkdownText: View {
             .frame(width: 20, alignment: .trailing)
           inlineText(item)
             .font(AppTheme.bodyFont)
-            .lineSpacing(4)
+            .lineSpacing(5)
             .multilineTextAlignment(.leading)
             .foregroundColor(AppTheme.foreground)
         }
@@ -112,7 +128,7 @@ struct MarkdownText: View {
         .frame(width: 3)
       inlineText(text)
         .font(AppTheme.bodyFont)
-        .lineSpacing(4)
+        .lineSpacing(5)
         .multilineTextAlignment(.leading)
         .foregroundColor(AppTheme.muted)
         .padding(.leading, 12)

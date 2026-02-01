@@ -1,18 +1,4 @@
 // CRITICAL
-"use client";
-
-// Types
-export interface StreamEvent {
-  type: "text" | "tool_calls" | "done" | "error";
-  content?: string;
-  tool_calls?: Array<{
-    id: string;
-    type: string;
-    function: { name: string; arguments: string };
-  }>;
-  error?: string;
-}
-
 // Constants
 const BOX_TAGS_PATTERN = /<\|(?:begin|end)_of_box\|>/g;
 
@@ -37,11 +23,6 @@ export const stripThinkingForModelContext = (text: string): string => {
   return (cleaned.trim() + preservedBlocks.join("")).trim();
 };
 
-// Strip thinking tags but keep text inside
-export const stripThinkTagsKeepText = (text: string): string => {
-  return text?.replace(/<\/?think(?:ing)?>/gi, "") || "";
-};
-
 // Try to parse nested JSON from string
 export function tryParseNestedJsonString(raw: string): Record<string, unknown> | null {
   try {
@@ -51,47 +32,4 @@ export function tryParseNestedJsonString(raw: string): Record<string, unknown> |
     if (jsonMatch) return JSON.parse(jsonMatch[0]);
   } catch {}
   return null;
-}
-
-// Parse Server-Sent Events from a stream
-export async function* parseSSEEvents(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-): AsyncGenerator<StreamEvent> {
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6).trim();
-        if (data) {
-          try {
-            yield JSON.parse(data) as StreamEvent;
-          } catch {
-            // Skip malformed JSON
-          }
-        }
-      }
-    }
-  }
-}
-
-// Download text as file
-export function downloadTextFile(filename: string, content: string, mime = "text/plain"): void {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }

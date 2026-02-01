@@ -86,6 +86,26 @@ struct ChatStreamingMessageView: View {
           .background(AppTheme.card)
           .cornerRadius(8)
         }
+
+        if !service.streamingReasoning.isEmpty || !service.streamingToolCalls.isEmpty {
+          Button(action: {
+            let meta = AgentMeta(
+              thinkingBlocks: service.streamingReasoning.isEmpty ? [] : [service.streamingReasoning],
+              toolCalls: service.streamingToolCalls,
+              toolResults: []
+            )
+            onShowActions(meta)
+          }) {
+            HStack(spacing: 4) {
+              Text("Trace")
+                .font(AppTheme.captionFont.weight(.medium))
+              Image(systemName: "arrow.right")
+                .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundColor(AppTheme.muted)
+          }
+          .buttonStyle(.plain)
+        }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "description": "Implements changes in this repo following AGENTS.md rules.",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      }
+    },
+    "plan": {
+      "mode": "primary",
+      "description": "Plans work without modifying files.",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "review": {
+      "mode": "subagent",
+      "description": "Reviews changes for correctness and risk without edits.",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    }
+  }
+}

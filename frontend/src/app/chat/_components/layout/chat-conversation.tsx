@@ -15,6 +15,7 @@ interface ChatConversationProps {
   artifactsByMessage?: Map<string, Artifact[]>;
   selectedModel?: string;
   contextUsageLabel?: string | null;
+  onOpenContext?: () => void;
   onFork?: (messageId: string) => void;
   onReprompt?: (messageId: string) => void;
   showEmptyState: boolean;
@@ -32,6 +33,7 @@ export function ChatConversation({
   artifactsByMessage,
   selectedModel,
   contextUsageLabel,
+  onOpenContext,
   onFork,
   onReprompt,
   showEmptyState,
@@ -64,6 +66,7 @@ export function ChatConversation({
                   artifactsByMessage={artifactsByMessage}
                   selectedModel={selectedModel}
                   contextUsageLabel={contextUsageLabel}
+                  onOpenContext={onOpenContext}
                   onFork={onFork}
                   onReprompt={onReprompt}
                 />

@@ -1,3 +1,4 @@
+// CRITICAL
 import Foundation
 
 enum ArtifactTemplates {
