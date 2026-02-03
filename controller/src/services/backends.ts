@@ -145,7 +145,7 @@ export const getDefaultToolCallParser = (recipe: Recipe): string | undefined => 
     return "glm45";
   }
   if (modelId.includes("intellect") && modelId.includes("3")) {
-    return "qwen3xml";
+    return "qwen3_xml";
   }
   return undefined;
 };
