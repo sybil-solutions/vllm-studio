@@ -1257,10 +1257,10 @@ export function ChatPage() {
 
   // Load MCP servers/tools when enabled
   useEffect(() => {
-    if (mcpEnabled) {
-      loadMCPServers();
-      loadMCPTools();
-    }
+    if (!mcpEnabled) return;
+    void loadMCPServers().then(() => {
+      void loadMCPTools();
+    });
   }, [mcpEnabled, loadMCPServers, loadMCPTools]);
 
   // Load agent files when agent mode is enabled

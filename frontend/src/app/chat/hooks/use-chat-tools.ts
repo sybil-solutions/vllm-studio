@@ -50,6 +50,7 @@ export function useChatTools({ mcpEnabled }: UseChatToolsOptions) {
         args: server.args || [],
         env: server.env || {},
       }));
+      mcpServersRef.current = normalizedServers;
       setMcpServers(normalizedServers);
     } catch (err) {
       console.error("Failed to load MCP servers:", err);
