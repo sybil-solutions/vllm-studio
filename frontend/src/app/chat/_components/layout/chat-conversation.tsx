@@ -1,14 +1,13 @@
 // CRITICAL
 "use client";
 
-import type { UIMessage } from "@ai-sdk/react";
 import type { ReactNode, RefObject } from "react";
-import type { Artifact } from "@/lib/types";
+import type { Artifact, ChatMessage } from "@/lib/types";
 import { ChatMessageList } from "../messages/chat-message-list";
 import { ChatSplashCanvas } from "./chat-splash-canvas";
 
 interface ChatConversationProps {
-  messages: UIMessage[];
+  messages: ChatMessage[];
   isLoading: boolean;
   error?: string | null;
   artifactsEnabled?: boolean;

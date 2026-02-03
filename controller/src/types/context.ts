@@ -5,6 +5,7 @@ import type { LaunchState } from "../services/launch-state";
 import type { ControllerMetrics, MetricsRegistry } from "../services/metrics";
 import type { ProcessManager } from "../services/process-manager";
 import type { DownloadManager } from "../services/download-manager";
+import type { ChatRunManager } from "../services/agent-runtime/run-manager";
 import type { ChatStore } from "../stores/chat-store";
 import type { DownloadStore } from "../stores/download-store";
 import type { LifetimeMetricsStore, PeakMetricsStore } from "../stores/metrics-store";
@@ -23,6 +24,7 @@ export interface AppContext {
   metricsRegistry: MetricsRegistry;
   processManager: ProcessManager;
   downloadManager: DownloadManager;
+  runManager: ChatRunManager;
   stores: {
     recipeStore: RecipeStore;
     chatStore: ChatStore;

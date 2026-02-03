@@ -2,7 +2,6 @@
 # Chat system map (Frontend)
 
 Scope (MUST stay accurate):
-- `src/app/api/chat/**`
 - `src/app/chat/**`
 
 Goal of this document:
@@ -19,11 +18,11 @@ Non-goals:
 
 ## 0) Glossary
 
-- **AI SDK**: `ai` + `@ai-sdk/react`. Provides `useChat`, `DefaultChatTransport`, streaming UIMessage protocol, and automatic tool-loop support.
-- **UIMessage**: A message shape used by AI SDK (`role` + `parts[]`). This is the **source of truth** for in-memory conversation in the browser.
-- **Tool loop**: Model emits tool calls → client executes tool → client provides tool output → AI SDK automatically re-requests the model until no more tool calls.
+- **ChatMessage**: UI message shape (`role` + `parts[]`) used in the browser and stored by the controller.
+- **Run stream**: Controller-owned SSE stream from `POST /chats/:sessionId/turn` emitting `run_start`, `message_*`, `tool_execution_*`, `plan_updated`, and `run_end`.
+- **Pi agent runtime**: Controller-owned agent loop built on `@mariozechner/pi-agent-core` + `@mariozechner/pi-ai` that executes tools server-side.
 - **Controller**: vLLM Studio backend that stores sessions/messages, MCP config, runs tools, etc. Accessed from browser via `/api/proxy/...` (not in scope, but critical dependency).
-- **Inference backend**: OpenAI-compatible `/v1` endpoint (vLLM/LiteLLM/etc). Used by `src/app/api/chat/route.ts`.
+- **Inference backend**: OpenAI-compatible `/v1` endpoint (vLLM/LiteLLM/etc) called **by the controller**, not by Next.js.
 - **Artifacts**: Code/UI snippets extracted from assistant text (` ```artifact-* ``` ` or `<artifact ...>`), shown in preview UI.
 - **Agent Plan**: Synthetic tools `create_plan` + `update_plan` that let the model maintain a checklist in agent mode.
 
@@ -42,13 +41,13 @@ graph TD
   end
 
   subgraph NextServer["Next.js Server"]
-    ApiChat["POST /api/chat - AI SDK streamText"]
     ApiProxy["/api/proxy/* - controller proxy"]
     ApiTitle["/api/title"]
     ApiTranscribe["/api/voice/transcribe"]
   end
 
   subgraph Controller["Controller Backend"]
+    Runs["POST /chats/:id/turn (SSE run stream)"]
     Sessions[("Sessions + Messages DB")]
     MCP[("MCP servers + tools")]
     Compaction[("Compaction endpoint")]
@@ -59,67 +58,56 @@ graph TD
   end
 
   ChatRoutePage --> ChatPage
-  ChatPage -->|"useChat transport"| ApiChat
-  ApiChat -->|"streamText()"| OpenAICompat
 
   ChatPage -->|"api.* via /api/proxy"| ApiProxy
+  ApiProxy --> Runs
   ApiProxy --> Sessions
   ApiProxy --> MCP
   ApiProxy --> Compaction
+  Runs --> OpenAICompat
 
   ChatPage -->|"title generation"| ApiTitle
   ChatPage -->|"voice transcription"| ApiTranscribe
   ChatPage <--> Zustand
 ```
 
-### 1.2 The two “chat backends” (important)
+### 1.2 Single controller-owned chat backend (important)
 
-There are **two different network paths** in play:
+There is now **one** network path for chat:
 
-1) **Model response streaming**
-- Client sends messages to **Next route**: `POST /api/chat`
-- Next route streams from **inference backend** via AI SDK.
+1) **Controller run stream**
+- Client sends messages to `POST /chats/:sessionId/turn` (via `/api/proxy`).
+- Controller persists messages, runs the agent loop, executes tools, and streams SSE events.
 
-2) **Session persistence + tools (controller)**
-- Client uses `api.*` (`src/lib/api.ts`) which hits `/api/proxy/...`.
-- Controller stores sessions/messages, exposes MCP tools, compaction, usage, etc.
+2) **Inference backend**
+- Only the controller talks to `/v1` during the run.
 
-This split is a major source of complexity:
-- Messages are streamed from inference **but stored** via controller.
-- Tool execution happens client-side (MCP tool call via controller, then tool output back into AI SDK stream).
+This removes the previous split between streaming and persistence. Tool execution is server-side.
 
 ---
 
 ## 2) Core runtime loops (state machines)
 
-### 2.1 Chat streaming + tool loop (AI SDK)
-
-Key configuration (in `chat-page.tsx`):
-- `useChat({ sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls, onToolCall })`
+### 2.1 Chat streaming + tool loop (controller-run)
 
 ```mermaid
 stateDiagram-v2
   [*] --> Ready
 
   Ready --> Submitted: sendMessage()
-  Submitted --> Streaming: stream start
+  Submitted --> Streaming: open SSE run
 
-  Streaming --> ToolCall: model emits tool-call chunk
-  ToolCall --> ToolExec: ChatPage.onToolCall()
-  ToolExec --> Streaming: addToolOutput()\n(stream continues)
+  Streaming --> ToolExec: tool_execution_*\n(server-side)
+  ToolExec --> Streaming: tool result events
 
-  Streaming --> Ready: stream finish
-
-  Ready --> Submitted: auto-send\n(if last assistant step has tool calls\nAND all have outputs)
+  Streaming --> Ready: run_end
 
   Ready --> [*]: user leaves page
 ```
 
 Notes:
-- Tool calls are **not executed on the server** in `/api/chat`. They are emitted to the client.
-- The client’s `onToolCall` decides how to execute:
-  - MCP tool → controller `/mcp/tools/{server}/{tool}`
-  - Agent synthetic tool (`create_plan`, `update_plan`) → local state update
+- Tool calls are executed **on the controller** by the Pi agent runtime.
+- The client only renders `message_*`, `tool_execution_*`, and `plan_updated` events from the run stream.
 
 ### 2.2 End-to-end sequence diagram (user message)
 
@@ -129,31 +117,22 @@ sequenceDiagram
   participant ToolBelt as ToolBelt UI
   participant ChatPage as ChatPage (client)
   participant Controller as Controller (/api/proxy)
-  participant AI as AI SDK useChat
-  participant ApiChat as Next /api/chat
+  participant Agent as Pi agent runtime
   participant LLM as Inference (/v1)
 
   User->>ToolBelt: Type message / attach / record
   ToolBelt->>ChatPage: onSubmit(text, attachments)
 
   ChatPage->>Controller: create session if needed\nPOST /chats
-  ChatPage->>Controller: persist user message\nPOST /chats/:id/messages
+  ChatPage->>Controller: POST /chats/:id/turn (SSE run)
 
-  ChatPage->>AI: sendMessage(text, body={model, tools})
-  AI->>ApiChat: POST /api/chat (UIMessage[] + system + tools)
-  ApiChat->>LLM: streamText(modelMessages)
+  Controller->>Agent: start run (Pi agent core)
+  Agent->>LLM: chat/completions
 
-  LLM-->>AI: streamed chunks\n(text-delta / reasoning-delta / tool-call)
+  Agent-->>Controller: message_*\n tool_execution_*\n plan_updated\n run_end
+  Controller-->>ChatPage: SSE events (stream)
 
-  alt tool-call
-    AI-->>ChatPage: onToolCall(tool)
-    ChatPage->>Controller: call MCP tool (or local agent tool)
-    ChatPage->>AI: addToolOutput(toolCallId, output)
-    AI->>ApiChat: auto-send follow-up when tool outputs complete
-  end
-
-  AI-->>ChatPage: onFinish(assistant message)
-  ChatPage->>Controller: persist assistant message\nPOST /chats/:id/messages
+  ChatPage->>Controller: abort run (optional)
 ```
 
 ### 2.3 Agent Plan state machine
@@ -174,8 +153,8 @@ stateDiagram-v2
 ```
 
 Where it lives:
-- Tool definitions + execution: `src/app/chat/hooks/use-agent-tools.ts`
-- UI: `src/app/chat/_components/agent/agent-plan-drawer.tsx`
+- Tool definitions + execution: controller `services/agent-runtime/tool-registry.ts` (out of scope).
+- UI: `src/app/chat/_components/agent/agent-plan-drawer.tsx` + `chat-page.tsx` event handling.
 
 ### 2.4 Session lifecycle state machine
 
@@ -243,7 +222,7 @@ stateDiagram-v2
 
 ```mermaid
 graph TD
-  A["Assistant UIMessage parts - type:text"] --> B["ChatPage: extractArtifacts"]
+  A["Assistant ChatMessage parts - type:text"] --> B["ChatPage: extractArtifacts"]
   B --> C["sessionArtifacts + artifactsByMessage Map"]
 
   C --> D["UnifiedSidebar: ArtifactPreviewPanel"]
@@ -274,10 +253,11 @@ graph TD
   ChatRoutePage["page.tsx"] --> ChatPage["chat-page.tsx"]
 
   ChatPage --> useChatSessions["use-chat-sessions"]
-  ChatPage --> useChatTransport["use-chat-transport"]
   ChatPage --> useChatTools["use-chat-tools"]
   ChatPage --> useChatDerived["use-chat-derived"]
-  ChatPage --> useAgentTools["use-agent-tools"]
+  ChatPage --> useChatUsage["use-chat-usage"]
+  ChatPage --> useAgentFiles["use-agent-files"]
+  ChatPage --> useAgentState["use-agent-state"]
 
   ChatPage --> UnifiedSidebar["unified-sidebar"]
   UnifiedSidebar --> ChatConversation["chat-conversation"]
@@ -319,19 +299,19 @@ Legend:
 
 | Feature | Status | Primary files | Notes |
 |---|---:|---|---|
-| Basic chat with streaming | ✅ | `chat-page.tsx`, `/api/chat/route.ts` | Uses AI SDK `useChat` streaming. |
-| Session history (list/load/fork) | ✅ | `use-chat-sessions.ts`, `use-chat-transport.ts`, `chat-page.tsx` | Uses controller `/chats`. Messages loaded into `useChat` via `setMessages`. |
-| System prompt editing | ✅ | `chat-settings-modal.tsx`, `chat-page.tsx` | Stored in Zustand, injected into `/api/chat` via transport `body`. |
-| MCP tools execution | ✅/🟡 | `use-chat-tools.ts`, `chat-page.tsx` | Tool calls work; **tool outputs are not obviously persisted** (depends on controller schema). |
+| Basic chat with streaming | ✅ | `chat-page.tsx` | Uses controller run stream (`/chats/:id/turn`) via `api.streamChatRun`. |
+| Session history (list/load/fork) | ✅ | `use-chat-sessions.ts`, `chat-page.tsx` | Uses controller `/chats`. Messages loaded into local state via `setMessages()`. |
+| System prompt editing | ✅ | `chat-settings-modal.tsx`, `chat-page.tsx` | Stored in Zustand, sent in run payload to controller. |
+| MCP tools execution | ✅ | `use-chat-tools.ts`, `chat-page.tsx` | Tools execute on the controller; UI renders `tool_execution_*` events. |
 | Activity view (thinking + tools timeline) | ✅ | `use-chat-derived.ts`, `chat-side-panel.tsx` (ActivityPanel) | Shows tool calls + thinking extraction. |
 | Context stats + auto-compaction | ✅/🟡 | `chat-page.tsx` + `src/lib/services/context-management/*` | Auto-compaction is implemented and updates session/messages; heavy coupling in ChatPage. |
 | Artifact extraction + preview UI | ✅/🟡 | `artifact-renderer.tsx` (extract), `artifact-preview-panel.tsx`, `artifact-modal.tsx`, `artifact-viewer.tsx` | Works, but **multiple overlapping implementations** exist. |
 | File attachments | 🟡 | `tool-belt.tsx` | UI supports adding files/images. **Sending to model is currently text placeholders** (not actual file parts). |
 | Image attachments | 🟡 | `tool-belt.tsx` | Base64 is computed for images, but not passed to model in current send path. |
 | Audio recording | 🟡 | `tool-belt.tsx`, `/api/voice/transcribe` (external) | Records audio, transcribes to text, appends to input. Not sent as audio part. |
-| Deep Research | 🔴/🟡 | `chat-settings-modal.tsx`, `tool-belt-toolbar.tsx`, `chat-slice.ts` | Toggle exists; no observable effect in chat send pipeline in this directory. |
+| Deep Research | 🟡 | `chat-settings-modal.tsx`, `tool-belt-toolbar.tsx`, `chat-page.tsx` | Toggle is forwarded to the controller run (influences thinking level). |
 | Agent Files / virtual filesystem | 🟡 | `agent-files-panel.tsx`, `use-agent-files.ts` | Wired to `/chats/:sessionId/files` via `use-agent-files`; panel lists the workspace tree but has no inline editor. |
-| Agent planning tools (`create_plan`, `update_plan`) | ✅ | `use-agent-tools.ts`, `agent-plan-drawer.tsx`, `chat-page.tsx` | Synthetic tools merged into tool list when agent mode is on. |
+| Agent planning tools (`create_plan`, `update_plan`) | ✅ | `agent-plan-drawer.tsx`, `chat-page.tsx`, `use-controller-events.ts` | Plan updates arrive from controller tools via run stream + SSE. |
 | TTS | 🔴/🟡 | `tool-belt.tsx`, `tool-belt-toolbar.tsx`, store | Toggle exists; no speech synthesis in chat rendering here. |
 | Queue next message while streaming | 🟡 | `tool-belt.tsx`, store `queuedContext` | UI supports entering `queuedContext` during streaming; no auto-submit logic found in this directory. |
 
@@ -340,7 +320,7 @@ Legend:
 ## 4) State management model (Zustand)
 
 **Important:** messages are NOT stored in Zustand.
-- Messages live inside `useChat()`.
+- Messages live inside `chat-page.tsx` local state.
 - Zustand stores UI state, sessions list/metadata, tool execution status, attachments, artifacts UI state, etc.
 
 ### 4.1 Zustand keys used directly by chat UI
@@ -374,19 +354,16 @@ If you remove legacy UI components, the corresponding store keys can be removed.
 ### 5.1 In-scope file tree
 
 ```
-src/app/api/chat/
-  route.ts
-
 src/app/chat/
   page.tsx
   types.ts
   utils/index.ts
   hooks/
-    use-agent-tools.ts
+    use-agent-files.ts
+    use-agent-state.ts
     use-chat-derived.ts
     use-chat-sessions.ts
     use-chat-tools.ts
-    use-chat-transport.ts
     use-chat-usage.ts
   _components/
     agent/
@@ -434,30 +411,12 @@ src/app/chat/
 
 ## 6) File-by-file documentation (with “status”)
 
-### src/app/api/chat/route.ts (✅ ACTIVE)
-
-**Role:** Next.js API route implementing `POST /api/chat`.
-
-**Responsibilities:**
-- Accepts `{ messages: UIMessage[], model?, tools?, system? }`.
-- Converts `UIMessage[]` → model messages via `convertToModelMessages(messages)`.
-- Builds a **ToolSet** from client-provided tool schemas.
-- Calls `streamText({ model, messages, system, tools })` with OpenAI-compatible backend.
-- Returns `toUIMessageStreamResponse({ sendReasoning: true, messageMetadata })`.
-
-**Key property:** Tool execution is **client-side**. The server only provides tool schemas.
-
-**Dependencies:**
-- `getApiSettings()` (external): provides backend URL and API key.
-
----
-
 ### src/app/chat/page.tsx (✅ ACTIVE)
 
 **Role:** `/chat` page entry. Uses dynamic import:
 - `dynamic(() => import("./_components/layout/chat-page"), { ssr:false })`
 
-**Why:** avoids SSR/hydration problems for browser-only APIs (`useChat`, media recorder, etc).
+**Why:** avoids SSR/hydration problems for browser-only APIs (media recorder, localStorage, SSE, etc).
 
 ---
 
@@ -472,20 +431,11 @@ Key exports:
 
 ---
 
-### src/app/chat/utils/index.ts (🟡 PARTIAL / contains dead code)
+### src/app/chat/utils/index.ts (✅ ACTIVE)
 
 **Active exports used in chat:**
 - `stripThinkingForModelContext(text)` → used in `chat-page.tsx` when building model context.
 - `tryParseNestedJsonString(raw)` → used when loading stored tool calls in `chat-page.tsx`.
-
-**Likely dead/legacy exports (no references found in repo):**
-- `StreamEvent`, `parseSSEEvents()` (legacy manual SSE parsing; AI SDK now handles streaming)
-- `downloadTextFile()`
-- `stripThinkTagsKeepText()`
-
-**Recommendation:** split into `chat-text.ts` + delete unused SSE utilities.
-
----
 
 ## 6.1 Hooks
 
@@ -496,21 +446,6 @@ Key exports:
 - Uses controller API: `api.getChatSessions()`, `api.getChatSession(id)`.
 - Stores sessions + selection in Zustand.
 - **Does not** load messages into UI; `chat-page.tsx` calls `setMessages()` after fetching.
-
----
-
-### hooks/use-chat-transport.ts (✅ ACTIVE)
-
-**Role:** “Persistence bridge” between AI SDK `UIMessage` and controller DB.
-
-Main functions:
-- `persistMessage(sessionId, uiMessage)`
-  - Extracts text from `parts[]`.
-  - Extracts tool calls (from parts starting with `tool-`) and stores them as tool_calls.
-- `createSessionWithMessage(userMessage)`
-- `generateTitle(sessionId, userContent, assistantContent)` via `/api/title`.
-
-**Note:** tool outputs are persisted by a follow-up update in `chat-page.tsx` after `addToolOutput()` mutates the assistant message.
 
 ---
 
@@ -532,7 +467,7 @@ Tracks ephemeral UI state:
 ### hooks/use-chat-derived.ts (✅ ACTIVE)
 
 **Role:** Derived UI data:
-- Thinking extraction (AI SDK reasoning parts + `<think>` tags)
+- Thinking extraction (reasoning parts + `<think>` tags)
 - Activity timeline groups (per assistant message)
 
 Depends on:
@@ -549,18 +484,6 @@ Calls controller:
 
 ---
 
-### hooks/use-agent-tools.ts (✅ ACTIVE)
-
-**Role:** Implements synthetic agent tools:
-- Tool defs: `create_plan`, `update_plan`
-- `executeAgentTool()` updates Zustand `agentPlan` and returns JSON tool output.
-- `buildAgentSystemPrompt()` generates `<agent_mode>` block, optionally with `<current_plan>`.
-
-Key integration point:
-- `chat-page.tsx` merges these tool defs into the model’s tool list when `agentMode` is enabled.
-
----
-
 ## 6.2 Layout
 
 ### _components/layout/chat-page.tsx (✅ ACTIVE, very large)
@@ -568,10 +491,9 @@ Key integration point:
 **Role:** The orchestrator (“god component”).
 
 Major responsibilities:
-- Owns `useChat()` message lifecycle:
-  - transport config
-  - tool loop (onToolCall)
-  - persistence (onFinish)
+- Owns controller run stream lifecycle:
+  - `api.streamChatRun()` for SSE
+  - `handleRunEvent()` for `message_*`, `tool_execution_*`, `plan_updated`, `run_end`
 - Loads sessions and restores messages (`setMessages(mapStoredMessages(...))`).
 - Loads models list and stores in Zustand.
 - Builds `effectiveSystemPrompt` (system + agent-mode block).
@@ -922,23 +844,17 @@ Exports whole chat (JSON/Markdown).
 
 - `src/app/chat/utils/index.ts`
   - Keep: `stripThinkingForModelContext`, `tryParseNestedJsonString`
-  - Remove: SSE + download helpers
 
 - `src/app/chat/_components/code/code-sandbox.tsx`
   - Only used by unused `ArtifactRenderer`.
 
 ### 7.3 Unintegrated feature toggles (UI exists, pipeline doesn’t change)
 
-- Deep research toggle (`deepResearch.enabled`) does not influence:
-  - system prompt
-  - tool list
-  - model request params
-
 - TTS toggle (`isTTSEnabled`) does not change output rendering.
 
 - Queued context (`queuedContext`) is writable while streaming but has no auto-send path in this directory.
 
-- Agent file system: panel exists, but no data or tool integration.
+- Agent file system: panel is wired to controller; no inline editor yet.
 
 ---
 
@@ -947,7 +863,7 @@ Exports whole chat (JSON/Markdown).
 These are *organizational* recommendations to reduce confusion:
 
 1) **Split `chat-page.tsx`** into hooks/modules:
-   - `use-chat-request.ts` (send, tool loop config)
+   - `use-run-stream.ts` (send + SSE event handling)
    - `use-session-restore.ts` (URL params + loading + setMessages)
    - `use-artifacts.ts` (artifact extraction + modal selection)
    - `use-context-stats.ts` (token counting + compaction)
@@ -967,19 +883,23 @@ These are *organizational* recommendations to reduce confusion:
      - `MessageParsingService` artifacts parser (external)
 
 5) **Make attachments “real” or drop them**
-   - Current send path uses text placeholders; it does not pass `File` parts to AI SDK.
+   - Current send path uses text placeholders; it does not pass binary parts to the controller run.
 
 ---
 
 ## 9) Quick debugging checklist (chat-focused)
 
 - If the model stops after tool calls:
-  - Confirm `sendAutomaticallyWhen` is enabled (`lastAssistantMessageIsCompleteWithToolCalls`).
-  - Verify tool parts get `output-available` via `addToolOutput()`.
-  - Verify the **system prompt** is present on auto-sends (transport `body` is dynamic).
+  - Check controller logs for tool execution errors.
+  - Confirm `tool_execution_end` events reach the client.
+  - Ensure the run ends with `run_end` (not aborted).
 
 - If session reload loses tool results:
-  - Check what controller stores in `tool_calls[].result` (persist path currently stores inputs only).
+  - Check controller persistence (`tool_calls[].result` + `chat_tool_executions`).
+
+- If SSE stream stalls:
+  - Verify `/chats/:id/turn` response headers and proxy setup.
+  - Check `api.streamChatRun` parsing (event/data framing).
 
 - If hydration errors occur:
   - Check for invalid HTML nesting (e.g., button inside button).

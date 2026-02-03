@@ -66,6 +66,11 @@ interface RequestOptions extends RequestInit {
   retryDelay?: number;
 }
 
+export interface ChatRunStreamEvent {
+  event: string;
+  data: Record<string, unknown>;
+}
+
 class APIClient {
   private baseUrl: string;
   private useProxy: boolean;
@@ -75,14 +80,12 @@ class APIClient {
     this.useProxy = useProxy;
   }
 
-  private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const {
-      timeout = DEFAULT_TIMEOUT,
-      retries = DEFAULT_RETRIES,
-      retryDelay = RETRY_DELAY,
-      ...fetchOptions
-    } = options;
+  private buildUrl(endpoint: string): string {
+    const path = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+    return this.useProxy ? `${this.baseUrl}/${path}` : `${this.baseUrl}${endpoint}`;
+  }
 
+  private buildHeaders(extraHeaders?: HeadersInit): Record<string, string> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const storedBackendUrl = getStoredBackendUrl();
     if (this.useProxy && storedBackendUrl) {
@@ -94,8 +97,26 @@ class APIClient {
       headers["Authorization"] = `Bearer ${storedKey}`;
     }
 
-    const path = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
-    const url = this.useProxy ? `${this.baseUrl}/${path}` : `${this.baseUrl}${endpoint}`;
+    if (extraHeaders) {
+      const merged = new Headers(extraHeaders);
+      merged.forEach((value, key) => {
+        headers[key] = value;
+      });
+    }
+
+    return headers;
+  }
+
+  private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    const {
+      timeout = DEFAULT_TIMEOUT,
+      retries = DEFAULT_RETRIES,
+      retryDelay = RETRY_DELAY,
+      ...fetchOptions
+    } = options;
+
+    const headers = this.buildHeaders(fetchOptions.headers);
+    const url = this.buildUrl(endpoint);
 
     let lastError: Error | null = null;
     let lastStatus: number | undefined;
@@ -107,7 +128,7 @@ class APIClient {
       try {
         const response = await fetch(url, {
           ...fetchOptions,
-          headers: { ...headers, ...fetchOptions.headers },
+          headers,
           credentials: "include",
           signal: controller.signal,
         });
@@ -162,6 +183,109 @@ class APIClient {
     }
 
     throw lastError || new Error("Request failed after retries");
+  }
+
+  private async *parseSseStream(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+  ): AsyncGenerator<ChatRunStreamEvent> {
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let eventType = "";
+    let dataLines: string[] = [];
+
+    const flushEvent = (): ChatRunStreamEvent | null => {
+      if (dataLines.length === 0) return null;
+      const dataString = dataLines.join("\n");
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(dataString) as Record<string, unknown>;
+      } catch {
+        data = { raw: dataString };
+      }
+      const payload = {
+        event: eventType || "message",
+        data,
+      };
+      eventType = "";
+      dataLines = [];
+      return payload;
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line) {
+          const payload = flushEvent();
+          if (payload) {
+            yield payload;
+          }
+          continue;
+        }
+
+        if (line.startsWith("event:")) {
+          eventType = line.slice(6).trim();
+          continue;
+        }
+
+        if (line.startsWith("data:")) {
+          dataLines.push(line.slice(5).trim());
+        }
+      }
+    }
+
+    const finalPayload = flushEvent();
+    if (finalPayload) {
+      yield finalPayload;
+    }
+  }
+
+  async streamChatRun(
+    sessionId: string,
+    payload: {
+      content: string;
+      message_id?: string;
+      model?: string;
+      system?: string;
+      mcp_enabled?: boolean;
+      agent_mode?: boolean;
+      deep_research?: boolean;
+      thinking_level?: string;
+    },
+    options: { signal?: AbortSignal } = {},
+  ): Promise<{ runId: string | null; stream: AsyncGenerator<ChatRunStreamEvent> }> {
+    const endpoint = `/chats/${encodeURIComponent(sessionId)}/turn`;
+    const url = this.buildUrl(endpoint);
+    const headers = this.buildHeaders({
+      Accept: "text/event-stream",
+    });
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: options.signal,
+      credentials: "include",
+    });
+
+    if (!response.ok || !response.body) {
+      const errorBody = await response.json().catch(() => ({ detail: "Request failed" }));
+      const errorMessage =
+        errorBody.detail || errorBody.error?.message || `HTTP ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    const runId = response.headers.get("x-run-id");
+    const reader = response.body.getReader();
+    return {
+      runId,
+      stream: this.parseSseStream(reader),
+    };
   }
 
   async getHealth(): Promise<HealthResponse> {
@@ -284,6 +408,12 @@ class APIClient {
     return this.request(`/chats/${sessionId}/messages`, {
       method: "POST",
       body: JSON.stringify(message),
+    });
+  }
+
+  async abortChatRun(sessionId: string, runId: string): Promise<{ success: boolean }> {
+    return this.request(`/chats/${sessionId}/runs/${runId}/abort`, {
+      method: "POST",
     });
   }
 

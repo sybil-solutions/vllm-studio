@@ -1,8 +1,7 @@
 // CRITICAL
 "use client";
 
-import type { UIMessage } from "@ai-sdk/react";
-import type { DeepResearchConfig, SessionUsage, MCPServer } from "@/lib/types";
+import type { DeepResearchConfig, SessionUsage, MCPServer, ChatMessage } from "@/lib/types";
 import type { ModelOption } from "../../types";
 import { ChatSettingsModal } from "../modals/chat-settings-modal";
 import { MCPSettingsModal } from "../modals/mcp-settings-modal";
@@ -31,7 +30,7 @@ interface ChatModalsProps {
   onRemoveServer: (name: string) => Promise<void>;
   onRefreshServers: () => void;
   sessionUsage: SessionUsage | null;
-  messages: UIMessage[];
+  messages: ChatMessage[];
   onExportJson: () => void;
   onExportMarkdown: () => void;
 }

@@ -26,10 +26,6 @@ const config = {
     // Next.js config
     'eslint-config-next',
     'tailwindcss',
-    // AI SDK providers
-    '@ai-sdk/openai-compatible',
-    '@ai-sdk/react',
-    'ai',
     // Markdown processing
     // PostCSS
     'postcss',

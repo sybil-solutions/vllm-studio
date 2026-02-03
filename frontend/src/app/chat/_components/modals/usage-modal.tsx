@@ -2,14 +2,13 @@
 "use client";
 
 import { X, BarChart3 } from "lucide-react";
-import type { SessionUsage } from "@/lib/types";
-import type { UIMessage } from "@ai-sdk/react";
+import type { SessionUsage, ChatMessage } from "@/lib/types";
 
 interface UsageModalProps {
   isOpen: boolean;
   onClose: () => void;
   sessionUsage: SessionUsage | null;
-  messages: UIMessage[];
+  messages: ChatMessage[];
   selectedModel: string;
 }
 

@@ -1,3 +1,4 @@
+// CRITICAL
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { AppContext } from "./types/context";
@@ -13,6 +14,7 @@ import { DownloadStore } from "./stores/download-store";
 import { PeakMetricsStore, LifetimeMetricsStore } from "./stores/metrics-store";
 import { McpStore } from "./stores/mcp-store";
 import { RecipeStore } from "./stores/recipe-store";
+import { ChatRunManager } from "./services/agent-runtime/run-manager";
 
 /**
  * Create the application dependency container.
@@ -39,7 +41,7 @@ export const createAppContext = (): AppContext => {
 
   lifetimeMetricsStore.ensureFirstStarted();
 
-  return {
+  const baseContext = {
     config,
     logger,
     eventManager,
@@ -56,5 +58,12 @@ export const createAppContext = (): AppContext => {
       lifetimeMetricsStore,
       mcpStore,
     },
+  } as Omit<AppContext, "runManager">;
+
+  const runManager = new ChatRunManager(baseContext as AppContext);
+
+  return {
+    ...baseContext,
+    runManager,
   };
 };

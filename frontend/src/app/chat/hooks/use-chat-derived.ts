@@ -2,17 +2,15 @@
 "use client";
 
 import { useMemo, useCallback } from "react";
-import type { UIMessage } from "@ai-sdk/react";
 import type { ActivityGroup, ActivityItem, ThinkingState } from "../types";
-import type { ToolResult } from "@/lib/types";
+import type { ToolResult, ChatMessage, ChatMessagePart } from "@/lib/types";
 import { thinkingParser } from "@/lib/services/message-parsing";
 
 interface UseChatDerivedOptions {
-  messages: UIMessage[];
+  messages: ChatMessage[];
   isLoading: boolean;
   executingTools: Set<string>;
   toolResultsMap: Map<string, ToolResult>;
-  systemPrompt?: string;
 }
 
 export function useChatDerived({
@@ -20,11 +18,10 @@ export function useChatDerived({
   isLoading,
   executingTools,
   toolResultsMap,
-  systemPrompt,
 }: UseChatDerivedOptions) {
   // Extract thinking/reasoning content from a single assistant message
-  const extractThinking = useCallback((message: UIMessage) => {
-    // 1. Extract AI SDK reasoning parts
+  const extractThinking = useCallback((message: ChatMessage) => {
+    // 1. Extract reasoning parts
     const reasoningParts = message.parts.filter(
       (part): part is { type: "reasoning"; text: string } => part.type === "reasoning",
     );
@@ -51,19 +48,12 @@ export function useChatDerived({
   }, []);
 
   const isToolPart = (
-    part: UIMessage["parts"][number],
-  ): part is UIMessage["parts"][number] & { toolCallId: string; input?: unknown } => {
+    part: ChatMessagePart,
+  ): part is ChatMessagePart & { toolCallId: string; input?: unknown } => {
     if (typeof part.type !== "string") return false;
     if (part.type === "dynamic-tool") return "toolCallId" in part;
     return part.type.startsWith("tool-") && "toolCallId" in part;
   };
-
-  const requestContext = useMemo(() => {
-    const trimmedSystem = systemPrompt?.trim() || "";
-    return {
-      systemPrompt: trimmedSystem || undefined,
-    };
-  }, [systemPrompt]);
 
   // Build activity groups from assistant messages with chronologically interleaved items
   const activityGroups = useMemo<ActivityGroup[]>(() => {
@@ -205,6 +195,5 @@ export function useChatDerived({
     hasToolActivity,
     hasSidePanelContent,
     lastAssistantMessage,
-    requestContext,
   };
 }

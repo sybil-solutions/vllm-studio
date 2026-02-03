@@ -2,16 +2,14 @@
 "use client";
 
 import { memo } from "react";
-import type { UIMessage } from "@ai-sdk/react";
-import type { LanguageModelUsage } from "ai";
 import { useAppStore } from "@/store";
 import * as Icons from "../icons";
 import { MessageRenderer, thinkingParser } from "./message-renderer";
 import { MiniArtifactCard } from "../artifacts/mini-artifact-card";
-import type { Artifact } from "@/lib/types";
+import type { Artifact, ChatMessage, ChatMessageMetadata } from "@/lib/types";
 
 interface ChatMessageItemProps {
-  message: UIMessage;
+  message: ChatMessage;
   isStreaming: boolean;
   artifactsEnabled?: boolean;
   artifacts?: Artifact[];
@@ -30,10 +28,7 @@ interface ChatMessageItemProps {
   }) => void;
 }
 
-type MessageMetadata = {
-  model?: string;
-  usage?: LanguageModelUsage;
-};
+type MessageMetadata = ChatMessageMetadata;
 
 // Inline thinking component for mobile - minimal style
 function InlineThinking({
@@ -243,7 +238,7 @@ function ChatMessageItemBase({
     .map((part) => part.text)
     .join("");
 
-  // Extract AI SDK reasoning parts (type: "reasoning" from sendReasoning: true)
+  // Extract reasoning parts (type: "reasoning")
   const aiSdkReasoning = message.parts
     .filter(
       (part): part is { type: "reasoning"; text: string } =>
@@ -256,7 +251,7 @@ function ChatMessageItemBase({
   const parsedThinking = !isUser ? thinkingParser.parse(rawTextContent) : null;
   const textContent = isUser ? rawTextContent : parsedThinking?.mainContent || "";
 
-  // Combine parsed <think> tags with AI SDK reasoning parts
+  // Combine parsed <think> tags with reasoning parts
   const thinkingContent = aiSdkReasoning || parsedThinking?.thinkingContent || "";
   const isThinkingActive = isStreaming && !textContent && !!thinkingContent;
 

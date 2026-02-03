@@ -168,6 +168,8 @@ const cloneMessageToSession = (
   const content = getString(message["content"]) ?? undefined;
   const model = getString(message["model"]) ?? undefined;
   const toolCalls = Array.isArray(message["tool_calls"]) ? message["tool_calls"] : undefined;
+  const toolCallId = getString(message["tool_call_id"]) ?? undefined;
+  const toolName = getString(message["name"]) ?? undefined;
   const parts = Array.isArray(message["parts"]) ? message["parts"] : undefined;
   const metadata = Object.prototype.hasOwnProperty.call(message, "metadata")
     ? message["metadata"]
@@ -190,6 +192,8 @@ const cloneMessageToSession = (
     completionTokens,
     parts,
     metadata,
+    toolCallId,
+    toolName,
   );
 };
 
