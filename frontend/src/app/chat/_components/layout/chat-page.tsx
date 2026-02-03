@@ -147,6 +147,7 @@ export function ChatPage() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const activeRunIdRef = useRef<string | null>(null);
   const runAbortControllerRef = useRef<AbortController | null>(null);
+  const runCompletedRef = useRef(false);
 
   // Sessions hook
   const {
@@ -642,6 +643,7 @@ export function ChatPage() {
         }
         case "run_end": {
           activeRunIdRef.current = null;
+          runCompletedRef.current = true;
           setIsLoading(false);
           if (data["status"] && data["status"] !== "completed") {
             setStreamError(typeof data["error"] === "string" ? data["error"] : "Run failed");
@@ -1477,6 +1479,7 @@ export function ChatPage() {
       }
       const abortController = new AbortController();
       runAbortControllerRef.current = abortController;
+      runCompletedRef.current = false;
       setIsLoading(true);
       setStreamError(null);
       setExecutingTools(new Set());
@@ -1493,7 +1496,7 @@ export function ChatPage() {
           handleRunEvent(event);
         }
       } catch (err) {
-        if (!abortController.signal.aborted) {
+        if (!abortController.signal.aborted && !runCompletedRef.current) {
           const message = err instanceof Error ? err.message : String(err);
           setStreamError(message);
         }
