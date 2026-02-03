@@ -193,10 +193,11 @@ IMPORTANT: Do not use emoji, Unicode symbols, or decorative box-drawing characte
     let modifiedBody: ArrayBuffer | null = null;
     let bodyChanged = false;
     let matchedRecipe: Recipe | null = null;
+    let parsed: Record<string, unknown> = {};
 
     try {
       const bodyText = new TextDecoder().decode(bodyBuffer);
-      const parsed = JSON.parse(bodyText) as Record<string, unknown>;
+      parsed = JSON.parse(bodyText) as Record<string, unknown>;
       if (typeof parsed["model"] === "string") {
         requestedModel = parsed["model"];
         matchedRecipe = findRecipeByModel(requestedModel);
@@ -245,12 +246,20 @@ IMPORTANT: Do not use emoji, Unicode symbols, or decorative box-drawing characte
       }
     }
 
+    const toolsPayload = Array.isArray(parsed["tools"]) ? parsed["tools"] : [];
+    const hasTools = toolsPayload.length > 0;
+    const useDirectInference = isStreaming && hasTools;
     const masterKey = process.env["LITELLM_MASTER_KEY"] ?? "sk-master";
+    const inferenceKey = process.env["INFERENCE_API_KEY"] ?? "";
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${masterKey}`,
+      ...(useDirectInference
+        ? (inferenceKey ? { Authorization: `Bearer ${inferenceKey}` } : {})
+        : { Authorization: `Bearer ${masterKey}` }),
     };
     const litellmUrl = "http://localhost:4100/v1/chat/completions";
+    const inferenceUrl = `http://localhost:${context.config.inference_port}/v1/chat/completions`;
+    const upstreamUrl = useDirectInference ? inferenceUrl : litellmUrl;
 
     if (!isStreaming) {
       const response = await fetch(litellmUrl, { method: "POST", headers, body: finalBody });
@@ -302,19 +311,19 @@ IMPORTANT: Do not use emoji, Unicode symbols, or decorative box-drawing characte
       return ctx.json(result, { status: response.status });
     }
 
-    const litellmResponse = await fetch(litellmUrl, { method: "POST", headers, body: finalBody });
-    if (!litellmResponse.ok) {
-      const errorText = await litellmResponse.text();
+    const upstreamResponse = await fetch(upstreamUrl, { method: "POST", headers, body: finalBody });
+    if (!upstreamResponse.ok) {
+      const errorText = await upstreamResponse.text();
       return new Response(errorText, {
-        status: litellmResponse.status,
+        status: upstreamResponse.status,
         headers: {
-          "Content-Type": litellmResponse.headers.get("Content-Type") ?? "application/json",
+          "Content-Type": upstreamResponse.headers.get("Content-Type") ?? "application/json",
         },
       });
     }
-    const reader = litellmResponse.body?.getReader();
+    const reader = upstreamResponse.body?.getReader();
     if (!reader) {
-      throw serviceUnavailable("LiteLLM backend unavailable");
+      throw serviceUnavailable(useDirectInference ? "Inference backend unavailable" : "LiteLLM backend unavailable");
     }
 
     const thinkState: ThinkState = { inThinking: false };
