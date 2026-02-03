@@ -38,7 +38,7 @@ export function useChatSessions() {
         const data = await api.getChatSession(sessionId);
         setCurrentSessionId(sessionId);
         setCurrentSessionTitle(data.session?.title || "Chat");
-        // Messages are managed by useChat, we just load metadata
+        // Messages are managed by ChatPage state; we just load metadata here.
         return data.session ?? null;
       } catch (err) {
         console.error("Failed to load session:", err);

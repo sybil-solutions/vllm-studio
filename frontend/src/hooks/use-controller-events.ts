@@ -170,6 +170,15 @@ export function useControllerEvents(
             dispatchCustomEvent("vllm:chat-event", { type: eventType, data });
             break;
           }
+          case "agent_plan_updated": {
+            const sessionId = String(data["session_id"] ?? "");
+            const plan = normalizePlan(data["plan"]);
+            if (sessionId && currentSessionId === sessionId) {
+              setAgentPlan(plan);
+            }
+            dispatchCustomEvent("vllm:chat-event", { type: eventType, data });
+            break;
+          }
           case "recipe_created":
           case "recipe_updated":
           case "recipe_deleted": {
@@ -250,6 +259,7 @@ export function useControllerEvents(
       "agent_file_deleted",
       "agent_directory_created",
       "agent_file_moved",
+      "agent_plan_updated",
       "recipe_created",
       "recipe_updated",
       "recipe_deleted",

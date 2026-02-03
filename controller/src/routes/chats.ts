@@ -1,10 +1,26 @@
 // CRITICAL
 import type { Hono } from "hono";
 import { randomUUID } from "node:crypto";
+import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { AppContext } from "../types/context";
-import { notFound } from "../core/errors";
+import { badRequest, notFound } from "../core/errors";
 import { compactChatSession } from "../services/chat-compaction";
 import { Event } from "../services/event-manager";
+import { buildSseHeaders, streamAsyncStrings } from "../http/sse";
+
+const THINKING_LEVELS = new Set<ThinkingLevel>([
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+]);
+
+const toThinkingLevel = (value: unknown): ThinkingLevel | undefined => {
+  if (typeof value !== "string") return undefined;
+  return THINKING_LEVELS.has(value as ThinkingLevel) ? (value as ThinkingLevel) : undefined;
+};
 
 /**
  * Generate a simple title from the first few words of a message.
@@ -142,6 +158,8 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
     const content = typeof body["content"] === "string" ? body["content"] : undefined;
     const model = typeof body["model"] === "string" ? body["model"] : undefined;
     const toolCalls = Array.isArray(body["tool_calls"]) ? body["tool_calls"] : undefined;
+    const toolCallId = typeof body["tool_call_id"] === "string" ? body["tool_call_id"] : undefined;
+    const toolName = typeof body["name"] === "string" ? body["name"] : undefined;
     const parts = Array.isArray(body["parts"]) ? body["parts"] : undefined;
     const metadata = Object.prototype.hasOwnProperty.call(body, "metadata") ? body["metadata"] : undefined;
     const promptTokens = typeof body["request_prompt_tokens"] === "number" ? body["request_prompt_tokens"] : undefined;
@@ -162,6 +180,8 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
       completionTokens,
       parts,
       metadata,
+      toolCallId,
+      toolName,
     );
     const session = context.stores.chatStore.getSessionSummary(sessionId);
     await context.eventManager.publish(new Event("chat_message_upserted", {
@@ -177,6 +197,64 @@ export const registerChatsRoutes = (app: Hono, context: AppContext): void => {
   app.get("/chats/:sessionId/usage", async (ctx) => {
     const sessionId = ctx.req.param("sessionId");
     return ctx.json(context.stores.chatStore.getUsage(sessionId));
+  });
+
+  app.post("/chats/:sessionId/turn", async (ctx) => {
+    const sessionId = ctx.req.param("sessionId");
+    const session = context.stores.chatStore.getSession(sessionId);
+    if (!session) {
+      throw notFound("Session not found");
+    }
+
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await ctx.req.json()) as Record<string, unknown>;
+    } catch {
+      body = {};
+    }
+
+    const content = typeof body["content"] === "string" ? body["content"] : "";
+    if (!content.trim()) {
+      throw badRequest("Message content is required");
+    }
+
+    const messageId = typeof body["message_id"] === "string" ? body["message_id"] : undefined;
+    const model = typeof body["model"] === "string" ? body["model"] : undefined;
+    const systemPrompt = typeof body["system"] === "string" ? body["system"] : undefined;
+    const mcpEnabled = body["mcp_enabled"] === true;
+    const agentMode = body["agent_mode"] === true;
+    const deepResearch = body["deep_research"] === true;
+    const thinkingLevel = toThinkingLevel(body["thinking_level"]);
+
+    const runOptions = {
+      sessionId,
+      content,
+      mcpEnabled,
+      agentMode,
+      deepResearch,
+      ...(messageId ? { messageId } : {}),
+      ...(model ? { model } : {}),
+      ...(systemPrompt ? { systemPrompt } : {}),
+      ...(thinkingLevel ? { thinkingLevel } : {}),
+    };
+
+    const { runId, stream } = await context.runManager.startRun(runOptions);
+
+    return new Response(streamAsyncStrings(stream), {
+      headers: {
+        ...buildSseHeaders(),
+        "X-Run-Id": runId,
+      },
+    });
+  });
+
+  app.post("/chats/:sessionId/runs/:runId/abort", async (ctx) => {
+    const runId = ctx.req.param("runId");
+    const aborted = context.runManager.abortRun(runId);
+    if (!aborted) {
+      throw notFound("Run not found");
+    }
+    return ctx.json({ success: true });
   });
 
   app.post("/chats/retitle-all", async (ctx) => {

@@ -3,8 +3,6 @@
  * Type definitions for vLLM Studio
  */
 
-import type { UIMessage } from "ai";
-
 // Process info from controller
 export interface ProcessInfo {
   pid: number;
@@ -224,14 +222,53 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+export type ChatMessageRole = "user" | "assistant";
+
+export interface ChatMessageUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+export interface ChatMessageMetadata {
+  model?: string;
+  usage?: ChatMessageUsage;
+  internal?: boolean;
+  [key: string]: unknown;
+}
+
+export type ChatMessagePart =
+  | { type: "text"; text: string }
+  | { type: "reasoning"; text: string }
+  | {
+      type: "dynamic-tool";
+      toolCallId: string;
+      toolName?: string;
+      input?: unknown;
+      output?: unknown;
+      errorText?: string;
+      state?: string;
+      providerExecuted?: boolean;
+    }
+  | {
+      type: `tool-${string}`;
+      toolCallId: string;
+      toolName?: string;
+      input?: unknown;
+      output?: unknown;
+      errorText?: string;
+      state?: string;
+      providerExecuted?: boolean;
+    };
+
 export interface StoredMessage {
   id: string;
-  role: "user" | "assistant";
+  role: ChatMessageRole;
   content: string;
   model?: string;
   tool_calls?: StoredToolCall[];
-  parts?: UIMessage["parts"];
-  metadata?: UIMessage["metadata"];
+  parts?: ChatMessagePart[];
+  metadata?: ChatMessageMetadata;
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
@@ -240,6 +277,17 @@ export interface StoredMessage {
   request_total_input_tokens?: number | null;
   request_completion_tokens?: number | null;
   estimated_cost_usd?: number | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: ChatMessageRole;
+  parts: ChatMessagePart[];
+  metadata?: ChatMessageMetadata;
+  model?: string;
+  tool_calls?: StoredToolCall[];
+  content?: string;
+  created_at?: string;
 }
 
 export interface ChatSessionDetail extends ChatSession {

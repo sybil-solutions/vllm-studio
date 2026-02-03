@@ -2,14 +2,13 @@
 "use client";
 
 import { useCallback } from "react";
-import type { UIMessage } from "@ai-sdk/react";
 import * as Icons from "../icons";
 import { ChatMessageItem } from "./chat-message-item";
 import { useAppStore } from "@/store";
-import type { Artifact } from "@/lib/types";
+import type { Artifact, ChatMessage } from "@/lib/types";
 
 interface ChatMessageListProps {
-  messages: UIMessage[];
+  messages: ChatMessage[];
   isLoading: boolean;
   error?: string | null;
   artifactsEnabled?: boolean;

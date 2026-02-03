@@ -20,6 +20,8 @@
     "@hono/swagger-ui": "^0.5.3",
     "@hono/zod-openapi": "0.18.4",
     "agentfs-sdk": "^0.5.3",
+    "@mariozechner/pi-agent-core": "^0.50.9",
+    "@mariozechner/pi-ai": "^0.50.9",
     "dotenv": "16.6.1",
     "hono": "4.6.12",
     "pg": "8.13.3",

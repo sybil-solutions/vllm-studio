@@ -10,7 +10,7 @@
     "lint:fix": "eslint --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css,md,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,css,md,json}\"",
-    "depcheck": "depcheck --ignores=\"@types/react,@types/react-dom,@types/node,@types/react-syntax-highlighter,eslint-config-next,tailwindcss,@tailwindcss/postcss,depcheck,prettier,husky,jscpd,knip,lint-staged,@ai-sdk/openai,@ai-sdk/openai-compatible,@ai-sdk/react,ai,rehype-highlight,zod\" --ignore-patterns=\"*.d.ts,.next/**,playwright-report/**\" --specials=next,webpack,babel --skip-missing",
+    "depcheck": "depcheck --ignores=\"@types/react,@types/react-dom,@types/node,@types/react-syntax-highlighter,eslint-config-next,tailwindcss,@tailwindcss/postcss,depcheck,prettier,husky,jscpd,knip,lint-staged,rehype-highlight,zod\" --ignore-patterns=\"*.d.ts,.next/**,playwright-report/**\" --specials=next,webpack,babel --skip-missing",
     "analyze": "ANALYZE=true next build",
     "test": "vitest run",
     "test:integration": "playwright test",
@@ -19,9 +19,6 @@
     "check:fix": "knip --fix"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^2.0.13",
-    "@ai-sdk/react": "^3.0.43",
-    "ai": "^6.0.41",
     "clsx": "^2.1.1",
     "framer-motion": "^12.24.10",
     "lucide-react": "^0.561.0",
