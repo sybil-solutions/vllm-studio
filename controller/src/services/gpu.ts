@@ -1,12 +1,125 @@
 // CRITICAL
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import type { GpuInfo } from "../types/models";
 
-/**
- * Query GPU info from nvidia-smi.
- * @returns List of GPU info objects.
- */
-export const getGpuInfo = (): GpuInfo[] => {
+export const detectGpuType = (): "nvidia" | "amd" | null => {
+  try {
+    const nvidiaSmi = process.env["NVIDIA_SMI_PATH"] || "nvidia-smi";
+    execSync(`${nvidiaSmi} --query-gpu=name --format=csv,noheader,nounits`, {
+      encoding: "utf-8",
+      timeout: 5000,
+      stdio: "pipe",
+    });
+    return "nvidia";
+  } catch {
+    // Ignore
+  }
+
+  try {
+    spawnSync("rocm-smi", ["--showproductname"], {
+      encoding: "utf-8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return "amd";
+  } catch {
+    return null;
+  }
+};
+
+const parseRocmCsv = (output: string): Record<string, string>[] => {
+  if (!output || output.trim().length === 0) {
+    return [];
+  }
+  const lines = output.trim().split("\n");
+  if (lines.length < 2) {
+    return [];
+  }
+  const headers = lines[0].split(",").slice(1);
+  return lines.slice(1).map((line) => {
+    const values = line.split(",").slice(1);
+    return headers.reduce((acc, header, index) => {
+      acc[header] = values[index]?.trim() ?? "";
+      return acc;
+    }, {} as Record<string, string>);
+  });
+};
+
+export const getAmdGpuInfo = (): GpuInfo[] => {
+  try {
+    const runRocm = (args: string[]): string => {
+      const result = spawnSync("rocm-smi", args, {
+        encoding: "utf-8",
+        timeout: 5000,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      if (result.status !== 0 || !result.stdout) {
+        return "";
+      }
+      return result.stdout.toString();
+    };
+
+    const [productOutput, memOutput, useOutput, tempOutput, powerOutput] = [
+      runRocm(["--showproductname", "--csv"]),
+      runRocm(["--showmeminfo", "vram", "--csv"]),
+      runRocm(["--showuse", "--csv"]),
+      runRocm(["-t", "--csv"]),
+      runRocm(["--showpower", "--csv"]),
+    ];
+
+    const products = parseRocmCsv(productOutput);
+    const mems = parseRocmCsv(memOutput);
+    const uses = parseRocmCsv(useOutput);
+    const temps = parseRocmCsv(tempOutput);
+    const powers = parseRocmCsv(powerOutput);
+
+    const gpuCount = Math.max(products.length, mems.length, uses.length, temps.length, powers.length);
+    if (gpuCount === 0) {
+      return [];
+    }
+
+    const gpus: GpuInfo[] = [];
+    for (let i = 0; i < gpuCount; i += 1) {
+      const product = products[i] ?? {};
+      const mem = mems[i] ?? {};
+      const use = uses[i] ?? {};
+      const temp = temps[i] ?? {};
+      const power = powers[i] ?? {};
+
+      const name = product["Card Series"] || product["Device Name"] || "AMD GPU";
+      const memTotal = Number(mem["VRAM Total Memory (B)"] ?? 0);
+      const memUsed = Number(mem["VRAM Total Used Memory (B)"] ?? 0);
+      const memFree = Math.max(0, memTotal - memUsed);
+      const utilization = Number(use["GPU use (%)"] ?? 0);
+      const temperature = Number(temp["Temperature (Sensor edge) (C)"] ?? 0);
+      const powerDraw = Number(power["Average Graphics Package Power (W)"] ?? 0);
+      const toMB = (bytes: number): number => Math.max(0, Math.round(bytes / 1024 / 1024));
+
+      gpus.push({
+        index: i,
+        name,
+        memory_total: memTotal,
+        memory_total_mb: toMB(memTotal),
+        memory_used: memUsed,
+        memory_used_mb: toMB(memUsed),
+        memory_free: memFree,
+        memory_free_mb: toMB(memFree),
+        utilization,
+        utilization_pct: utilization,
+        temperature,
+        temp_c: temperature,
+        power_draw: powerDraw,
+        power_limit: 0,
+      });
+    }
+
+    return gpus;
+  } catch {
+    return [];
+  }
+};
+
+export const getNvidiaGpuInfo = (): GpuInfo[] => {
   const query = [
     "name",
     "memory.total",
@@ -19,7 +132,6 @@ export const getGpuInfo = (): GpuInfo[] => {
   ].join(",");
 
   try {
-    // Use full path to nvidia-smi with explicit env to ensure it can find CUDA libs
     const nvidiaSmi = process.env["NVIDIA_SMI_PATH"] || "/usr/bin/nvidia-smi";
     const output = execSync(
       `${nvidiaSmi} --query-gpu=${query} --format=csv,noheader,nounits`,
@@ -71,6 +183,17 @@ export const getGpuInfo = (): GpuInfo[] => {
   } catch {
     return [];
   }
+};
+
+export const getGpuInfo = (): GpuInfo[] => {
+  const gpuType = detectGpuType();
+  if (gpuType === "amd") {
+    return getAmdGpuInfo();
+  }
+  if (gpuType === "nvidia") {
+    return getNvidiaGpuInfo();
+  }
+  return [];
 };
 
 /**

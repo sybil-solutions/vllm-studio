@@ -7,6 +7,29 @@ import type { RecipeId } from "./brand";
 export type Backend = "vllm" | "sglang" | "transformers" | "tabbyapi";
 
 /**
+ * Chat proxy routing mode.
+ */
+export type RoutingMode = "auto" | "direct" | "litellm";
+
+/**
+ * Target backend for chat completions.
+ */
+export interface BackendTarget {
+  mode: RoutingMode;
+  url: string;
+  name: string;
+}
+
+/**
+ * Backend availability status.
+ */
+export interface BackendAvailability {
+  litellm_available: boolean;
+  inference_available: boolean;
+  selected_mode: RoutingMode;
+}
+
+/**
  * Model launch configuration.
  */
 export interface Recipe {
