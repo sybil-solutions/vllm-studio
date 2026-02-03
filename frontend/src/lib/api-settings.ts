@@ -1,5 +1,5 @@
 // CRITICAL
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { accessSync, constants, existsSync } from "fs";
 import { homedir, tmpdir } from "node:os";
 import path from "path";
@@ -91,7 +91,17 @@ export async function saveApiSettings(settings: ApiSettings): Promise<void> {
       try {
         await mkdir(dir, { recursive: true });
         const settingsFile = path.join(dir, SETTINGS_FILENAME);
-        await writeFile(settingsFile, payload, "utf-8");
+        try {
+          await writeFile(settingsFile, payload, "utf-8");
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if ((code === "EACCES" || code === "EPERM") && existsSync(settingsFile)) {
+            await unlink(settingsFile);
+            await writeFile(settingsFile, payload, "utf-8");
+          } else {
+            throw error;
+          }
+        }
         return;
       } catch (error) {
         lastError = error;
