@@ -19,3 +19,8 @@
 - Added Hermes `<tool_call><function=...>` parsing in controller proxy + LiteLLM handler.
 - Re-ran controller typecheck/tests and frontend lint/build.
 - Prepared deployment for updated parsers and attachment pipeline.
+
+## Iteration 4
+- Switched Intellect-3 tool_call_parser to qwen3_xml and relaunched vLLM.
+- Detected LiteLLM streaming dropping tool_calls; bypassed LiteLLM for streaming tool calls.
+- Verified streaming tool_calls from vLLM and SSE tool execution events.
