@@ -8,6 +8,7 @@ const withBundleAnalyzer = bundleAnalyzer({
 const nextConfig: NextConfig = {
   output: "standalone",
   images: { unoptimized: true },
+  turbopack: { root: __dirname },
   async redirects() {
     return [
       {
