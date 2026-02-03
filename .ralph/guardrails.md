@@ -14,3 +14,8 @@
 - Trigger: Next build scans repo root or hits permission errors
 - Instruction: set `turbopack.root` to frontend dir in `next.config.ts`
 - Added after: build failed reading data/postgres on server
+
+## Sign: Avoid client-only state in SSR render
+- Trigger: using window/localStorage during initial render
+- Instruction: initialize deterministic defaults and apply window/localStorage in useEffect after mount
+- Added after: React #418 hydration failure on /chat

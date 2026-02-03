@@ -24,3 +24,10 @@
 - Switched Intellect-3 tool_call_parser to qwen3_xml and relaunched vLLM.
 - Detected LiteLLM streaming dropping tool_calls; bypassed LiteLLM for streaming tool calls.
 - Verified streaming tool_calls from vLLM and SSE tool execution events.
+
+## Iteration 5
+- Added controller stream recovery for malformed tool-call JSON parsing.
+- Fixed frontend UUID generation fallback and removed crypto.randomUUID dependency.
+- Eliminated /chat hydration mismatch by deferring sidebar layout state to mount.
+- Rebuilt and redeployed frontend + restarted controller on server.
+- Verified chat + agent plan tool calls in browser; hit API /health and /v1/models.
