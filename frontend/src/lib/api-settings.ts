@@ -1,6 +1,7 @@
 // CRITICAL
 import { readFile, writeFile, mkdir } from "fs/promises";
-import { existsSync } from "fs";
+import { accessSync, constants, existsSync } from "fs";
+import { homedir, tmpdir } from "node:os";
 import path from "path";
 
 export interface ApiSettings {
@@ -17,26 +18,48 @@ const DEFAULT_SETTINGS: ApiSettings = {
   voiceModel: process.env.VOICE_MODEL || process.env.NEXT_PUBLIC_VOICE_MODEL || "whisper-large-v3-turbo",
 };
 
+const SETTINGS_FILENAME = "api-settings.json";
+
 // Settings file path - try multiple locations to support dev, monorepo, and standalone builds
 const DATA_DIR_CANDIDATES = [
   process.env.VLLM_STUDIO_DATA_DIR,
   path.join(process.cwd(), "data"),
   path.join(process.cwd(), "..", "data"),
   path.join(process.cwd(), "frontend", "data"),
+  path.join(homedir(), ".vllm-studio"),
+  path.join(tmpdir(), "vllm-studio"),
 ].filter((dir): dir is string => Boolean(dir));
 
 function resolveSettingsFile() {
-  for (const dir of DATA_DIR_CANDIDATES) {
-    const settingsFile = path.join(dir, "api-settings.json");
+  const writableDirs = DATA_DIR_CANDIDATES.filter((dir) => {
+    if (!existsSync(dir)) return false;
+    try {
+      accessSync(dir, constants.W_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  for (const dir of writableDirs) {
+    const settingsFile = path.join(dir, SETTINGS_FILENAME);
     if (existsSync(settingsFile)) {
       return { dataDir: dir, settingsFile };
     }
   }
 
-  const fallbackDir = DATA_DIR_CANDIDATES[0] || path.join(process.cwd(), "data");
+  for (const dir of DATA_DIR_CANDIDATES) {
+    const settingsFile = path.join(dir, SETTINGS_FILENAME);
+    if (existsSync(settingsFile)) {
+      return { dataDir: dir, settingsFile };
+    }
+  }
+
+  const fallbackDir =
+    writableDirs[0] || DATA_DIR_CANDIDATES[0] || path.join(process.cwd(), "data");
   return {
     dataDir: fallbackDir,
-    settingsFile: path.join(fallbackDir, "api-settings.json"),
+    settingsFile: path.join(fallbackDir, SETTINGS_FILENAME),
   };
 }
 
@@ -61,13 +84,20 @@ export async function getApiSettings(): Promise<ApiSettings> {
 }
 
 export async function saveApiSettings(settings: ApiSettings): Promise<void> {
+  const payload = JSON.stringify(settings, null, 2);
+  let lastError: unknown;
   try {
-    const { dataDir, settingsFile } = resolveSettingsFile();
-    // Ensure data directory exists
-    if (!existsSync(dataDir)) {
-      await mkdir(dataDir, { recursive: true });
+    for (const dir of DATA_DIR_CANDIDATES) {
+      try {
+        await mkdir(dir, { recursive: true });
+        const settingsFile = path.join(dir, SETTINGS_FILENAME);
+        await writeFile(settingsFile, payload, "utf-8");
+        return;
+      } catch (error) {
+        lastError = error;
+      }
     }
-    await writeFile(settingsFile, JSON.stringify(settings, null, 2), "utf-8");
+    throw lastError ?? new Error("No writable settings directory found");
   } catch (error) {
     console.error("[API Settings] Failed to save settings file:", error);
     throw error;
