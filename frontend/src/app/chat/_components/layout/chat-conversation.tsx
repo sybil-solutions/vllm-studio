@@ -16,6 +16,7 @@ interface ChatConversationProps {
   contextUsageLabel?: string | null;
   onFork?: (messageId: string) => void;
   onReprompt?: (messageId: string) => void;
+  onOpenContext?: () => void;
   showEmptyState: boolean;
   toolBelt: ReactNode;
   onScroll: () => void;
@@ -33,6 +34,7 @@ export function ChatConversation({
   contextUsageLabel,
   onFork,
   onReprompt,
+  onOpenContext,
   showEmptyState,
   toolBelt,
   onScroll,
@@ -65,6 +67,7 @@ export function ChatConversation({
                   contextUsageLabel={contextUsageLabel}
                   onFork={onFork}
                   onReprompt={onReprompt}
+                  onOpenContext={onOpenContext}
                 />
                 <div ref={messagesEndRef} />
               </div>

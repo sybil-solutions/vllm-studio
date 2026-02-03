@@ -9,7 +9,6 @@ import type {
   MCPTool,
   DeepResearchConfig,
   SessionUsage,
-  ActivePanel,
   AgentFileEntry,
 } from "@/lib/types";
 import type { ModelOption, Attachment } from "@/app/chat/types";
@@ -56,8 +55,6 @@ export interface ChatState {
 
   // Layout
   isMobile: boolean;
-  toolPanelOpen: boolean;
-  activePanel: ActivePanel;
   userScrolledUp: boolean;
 
   // MCP & tools
@@ -97,12 +94,7 @@ export interface ChatState {
   messageInlineToolsExpanded: Record<string, boolean>;
 
   // Artifacts
-  artifactPanelSelectedId: string | null;
   activeArtifactId: string | null;
-  artifactRendererState: Record<
-    string,
-    { isFullscreen: boolean; showCode: boolean; copied: boolean; showPreview?: boolean }
-  >;
   artifactViewerState: Record<
     string,
     {
@@ -119,10 +111,6 @@ export interface ChatState {
 
   // Code blocks & sandboxes
   codeBlockState: Record<string, { copied: boolean; isExpanded: boolean }>;
-  codeSandboxState: Record<
-    string,
-    { isRunning: boolean; isFullscreen: boolean; copied: boolean; error: string | null }
-  >;
   mermaidState: Record<string, { svg: string; error: string | null }>;
 
   // Splash
@@ -162,8 +150,6 @@ export interface ChatActions {
 
   // Layout
   setIsMobile: (isMobile: boolean) => void;
-  setToolPanelOpen: (toolPanelOpen: boolean) => void;
-  setActivePanel: (activePanel: ActivePanel) => void;
   setUserScrolledUp: (userScrolledUp: boolean) => void;
 
   // MCP & tools
@@ -209,21 +195,6 @@ export interface ChatActions {
   setMessageInlineToolsExpanded: (messageId: string, expanded: boolean) => void;
 
   // Artifacts
-  setArtifactPanelSelectedId: (artifactId: string | null) => void;
-  updateArtifactRendererState: (
-    artifactId: string,
-    updater: (prev: {
-      isFullscreen: boolean;
-      showCode: boolean;
-      copied: boolean;
-      showPreview?: boolean;
-    }) => {
-      isFullscreen: boolean;
-      showCode: boolean;
-      copied: boolean;
-      showPreview?: boolean;
-    },
-  ) => void;
   updateArtifactViewerState: (
     artifactId: string,
     updater: (prev: {
@@ -253,20 +224,6 @@ export interface ChatActions {
     updater: (prev: { copied: boolean; isExpanded: boolean }) => {
       copied: boolean;
       isExpanded: boolean;
-    },
-  ) => void;
-  updateCodeSandboxState: (
-    sandboxId: string,
-    updater: (prev: {
-      isRunning: boolean;
-      isFullscreen: boolean;
-      copied: boolean;
-      error: string | null;
-    }) => {
-      isRunning: boolean;
-      isFullscreen: boolean;
-      copied: boolean;
-      error: string | null;
     },
   ) => void;
   setMermaidState: (id: string, svg: string, error: string | null) => void;
@@ -317,8 +274,6 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
 
   // Layout
   isMobile: false,
-  toolPanelOpen: false,
-  activePanel: "activity",
   userScrolledUp: false,
 
   // MCP & tools
@@ -358,14 +313,11 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   messageInlineToolsExpanded: {},
 
   // Artifacts
-  artifactPanelSelectedId: null,
   activeArtifactId: null,
-  artifactRendererState: {},
   artifactViewerState: {},
 
   // Code blocks & sandboxes
   codeBlockState: {},
-  codeSandboxState: {},
   mermaidState: {},
 
   // Splash
@@ -405,8 +357,6 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
 
   // Layout
   setIsMobile: (isMobile) => set({ isMobile }),
-  setToolPanelOpen: (toolPanelOpen) => set({ toolPanelOpen }),
-  setActivePanel: (activePanel) => set({ activePanel }),
   setUserScrolledUp: (userScrolledUp) => set({ userScrolledUp }),
 
   // MCP & tools
@@ -465,22 +415,6 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
     })),
 
   // Artifacts
-  setArtifactPanelSelectedId: (artifactId) => set({ artifactPanelSelectedId: artifactId }),
-  updateArtifactRendererState: (artifactId, updater) =>
-    set((state) => {
-      const prev = state.artifactRendererState[artifactId] ?? {
-        isFullscreen: false,
-        showCode: false,
-        copied: false,
-        showPreview: false,
-      };
-      return {
-        artifactRendererState: {
-          ...state.artifactRendererState,
-          [artifactId]: updater(prev),
-        },
-      };
-    }),
   updateArtifactViewerState: (artifactId, updater) =>
     set((state) => {
       const prev = state.artifactViewerState[artifactId] ?? {
@@ -512,21 +446,6 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
         codeBlockState: {
           ...state.codeBlockState,
           [blockId]: updater(prev),
-        },
-      };
-    }),
-  updateCodeSandboxState: (sandboxId, updater) =>
-    set((state) => {
-      const prev = state.codeSandboxState[sandboxId] ?? {
-        isRunning: false,
-        isFullscreen: false,
-        copied: false,
-        error: null,
-      };
-      return {
-        codeSandboxState: {
-          ...state.codeSandboxState,
-          [sandboxId]: updater(prev),
         },
       };
     }),

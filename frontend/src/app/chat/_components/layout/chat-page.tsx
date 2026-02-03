@@ -71,8 +71,6 @@ export function ChatPage() {
   const setSelectedModel = useAppStore((state) => state.setSelectedModel);
   const systemPrompt = useAppStore((state) => state.systemPrompt);
   const setSystemPrompt = useAppStore((state) => state.setSystemPrompt);
-  const setToolPanelOpen = useAppStore((state) => state.setToolPanelOpen);
-  const setActivePanel = useAppStore((state) => state.setActivePanel);
   const mcpEnabled = useAppStore((state) => state.mcpEnabled);
   const setMcpEnabled = useAppStore((state) => state.setMcpEnabled);
   const artifactsEnabled = useAppStore((state) => state.artifactsEnabled);
@@ -1517,11 +1515,6 @@ export function ChatPage() {
       if (!selectedModel) return;
       if (!text.trim() && (!attachments || attachments.length === 0)) return;
       if (isLoading) return;
-
-      if (window.innerWidth >= 768) {
-        setToolPanelOpen(true);
-        setActivePanel("activity");
-      }
       setStreamingStartTime(Date.now());
       setStreamError(null);
 
@@ -1583,10 +1576,8 @@ export function ChatPage() {
       mcpEnabled,
       router,
       selectedModel,
-      setActivePanel,
       setInput,
       setStreamingStartTime,
-      setToolPanelOpen,
       startRunStream,
       systemPrompt,
     ],
@@ -1746,6 +1737,16 @@ export function ChatPage() {
     autoOpenedActivityRef.current = true;
   }, [hasActivity, sidebarOpen]);
 
+  const openActivityPanel = useCallback(() => {
+    setSidebarOpen(true);
+    setSidebarTab("activity");
+  }, [setSidebarOpen, setSidebarTab]);
+
+  const openContextPanel = useCallback(() => {
+    setSidebarOpen(true);
+    setSidebarTab("context");
+  }, [setSidebarOpen, setSidebarTab]);
+
   return (
     <div className="relative h-full flex overflow-hidden w-full max-w-full bg-[#0a0a0a]">
       <UnifiedSidebar
@@ -1809,6 +1810,7 @@ export function ChatPage() {
               contextUsageLabel={contextUsageLabel}
               onFork={handleForkMessage}
               onReprompt={handleReprompt}
+              onOpenContext={openContextPanel}
               showEmptyState={showEmptyState}
               toolBelt={toolBelt}
               onScroll={handleScroll}
@@ -1827,14 +1829,8 @@ export function ChatPage() {
 
             <ChatActionButtons
               activityCount={activityCount}
-              onOpenActivity={() => {
-                setSidebarOpen(true);
-                setSidebarTab("activity");
-              }}
-              onOpenContext={() => {
-                setSidebarOpen(true);
-                setSidebarTab("context");
-              }}
+              onOpenActivity={openActivityPanel}
+              onOpenContext={openContextPanel}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenMcpSettings={() => setMcpSettingsOpen(true)}
               onOpenUsage={() => setUsageOpen(true)}

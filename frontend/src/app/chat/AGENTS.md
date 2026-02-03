@@ -305,7 +305,7 @@ Legend:
 | MCP tools execution | ✅ | `use-chat-tools.ts`, `chat-page.tsx` | Tools execute on the controller; UI renders `tool_execution_*` events. |
 | Activity view (thinking + tools timeline) | ✅ | `use-chat-derived.ts`, `chat-side-panel.tsx` (ActivityPanel) | Shows tool calls + thinking extraction. |
 | Context stats + auto-compaction | ✅/🟡 | `chat-page.tsx` + `src/lib/services/context-management/*` | Auto-compaction is implemented and updates session/messages; heavy coupling in ChatPage. |
-| Artifact extraction + preview UI | ✅/🟡 | `artifact-renderer.tsx` (extract), `artifact-preview-panel.tsx`, `artifact-modal.tsx`, `artifact-viewer.tsx` | Works, but **multiple overlapping implementations** exist. |
+| Artifact extraction + preview UI | ✅/🟡 | `artifact-renderer.tsx` (extract), `artifact-preview-panel.tsx`, `artifact-modal.tsx`, `artifact-viewer.tsx` | Uses `extractArtifacts` + preview panel + modal viewer; legacy sandbox removed. |
 | File attachments | 🟡 | `tool-belt.tsx` | UI supports adding files/images. **Sending to model is currently text placeholders** (not actual file parts). |
 | Image attachments | 🟡 | `tool-belt.tsx` | Base64 is computed for images, but not passed to model in current send path. |
 | Audio recording | 🟡 | `tool-belt.tsx`, `/api/voice/transcribe` (external) | Records audio, transcribes to text, appends to input. Not sent as audio part. |
@@ -339,13 +339,10 @@ Core keys used by ChatPage:
 - Tool execution: `executingTools`, `toolResultsMap`
 - Agent plan: `agentPlan`
 
-### 4.2 Likely legacy / unused state
+### 4.2 Legacy state cleanup (done)
 
-These keys appear to be from a previous side-panel implementation and may now be unused or inconsistently used:
-- `toolPanelOpen`, `activePanel` (ChatPage now uses `UnifiedSidebar` local state)
-- `artifactPanelSelectedId` (only used by `ArtifactPanel`, which is only used by dead `ChatSidePanel`)
-
-If you remove legacy UI components, the corresponding store keys can be removed.
+Legacy panel + artifact renderer keys were removed (`toolPanelOpen`, `activePanel`,
+`artifactPanelSelectedId`, `artifactRendererState`, `codeSandboxState`) to align with `UnifiedSidebar`.
 
 ---
 
@@ -374,13 +371,11 @@ src/app/chat/
       index.ts
     artifacts/
       artifact-modal.tsx
-      artifact-panel.tsx
       artifact-preview-panel.tsx
       artifact-renderer.tsx
       artifact-viewer.tsx
       mini-artifact-card.tsx
     code/
-      code-sandbox.tsx
       enhanced-code-block.tsx
     input/
       attachments-preview.tsx
@@ -398,7 +393,6 @@ src/app/chat/
       chat-splash-canvas.tsx
       chat-toolbelt-dock.tsx
       chat-top-controls.tsx
-      resizable-panel.tsx
       unified-sidebar.tsx
     messages/
       chat-message-item.tsx
@@ -503,7 +497,6 @@ Major responsibilities:
 
 Known architectural smells:
 - Mixes UI rendering, persistence, model IO, compaction, artifact parsing, and sidebar behavior.
-- Contains legacy Zustand side-panel fields (`toolPanelOpen`, `activePanel`) that are no longer used by the main layout.
 
 ---
 
@@ -564,23 +557,13 @@ Agent toggle exists here too.
 
 ---
 
-### _components/layout/chat-side-panel.tsx (🟡 MIXED: partial active + dead component)
+### _components/layout/chat-side-panel.tsx (✅ ACTIVE)
 
 **Exports:**
-- ✅ `ActivityPanel` (USED)
-- ✅ `ContextPanel` (USED)
-- 🔴 `ChatSidePanel` (UNUSED: replaced by `UnifiedSidebar`)
+- `ActivityPanel` (USED)
+- `ContextPanel` (USED)
 
-**Recommendation:** Split this file into:
-- `activity-panel.tsx`
-- `context-panel.tsx`
-…and delete `ChatSidePanel` if not needed.
-
----
-
-### _components/layout/resizable-panel.tsx (🔴 DEAD)
-
-No references found. Looks like a previous attempt at a right-side resizable panel.
+Legacy `ChatSidePanel` was removed after `UnifiedSidebar` adoption.
 
 ---
 
@@ -657,9 +640,8 @@ Key behaviors:
 - Desktop tool-call summary line.
 - Renders mini artifact chips that open `ArtifactModal`.
 
-Potential mismatch:
-- This component still references legacy store panel controls (`setToolPanelOpen`, `setActivePanel`).
-  The main layout now uses `UnifiedSidebar` local state.
+Note:
+- Context token indicator opens the `UnifiedSidebar` context tab.
 
 ---
 
@@ -682,14 +664,10 @@ Features:
 
 ## 6.5 Artifacts
 
-### _components/artifacts/artifact-renderer.tsx (🟡 MIXED)
+### _components/artifacts/artifact-renderer.tsx (✅ ACTIVE — extraction only)
 
-**Active export used by ChatPage:**
+**Export used by ChatPage:**
 - `extractArtifacts(content, options)`
-
-**Unused exports (likely legacy):**
-- `ArtifactRenderer` component
-- `isArtifactCodeBlock`, `getArtifactType` (not referenced in repo)
 
 Note: Artifact parsing also exists in `src/lib/services/message-parsing` (external) → duplication.
 
@@ -723,19 +701,13 @@ Supports:
 - Copy/download/open in new tab
 - Fullscreen + zoom/pan for modal view
 
-This overlaps with `CodeSandbox` and `ArtifactPreviewPanel`.
+Pairs with `ArtifactPreviewPanel` for a lightweight sidebar view and `ArtifactModal` for full preview.
 
 ---
 
 ### _components/artifacts/mini-artifact-card.tsx (✅ ACTIVE)
 
 **Role:** Small pill button representing an artifact (used in message items).
-
----
-
-### _components/artifacts/artifact-panel.tsx (🔴 DEAD)
-
-Only referenced by dead `ChatSidePanel`.
 
 ---
 
@@ -785,17 +757,6 @@ Barrel exports.
 
 ---
 
-### _components/code/code-sandbox.tsx (🟡 PARTIAL / overlap)
-
-**Role:** Executable iframe sandbox for HTML/React/JS.
-
-Used by:
-- `ArtifactRenderer` (which itself is unused)
-
-So this is currently **indirectly dead** unless another future path uses it.
-
----
-
 ## 6.8 Modals
 
 ### _components/modals/chat-settings-modal.tsx (✅ ACTIVE)
@@ -830,23 +791,13 @@ Exports whole chat (JSON/Markdown).
 
 ## 7) Dead/legacy/unintegrated code summary (actionable inventory)
 
-### 7.1 Clearly dead (no references)
+### 7.1 Cleared
 
-- `src/app/chat/_components/layout/resizable-panel.tsx`
-- `src/app/chat/_components/layout/chat-side-panel.tsx` → `ChatSidePanel` export only
-- `src/app/chat/_components/artifacts/artifact-panel.tsx`
+- Legacy side-panel + sandbox artifacts removed (Feb 2026 cleanup).
 
-### 7.2 Partially dead / mixed responsibility files
+### 7.2 Remaining duplication
 
-- `src/app/chat/_components/artifacts/artifact-renderer.tsx`
-  - Keep: `extractArtifacts()`
-  - Likely remove/split: `ArtifactRenderer` component
-
-- `src/app/chat/utils/index.ts`
-  - Keep: `stripThinkingForModelContext`, `tryParseNestedJsonString`
-
-- `src/app/chat/_components/code/code-sandbox.tsx`
-  - Only used by unused `ArtifactRenderer`.
+- Artifact extraction still exists in both `extractArtifacts()` and `MessageParsingService` (external).
 
 ### 7.3 Unintegrated feature toggles (UI exists, pipeline doesn’t change)
 
@@ -868,21 +819,17 @@ These are *organizational* recommendations to reduce confusion:
    - `use-artifacts.ts` (artifact extraction + modal selection)
    - `use-context-stats.ts` (token counting + compaction)
 
-2) **Choose a single sidebar state source**
-   - Either keep `UnifiedSidebar` local state OR revive store-driven `toolPanelOpen/activePanel`, but not both.
-
-3) **Unify artifact preview components**
-   - Today there are 3 overlapping preview experiences:
+2) **Unify artifact preview components**
+   - Today there are 2 experiences:
      - `ArtifactPreviewPanel` (sidebar simple iframe)
      - `ArtifactModal` + `ArtifactViewer` (full featured)
-     - `CodeSandbox` (older sandbox)
 
-4) **Unify artifact extraction logic**
+3) **Unify artifact extraction logic**
    - Artifact extraction exists twice:
      - `extractArtifacts()` (artifact-renderer.tsx)
      - `MessageParsingService` artifacts parser (external)
 
-5) **Make attachments “real” or drop them**
+4) **Make attachments “real” or drop them**
    - Current send path uses text placeholders; it does not pass binary parts to the controller run.
 
 ---

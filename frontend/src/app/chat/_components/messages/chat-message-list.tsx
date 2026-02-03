@@ -17,6 +17,7 @@ interface ChatMessageListProps {
   contextUsageLabel?: string | null;
   onFork?: (messageId: string) => void;
   onReprompt?: (messageId: string) => void;
+  onOpenContext?: () => void;
 }
 
 export function ChatMessageList({
@@ -29,6 +30,7 @@ export function ChatMessageList({
   contextUsageLabel,
   onFork,
   onReprompt,
+  onOpenContext,
 }: ChatMessageListProps) {
   const copiedMessageId = useAppStore((state) => state.copiedMessageId);
   const setCopiedMessageId = useAppStore((state) => state.setCopiedMessageId);
@@ -102,6 +104,7 @@ export function ChatMessageList({
           contextUsageLabel={contextUsageLabel}
           copied={copiedMessageId === message.id}
           onCopy={handleCopy}
+          onOpenContext={onOpenContext}
           onFork={message.role === "assistant" ? onFork : undefined}
           onReprompt={message.role === "assistant" ? onReprompt : undefined}
           onExport={handleExport}

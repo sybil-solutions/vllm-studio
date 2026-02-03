@@ -755,9 +755,6 @@ export interface VllmUpgradeResult {
   used_wheel: string | null;
 }
 
-// Chat UI types
-export type ActivePanel = "activity" | "artifacts" | "context";
-
 export interface DeepResearchConfig {
   enabled: boolean;
   maxSources: number;
