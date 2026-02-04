@@ -23,6 +23,7 @@ interface ToolDropdownProps {
   label: string;
   isActive?: boolean;
   disabled?: boolean;
+  showChevron?: boolean;
   children: ReactNode;
 }
 
@@ -31,6 +32,7 @@ export function ToolDropdown({
   label,
   isActive,
   disabled,
+  showChevron = true,
   children,
 }: ToolDropdownProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -75,7 +77,11 @@ export function ToolDropdown({
           title={label}
         >
           <Icon className="h-3.5 w-3.5" />
-          <ChevronDown className={`h-2.5 w-2.5 transition-transform:ease-in:150ms ${open ? "rotate-180" : ""}`} />
+          {showChevron && (
+            <ChevronDown
+              className={`h-2.5 w-2.5 transition-transform:ease-in:150ms ${open ? "rotate-180" : ""}`}
+            />
+          )}
         </button>
         {open && (
           <div className="absolute bottom-full left-0 mb-1 min-w-[160px] bg-(--card) border border-(--border) rounded-lg shadow-xl transition-all:ease-in:200ms py-1 z-50">

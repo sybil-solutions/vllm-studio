@@ -12,7 +12,7 @@ import { registerLogsRoutes } from "../routes/logs";
 import { registerMcpRoutes } from "../routes/mcp";
 import { registerModelsRoutes } from "../routes/models";
 import { registerMonitoringRoutes } from "../routes/monitoring";
-import { registerProxyRoutes } from "../routes/proxy";
+import { registerOpenAIRoutes } from "../routes/openai";
 import { registerRuntimeRoutes } from "../routes/runtime";
 import { registerStudioRoutes } from "../routes/studio";
 import { registerSystemRoutes } from "../routes/system";
@@ -53,7 +53,7 @@ export const createApp = (context: AppContext): Hono => {
   registerLogsRoutes(app, context);
   registerMonitoringRoutes(app, context);
   registerMcpRoutes(app, context);
-  registerProxyRoutes(app, context);
+  registerOpenAIRoutes(app, context);
   registerUsageRoutes(app, context);
   registerTokenizationRoutes(app, context);
 

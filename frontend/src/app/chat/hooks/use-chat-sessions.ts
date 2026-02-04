@@ -31,7 +31,7 @@ export function useChatSessions() {
 
   const loadSession = useCallback(
     async (sessionId: string) => {
-      if (activeSessionRef.current === sessionId) return;
+      if (activeSessionRef.current === sessionId && currentSessionId === sessionId) return;
       activeSessionRef.current = sessionId;
 
       try {
@@ -45,7 +45,7 @@ export function useChatSessions() {
         return null;
       }
     },
-    [setCurrentSessionId, setCurrentSessionTitle],
+    [currentSessionId, setCurrentSessionId, setCurrentSessionTitle],
   );
 
   const startNewSession = useCallback(() => {

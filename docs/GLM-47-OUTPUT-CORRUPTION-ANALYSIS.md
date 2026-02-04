@@ -252,9 +252,9 @@ The thinking content should be:
 
 ### Processing Layers
 
-**Backend (controller/src/services/proxy-parsers.ts):**
-- `parseThinkTagsFromContent()` - Parses think tags and sets `reasoning_content`
-- Handles mid-stream think tags with state tracking
+**Backend (controller/src/services/tool-call-core.ts):**
+- Think tag parsing was removed with the legacy proxy parser.
+- The backend now focuses on tool-call normalization only.
 
 **Frontend (frontend/src/lib/services/message-parsing/parsers/thinking.parser.ts):**
 - `ThinkingParser.parse()` - Extracts think blocks from message content

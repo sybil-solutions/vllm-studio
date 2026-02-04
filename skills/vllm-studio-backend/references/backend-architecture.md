@@ -8,7 +8,7 @@
 
 ## Request Paths
 - **Chat UI**: `/chats/:id/turn` -> `ChatRunManager` (Pi-mono agent runtime) -> inference/LiteLLM.
-- **OpenAI-compatible API**: `/v1/chat/completions` -> `routes/proxy.ts` -> LiteLLM or direct inference.
+- **OpenAI-compatible API**: `/v1/chat/completions` -> `routes/openai.ts` -> LiteLLM or direct inference.
 - **Models**: `/v1/models` -> `routes/models.ts` -> inference + recipes.
 
 ## Pi-mono Runtime

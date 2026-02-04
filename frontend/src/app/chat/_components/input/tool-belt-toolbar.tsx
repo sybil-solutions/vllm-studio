@@ -10,6 +10,7 @@ import {
   Globe,
   Code,
   Brain,
+  Bot,
   Settings,
   SlidersHorizontal,
   Clock,
@@ -18,6 +19,7 @@ import {
   ArrowUp,
   Volume2,
   VolumeX,
+  Plus,
 } from "lucide-react";
 import { ToolDropdown, DropdownItem } from "./tool-dropdown";
 import { AgentModeToggle } from "../agent";
@@ -87,12 +89,40 @@ export function ToolBeltToolbar({
   onAgentModeToggle,
 }: ToolBeltToolbarProps) {
   const hasActiveTools = Boolean(mcpEnabled || artifactsEnabled || deepResearchEnabled);
+  const hasMobileMenuActive = Boolean(
+    attachmentsCount > 0 ||
+      hasActiveTools ||
+      hasSystemPrompt ||
+      agentMode ||
+      isRecording ||
+      isTranscribing ||
+      isTTSEnabled
+  );
+
+  const showAttachmentSection = Boolean(onAttachFile || onAttachImage);
+  const showVoiceSection = Boolean(onStartRecording || onStopRecording || onTTSToggle);
+  const showToolsSection = Boolean(
+    onMcpToggle || onArtifactsToggle || onDeepResearchToggle || onOpenMcpSettings
+  );
+  const showSettingsSection = Boolean(onAgentModeToggle || onOpenChatSettings);
+  const voiceLabel = isTranscribing
+    ? "Transcribing..."
+    : isRecording
+      ? "Stop recording"
+      : "Voice input";
+  const VoiceIcon = isTranscribing ? Loader2 : isRecording ? MicOff : Mic;
+  const onVoiceClick = isRecording ? onStopRecording : onStartRecording;
+
+  const SpinningLoaderIcon = ({ className }: { className?: string }) => (
+    <Loader2 className={`${className ?? ""} animate-spin`} />
+  );
+  const VoiceIconComponent = isTranscribing ? SpinningLoaderIcon : VoiceIcon;
 
   return (
     <div className="flex items-center justify-between px-3 py-2">
       <div className="flex items-center gap-1 min-w-0">
         {isLoading && elapsedSeconds !== undefined && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-blue-500/30">
+          <div className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-lg border border-blue-500/30">
             <Clock className="h-3 w-3 text-blue-400 animate-pulse" />
             <span className="text-xs font-mono font-medium text-blue-400">
               {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, "0")}
@@ -100,30 +130,172 @@ export function ToolBeltToolbar({
           </div>
         )}
 
-        <ToolDropdown
-          icon={Paperclip}
-          label="Attach media"
-          isActive={attachmentsCount > 0}
-          disabled={disabled}
-        >
-          <DropdownItem
+        <div className="md:hidden">
+          <ToolDropdown
+            icon={Plus}
+            label="More actions"
+            isActive={hasMobileMenuActive}
+            disabled={disabled}
+            showChevron={false}
+          >
+            {showAttachmentSection && (
+              <>
+                {onAttachFile && (
+                  <DropdownItem
+                    icon={Paperclip}
+                    label="Attach file"
+                    onClick={onAttachFile}
+                    disabled={disabled}
+                    closeOnClick
+                  />
+                )}
+                {onAttachImage && (
+                  <DropdownItem
+                    icon={ImageIcon}
+                    label="Attach image"
+                    onClick={onAttachImage}
+                    disabled={disabled}
+                    closeOnClick
+                  />
+                )}
+              </>
+            )}
+
+            {showAttachmentSection && (showVoiceSection || showToolsSection || showSettingsSection) && (
+              <div className="h-px bg-(--border) my-1" />
+            )}
+
+            {showVoiceSection && (
+              <>
+                {(onStartRecording || onStopRecording) && (
+                  <DropdownItem
+                    icon={VoiceIconComponent}
+                    label={voiceLabel}
+                    isActive={isRecording || isTranscribing}
+                    onClick={onVoiceClick}
+                    disabled={disabled || isTranscribing}
+                    closeOnClick
+                  />
+                )}
+                {onTTSToggle && (
+                  <DropdownItem
+                    icon={isTTSEnabled ? Volume2 : VolumeX}
+                    label={isTTSEnabled ? "Disable TTS" : "Enable TTS"}
+                    isActive={isTTSEnabled}
+                    onClick={onTTSToggle}
+                    disabled={disabled}
+                    closeOnClick
+                  />
+                )}
+              </>
+            )}
+
+            {showVoiceSection && (showToolsSection || showSettingsSection) && (
+              <div className="h-px bg-(--border) my-1" />
+            )}
+
+            {showToolsSection && (
+              <>
+                {onMcpToggle && (
+                  <DropdownItem
+                    icon={Globe}
+                    label="Web search & tools"
+                    isActive={mcpEnabled}
+                    onClick={onMcpToggle}
+                    disabled={disabled}
+                    closeOnClick
+                  />
+                )}
+                {onArtifactsToggle && (
+                  <DropdownItem
+                    icon={Code}
+                    label="Code preview"
+                    isActive={artifactsEnabled}
+                    onClick={onArtifactsToggle}
+                    disabled={disabled}
+                    closeOnClick
+                  />
+                )}
+                {onDeepResearchToggle && (
+                  <DropdownItem
+                    icon={Brain}
+                    label="Deep Research"
+                    isActive={deepResearchEnabled}
+                    onClick={onDeepResearchToggle}
+                    disabled={disabled}
+                    closeOnClick
+                  />
+                )}
+                {onOpenMcpSettings && (
+                  <>
+                    <div className="h-px bg-(--border) my-1" />
+                    <DropdownItem
+                      icon={Settings}
+                      label="MCP servers"
+                      onClick={onOpenMcpSettings}
+                      disabled={disabled}
+                      closeOnClick
+                    />
+                  </>
+                )}
+              </>
+            )}
+
+            {showToolsSection && showSettingsSection && <div className="h-px bg-(--border) my-1" />}
+
+            {showSettingsSection && (
+              <>
+                {onAgentModeToggle && (
+                  <DropdownItem
+                    icon={Bot}
+                    label="Agent mode"
+                    isActive={agentMode}
+                    onClick={onAgentModeToggle}
+                    disabled={disabled}
+                    closeOnClick
+                  />
+                )}
+                {onOpenChatSettings && (
+                  <DropdownItem
+                    icon={SlidersHorizontal}
+                    label={hasSystemPrompt ? "System prompt (active)" : "System prompt"}
+                    isActive={hasSystemPrompt}
+                    onClick={onOpenChatSettings}
+                    disabled={disabled}
+                    closeOnClick
+                  />
+                )}
+              </>
+            )}
+          </ToolDropdown>
+        </div>
+
+        <div className="hidden md:flex">
+          <ToolDropdown
             icon={Paperclip}
-            label="Attach file"
-            onClick={onAttachFile}
+            label="Attach media"
+            isActive={attachmentsCount > 0}
             disabled={disabled}
-          />
-          <DropdownItem
-            icon={ImageIcon}
-            label="Attach image"
-            onClick={onAttachImage}
-            disabled={disabled}
-          />
-        </ToolDropdown>
+          >
+            <DropdownItem
+              icon={Paperclip}
+              label="Attach file"
+              onClick={onAttachFile}
+              disabled={disabled}
+            />
+            <DropdownItem
+              icon={ImageIcon}
+              label="Attach image"
+              onClick={onAttachImage}
+              disabled={disabled}
+            />
+          </ToolDropdown>
+        </div>
 
         <button
           onClick={isRecording ? onStopRecording : onStartRecording}
           disabled={disabled || isTranscribing}
-          className={`flex items-center justify-center p-2 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
+          className={`hidden md:flex items-center justify-center p-2 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
             isRecording
               ? "bg-(--error) text-(--error)"
               : isTranscribing
@@ -162,54 +334,58 @@ export function ToolBeltToolbar({
           </button>
         )}
 
-        <ToolDropdown icon={Wrench} label="Tools" isActive={hasActiveTools} disabled={disabled}>
-          <DropdownItem
-            icon={Globe}
-            label="Web search & tools"
-            isActive={mcpEnabled}
-            onClick={onMcpToggle}
-            disabled={disabled}
-          />
-          {onArtifactsToggle && (
+        <div className="hidden md:flex">
+          <ToolDropdown icon={Wrench} label="Tools" isActive={hasActiveTools} disabled={disabled}>
             <DropdownItem
-              icon={Code}
-              label="Code preview"
-              isActive={artifactsEnabled}
-              onClick={onArtifactsToggle}
+              icon={Globe}
+              label="Web search & tools"
+              isActive={mcpEnabled}
+              onClick={onMcpToggle}
               disabled={disabled}
             />
-          )}
-          {onDeepResearchToggle && (
-            <DropdownItem
-              icon={Brain}
-              label="Deep Research"
-              isActive={deepResearchEnabled}
-              onClick={onDeepResearchToggle}
-              disabled={disabled}
-            />
-          )}
-          {onOpenMcpSettings && (
-            <>
-              <div className="h-px bg-(--border) my-1" />
+            {onArtifactsToggle && (
               <DropdownItem
-                icon={Settings}
-                label="MCP servers"
-                onClick={onOpenMcpSettings}
+                icon={Code}
+                label="Code preview"
+                isActive={artifactsEnabled}
+                onClick={onArtifactsToggle}
                 disabled={disabled}
               />
-            </>
-          )}
-        </ToolDropdown>
+            )}
+            {onDeepResearchToggle && (
+              <DropdownItem
+                icon={Brain}
+                label="Deep Research"
+                isActive={deepResearchEnabled}
+                onClick={onDeepResearchToggle}
+                disabled={disabled}
+              />
+            )}
+            {onOpenMcpSettings && (
+              <>
+                <div className="h-px bg-(--border) my-1" />
+                <DropdownItem
+                  icon={Settings}
+                  label="MCP servers"
+                  onClick={onOpenMcpSettings}
+                  disabled={disabled}
+                />
+              </>
+            )}
+          </ToolDropdown>
+        </div>
 
         {onAgentModeToggle && (
-          <AgentModeToggle enabled={agentMode || false} onToggle={onAgentModeToggle} />
+          <div className="hidden md:flex">
+            <AgentModeToggle enabled={agentMode || false} onToggle={onAgentModeToggle} />
+          </div>
         )}
 
         {onOpenChatSettings && (
           <button
             onClick={onOpenChatSettings}
             disabled={disabled}
-            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
+            className={`hidden md:flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
               hasSystemPrompt
                 ? "bg-(--card-hover) text-[#e8e4dd] border border-(--border)"
                 : "hover:bg-(--accent) text-[#9a9590]"

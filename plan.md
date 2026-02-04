@@ -347,9 +347,7 @@ Goal:
 Actions:
 - For the new agent runtime, call Pi-AI providers directly against LiteLLM/inference.
 - Gradually reduce reliance on:
-  - `controller/src/services/proxy-streamer.ts`
-  - `controller/src/services/proxy-parsers.ts`
-  - `config/tool_call_handler.py` parsing logic
+  - `controller/src/services/tool-call-core.ts`
 
 Verification:
 - Tool calls still work for the models you care about (GLM, DeepSeek, MiniMax, etc.).

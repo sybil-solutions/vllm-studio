@@ -339,7 +339,7 @@ The `/launch/:recipeId` endpoint is the "state machine" that:
 
 ### 4.3 Chat-Completions Switching (Model Auto-Switch)
 
-Route: `controller/src/routes/proxy.ts` -> `POST /v1/chat/completions`
+Route: `controller/src/routes/openai.ts` -> `POST /v1/chat/completions`
 
 Before forwarding the request to LiteLLM, it:
 
@@ -353,8 +353,9 @@ Before forwarding the request to LiteLLM, it:
      - Evicts the current model
      - Launches the recipe (same command builder described above)
      - Polls `/health` until ready (up to 300s)
-3. Forwards the chat completion request to LiteLLM:
-   - `http://localhost:4100/v1/chat/completions`
+3. Normalizes tool-call requests (functions -> tools) and forwards the chat completion request to:
+   - LiteLLM (`http://localhost:4100/v1/chat/completions`) for non-streaming or no tools
+   - Direct inference (`http://localhost:${INFERENCE_PORT}/v1/chat/completions`) for streaming with tools
 
 This is why "just calling chat completions with a model name" can implicitly trigger recipe-based model switching.
 
@@ -557,7 +558,7 @@ These are all direct consequences of the current code paths above:
    - `--enable-auto-tool-choice` is coupled to tool-call-parser in the controller builder (even if `enable_auto_tool_choice` is false).
 5. **Two independent locks exist**
    - `/launch/:id` uses a lock in `controller/src/routes/lifecycle.ts`.
-   - `/v1/chat/completions` uses a separate lock in `controller/src/routes/proxy.ts`.
+- `/v1/chat/completions` uses a separate lock in `controller/src/routes/openai.ts`.
    - They do not coordinate with each other.
 
 ---
@@ -581,7 +582,7 @@ Controller:
   - `controller/src/services/event-manager.ts`
   - `controller/src/routes/logs.ts` (`/events`, `/logs/*`)
 - Chat switching:
-  - `controller/src/routes/proxy.ts` (`/v1/chat/completions`)
+  - `controller/src/routes/openai.ts` (`/v1/chat/completions`)
 
 Frontend:
 

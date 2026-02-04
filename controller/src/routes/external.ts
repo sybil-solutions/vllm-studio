@@ -5,7 +5,7 @@ export * from "./logs";
 export * from "./mcp";
 export * from "./models";
 export * from "./monitoring";
-export * from "./proxy";
+export * from "./openai";
 export * from "./system";
 export * from "./tokenization";
 export * from "./usage";

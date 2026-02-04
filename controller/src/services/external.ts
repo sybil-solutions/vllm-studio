@@ -6,5 +6,4 @@ export * from "./mcp-runner";
 export * from "./metrics";
 export * from "./model-browser";
 export * from "./process-manager";
-export * from "./proxy-parsers";
-export * from "./proxy-streamer";
+export * from "./tool-call-core";

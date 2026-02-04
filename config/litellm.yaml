@@ -119,7 +119,6 @@ router_settings:
 
 # LiteLLM settings
 litellm_settings:
-  callbacks: tool_call_handler.proxy_handler_instance
   drop_params: false
   set_verbose: false
   request_timeout: 600
