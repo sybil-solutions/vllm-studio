@@ -1001,7 +1001,7 @@ export function ChatPage() {
   const activityPanelVisible = sidebarOpen && sidebarTab === "activity";
   const contextPanelVisible = sidebarOpen && sidebarTab === "context";
 
-  const { thinkingActive, activityGroups } = Hooks.useChatDerived({
+  const { thinkingActive, thinkingState, activityGroups } = Hooks.useChatDerived({
     messages,
     isLoading,
     executingTools,
@@ -1016,6 +1016,25 @@ export function ChatPage() {
     if (executingTools.size > 0) return executingTools.size;
     return isLoading ? 1 : 0;
   }, [activityGroups, activityPanelVisible, executingTools.size, isLoading]);
+
+  const thinkingSnippet = useMemo(() => {
+    if (!isLoading) return "";
+    const raw = thinkingState.content.trim();
+    if (raw) {
+      const line =
+        raw
+          .split(/\r?\n/)
+          .find((entry) => entry.trim().length > 0) ?? raw;
+      const trimmed = line.trim();
+      return trimmed.length > 140 ? `${trimmed.slice(0, 140).trim()}...` : trimmed;
+    }
+    if (executingTools.size > 0) {
+      const tools = Array.from(executingTools).slice(0, 2).join(", ");
+      const extra = executingTools.size > 2 ? ` +${executingTools.size - 2} more` : "";
+      return `Running ${tools}${extra}`;
+    }
+    return "Working...";
+  }, [executingTools, isLoading, thinkingState.content]);
 
   const selectedModelMeta = useMemo(
     () => availableModels.find((model) => model.id === selectedModel),
@@ -2252,6 +2271,7 @@ export function ChatPage() {
             <ChatConversation
               messages={messages}
               isLoading={isLoading}
+              thinkingSnippet={thinkingSnippet}
               error={
                 streamError ??
                 (streamStalled

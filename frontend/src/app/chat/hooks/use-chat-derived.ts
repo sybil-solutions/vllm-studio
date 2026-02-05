@@ -242,20 +242,25 @@ export function useChatDerived({
 
   const thinkingState = useMemo<ThinkingState>(() => {
     if (!enableActivityGroups) {
-      return { content: "", isComplete: !isLoading };
+      if (!lastAssistantMessage) return { content: "", isComplete: !isLoading };
+      const extracted = extractThinking(lastAssistantMessage);
+      return {
+        content: extracted.content,
+        isComplete: !isLoading,
+      };
     }
     const latestGroup = activityGroups[0];
     if (!latestGroup) return { content: "", isComplete: true };
 
     // Find the latest thinking item
-    const thinkingItems = latestGroup.items.filter(i => i.type === "thinking");
+    const thinkingItems = latestGroup.items.filter((i) => i.type === "thinking");
     const latestThinking = thinkingItems[thinkingItems.length - 1];
 
     return {
       content: latestThinking?.content || "",
       isComplete: !isLoading,
     };
-  }, [enableActivityGroups, activityGroups, isLoading]);
+  }, [enableActivityGroups, activityGroups, extractThinking, isLoading, lastAssistantMessage]);
 
   const thinkingActive = useMemo(() => {
     if (enableActivityGroups) {

@@ -9,6 +9,7 @@ import { ChatSplashCanvas } from "./chat-splash-canvas";
 interface ChatConversationProps {
   messages: ChatMessage[];
   isLoading: boolean;
+  thinkingSnippet?: string;
   error?: string | null;
   artifactsEnabled?: boolean;
   artifactsByMessage?: Map<string, Artifact[]>;
@@ -30,6 +31,7 @@ interface ChatConversationProps {
 function ChatConversationBase({
   messages,
   isLoading,
+  thinkingSnippet,
   error,
   artifactsEnabled,
   artifactsByMessage,
@@ -76,6 +78,7 @@ function ChatConversationBase({
                 <ChatMessageList
                   messages={messages}
                   isLoading={isLoading}
+                  thinkingSnippet={thinkingSnippet}
                   error={error || undefined}
                   artifactsEnabled={artifactsEnabled}
                   artifactsByMessage={artifactsByMessage}
@@ -107,6 +110,7 @@ function areChatConversationPropsEqual(
     return (
       prev.messages === next.messages &&
       prev.isLoading === next.isLoading &&
+      prev.thinkingSnippet === next.thinkingSnippet &&
       prev.error === next.error &&
       prev.artifactsEnabled === next.artifactsEnabled &&
       prev.artifactsByMessage === next.artifactsByMessage &&
@@ -129,6 +133,7 @@ function areChatConversationPropsEqual(
   return (
     prev.messages === next.messages &&
     prev.isLoading === next.isLoading &&
+    prev.thinkingSnippet === next.thinkingSnippet &&
     prev.error === next.error &&
     prev.artifactsEnabled === next.artifactsEnabled &&
     prev.artifactsByMessage === next.artifactsByMessage &&

@@ -5,6 +5,7 @@ import { Agent } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, TextContent, ToolResultMessage, Usage } from "@mariozechner/pi-ai";
 import { AsyncQueue } from "../../core/async";
 import { Event } from "../event-manager";
+import { cleanUtf8StreamContent, type Utf8State } from "../proxy-parsers";
 import type { AppContext } from "../../types/context";
 import { createOpenAiCompatibleModel } from "./model-factory";
 import { buildAgentTools } from "./tool-registry";
@@ -147,6 +148,28 @@ export class ChatRunManager {
     let runError: string | null = null;
     let turnIndex = -1;
 
+    const utf8State: Utf8State = { pendingContent: "", pendingReasoning: "" };
+    const cleanMessage = (message: AgentMessage): void => {
+      if (!message || message.role !== "assistant") return;
+      const assistant = message as AssistantMessage;
+      const content = Array.isArray(assistant.content) ? assistant.content : null;
+      if (!content) return;
+      for (const block of content) {
+        if (!block || typeof block !== "object") continue;
+        if (block.type === "text" && typeof (block as { text?: unknown }).text === "string") {
+          const cleaned = cleanUtf8StreamContent((block as { text: string }).text, utf8State);
+          (block as { text: string }).text = cleaned;
+          continue;
+        }
+        if (block.type === "thinking" && typeof (block as { thinking?: unknown }).thinking === "string") {
+          const reasoningState = { pendingContent: utf8State.pendingReasoning, pendingReasoning: "" };
+          const cleaned = cleanUtf8StreamContent((block as { thinking: string }).thinking, reasoningState);
+          utf8State.pendingReasoning = reasoningState.pendingContent;
+          (block as { thinking: string }).thinking = cleaned;
+        }
+      }
+    };
+
     const publish = (type: string, data: Record<string, unknown>): void => {
       eventSeq += 1;
       const payload = {
@@ -184,6 +207,7 @@ export class ChatRunManager {
         setLastAssistantId: (id) => { lastAssistantMessageId = id; },
         getAssistantId: () => currentAssistantMessageId,
         getLastAssistantId: () => lastAssistantMessageId,
+        cleanMessage,
         getTurnIndex: () => turnIndex,
         setTurnIndex: (value) => { turnIndex = value; },
         markError: (message, status) => {
@@ -290,6 +314,7 @@ export class ChatRunManager {
       setLastAssistantId: (id: string | null) => void;
       getAssistantId: () => string | null;
       getLastAssistantId: () => string | null;
+      cleanMessage: (message: AgentMessage) => void;
       getTurnIndex: () => number;
       setTurnIndex: (value: number) => void;
       markError: (message: string, status: "error" | "aborted") => void;
@@ -321,6 +346,7 @@ export class ChatRunManager {
       }
       case "message_update": {
         const message = event.message as AgentMessage;
+        helpers.cleanMessage(message);
         const messageId = message.role === "assistant" ? helpers.getAssistantId() : undefined;
         const turnIndex = helpers.getTurnIndex();
         const turnPayload = turnIndex >= 0 ? { turn_index: turnIndex } : {};
@@ -334,6 +360,7 @@ export class ChatRunManager {
       }
       case "message_end": {
         const message = event.message as AgentMessage;
+        helpers.cleanMessage(message);
         const turnIndex = helpers.getTurnIndex();
         const turnPayload = turnIndex >= 0 ? { turn_index: turnIndex } : {};
         if (message.role === "assistant") {
@@ -413,6 +440,7 @@ export class ChatRunManager {
       }
       case "turn_end": {
         const assistant = event.message as AssistantMessage;
+        helpers.cleanMessage(assistant as AgentMessage);
         const messageId = helpers.getLastAssistantId();
         const turnIndex = helpers.getTurnIndex();
         const turnPayload = turnIndex >= 0 ? { turn_index: turnIndex } : {};

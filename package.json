@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "cerebras-cli": "^1.0.162"
+    "cerebras-cli": "^1.0.162",
+    "claude": "^0.1.2"
   }
 }

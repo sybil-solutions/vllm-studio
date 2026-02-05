@@ -111,6 +111,7 @@ function groupMessages(messages: ChatMessage[]): MessageGroup[] {
 interface ChatMessageListProps {
   messages: ChatMessage[];
   isLoading: boolean;
+  thinkingSnippet?: string;
   error?: string | null;
   artifactsEnabled?: boolean;
   artifactsByMessage?: Map<string, Artifact[]>;
@@ -137,6 +138,7 @@ VirtuosoList.displayName = "VirtuosoList";
 export function ChatMessageList({
   messages,
   isLoading,
+  thinkingSnippet,
   error,
   artifactsEnabled = false,
   artifactsByMessage,
@@ -293,6 +295,12 @@ export function ChatMessageList({
 
   const Footer = () => (
     <div className="pt-4">
+      {thinkingSnippet && isLoading && (
+        <div className="flex items-center gap-2 text-[#9a9590] mb-2">
+          <Icons.Brain className="h-3.5 w-3.5 text-violet-300/70" />
+          <span className="text-xs truncate">{thinkingSnippet}</span>
+        </div>
+      )}
       {hasAgentFiles && onOpenAgentFile && (
         <div className="mb-4">
           <div className="text-[10px] uppercase tracking-[0.24em] text-[#6a6560] mb-2">
