@@ -1,7 +1,8 @@
 // CRITICAL
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import {
   Folder,
   File,
@@ -19,6 +20,7 @@ import {
   Check,
 } from "lucide-react";
 import type { AgentFileEntry, AgentFileVersion } from "@/lib/types";
+import { useMessageParsing } from "@/lib/services/message-parsing";
 import type { AgentPlan } from "./agent-types";
 import { CodePreview } from "../code";
 import {
@@ -102,20 +104,28 @@ function isBase64(str: string): boolean {
 }
 
 function isPreviewableExt(ext: string): boolean {
-  return ["html", "svg", "js", "jsx", "ts", "tsx", "mjs", "cjs"].includes(ext);
+  return ["html", "svg", "js", "jsx", "ts", "tsx", "mjs", "cjs", "md", "markdown"].includes(ext);
 }
 
 function buildFilePath(entry: AgentFileEntry, parentPath: string): string {
   return parentPath ? `${parentPath}/${entry.name}` : entry.name;
 }
 
+function stripQueryAndHash(value: string): string {
+  return value.split("?")[0]?.split("#")[0] ?? value;
+}
+
 // Resolve a relative path from a base path
 function resolvePath(basePath: string, relativePath: string): string {
+  const cleaned = stripQueryAndHash(relativePath).trim();
+  if (cleaned.startsWith("/")) {
+    return cleaned.replace(/^\/+/, "");
+  }
   // Get directory of base file
   const baseDir = basePath.includes("/") ? basePath.substring(0, basePath.lastIndexOf("/")) : "";
 
   // Handle ./ prefix
-  let resolved = relativePath.replace(/^\.\//, "");
+  let resolved = cleaned.replace(/^\.\//, "");
 
   // Handle ../ prefixes
   const parts = baseDir.split("/").filter(Boolean);
@@ -125,6 +135,129 @@ function resolvePath(basePath: string, relativePath: string): string {
   }
 
   return parts.length > 0 ? `${parts.join("/")}/${resolved}` : resolved;
+}
+
+function isLocalImportSpecifier(spec: string): boolean {
+  if (!spec) return false;
+  if (spec.startsWith("http://") || spec.startsWith("https://") || spec.startsWith("//")) return false;
+  if (spec.startsWith("data:") || spec.startsWith("blob:")) return false;
+  if (spec.startsWith("./") || spec.startsWith("../") || spec.startsWith("/")) return true;
+  // Treat extension-based specifiers as local (e.g., "app.js")
+  return /\.[a-z0-9]+$/i.test(spec);
+}
+
+function encodeBase64(value: string): string {
+  try {
+    if (typeof TextEncoder !== "undefined") {
+      const bytes = new TextEncoder().encode(value);
+      let binary = "";
+      for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+      }
+      if (typeof btoa === "function") return btoa(binary);
+      const maybeBuffer = (globalThis as { Buffer?: { from: (data: Uint8Array) => { toString: (enc: string) => string } } })
+        .Buffer;
+      if (maybeBuffer) return maybeBuffer.from(bytes).toString("base64");
+    }
+  } catch {
+    // fallthrough
+  }
+  try {
+    const maybeBuffer = (globalThis as { Buffer?: { from: (data: string, enc: string) => { toString: (enc: string) => string } } })
+      .Buffer;
+    if (maybeBuffer) return maybeBuffer.from(value, "utf-8").toString("base64");
+  } catch {
+    // fallthrough
+  }
+  return "";
+}
+
+function makeDataUrl(code: string, mime: string): string {
+  const base64 = encodeBase64(code);
+  if (base64) return `data:${mime};base64,${base64}`;
+  return `data:${mime};charset=utf-8,${encodeURIComponent(code)}`;
+}
+
+function createModuleResolver(allFileVersions: Record<string, AgentFileVersion[]>) {
+  const cache = new Map<string, string>();
+  const inProgress = new Set<string>();
+  const moduleExts = new Set(["js", "mjs", "jsx"]);
+
+  function resolveModulePath(fromPath: string, spec: string): string | null {
+    if (!isLocalImportSpecifier(spec)) return null;
+    const cleaned = stripQueryAndHash(spec);
+    const resolved = resolvePath(fromPath, cleaned);
+
+    if (getFileContent(resolved, allFileVersions)) return resolved;
+
+    const withJs = `${resolved}.js`;
+    if (getFileContent(withJs, allFileVersions)) return withJs;
+
+    const withMjs = `${resolved}.mjs`;
+    if (getFileContent(withMjs, allFileVersions)) return withMjs;
+
+    const withJsx = `${resolved}.jsx`;
+    if (getFileContent(withJsx, allFileVersions)) return withJsx;
+
+    const withIndex = `${resolved}/index.js`;
+    if (getFileContent(withIndex, allFileVersions)) return withIndex;
+
+    return getFileContent(resolved, allFileVersions) ? resolved : null;
+  }
+
+  function rewriteImports(code: string, fromPath: string): string {
+    let result = code;
+
+    const replacer = (match: string, prefix: string, quote: string, spec: string, suffix: string) => {
+      if (!isLocalImportSpecifier(spec)) return match;
+      const resolved = resolveModulePath(fromPath, spec);
+      if (!resolved) return match;
+      const url = buildDataUrlForPath(resolved);
+      if (!url) return match;
+      return `${prefix}${quote}${url}${quote}${suffix}`;
+    };
+
+    result = result.replace(
+      /(import\s*\(\s*)(['"])([^'"]+)\2(\s*\))/g,
+      replacer,
+    );
+
+    result = result.replace(
+      /(import\s+[^'"]*?\s+from\s+)(['"])([^'"]+)\2/g,
+      (match, prefix, quote, spec) => replacer(match, prefix, quote, spec, ""),
+    );
+
+    result = result.replace(
+      /(export\s+[^'"]*?\s+from\s+)(['"])([^'"]+)\2/g,
+      (match, prefix, quote, spec) => replacer(match, prefix, quote, spec, ""),
+    );
+
+    result = result.replace(
+      /(import\s+)(['"])([^'"]+)\2/g,
+      (match, prefix, quote, spec) => replacer(match, prefix, quote, spec, ""),
+    );
+
+    return result;
+  }
+
+  function buildDataUrlForPath(path: string): string | null {
+    const ext = getFileExtension(path);
+    if (!moduleExts.has(ext)) return null;
+    if (cache.has(path)) return cache.get(path) ?? null;
+    if (inProgress.has(path)) return null;
+    const content = getFileContent(path, allFileVersions);
+    if (content == null) return null;
+    inProgress.add(path);
+    const rewritten = rewriteImports(content, path);
+    const dataUrl = makeDataUrl(rewritten, "text/javascript");
+    cache.set(path, dataUrl);
+    inProgress.delete(path);
+    return dataUrl;
+  }
+
+  return {
+    rewriteImports,
+  };
 }
 
 // Get latest content for a file path from versions
@@ -141,6 +274,7 @@ function inlineLocalImports(
   allFileVersions: Record<string, AgentFileVersion[]>
 ): string {
   let result = htmlContent;
+  const moduleResolver = createModuleResolver(allFileVersions);
 
   // Inline <link rel="stylesheet" href="..."> tags
   result = result.replace(
@@ -177,18 +311,23 @@ function inlineLocalImports(
 
   // Inline <script src="..."> tags (non-module)
   result = result.replace(
-    /<script\s+[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi,
-    (match, src) => {
+    /<script\s+([^>]*?)src=["']([^"']+)["']([^>]*)><\/script>/gi,
+    (match, beforeAttrs, src, afterAttrs) => {
+      const attrs = `${beforeAttrs ?? ""} ${afterAttrs ?? ""}`.toLowerCase();
       // Skip external URLs
       if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("//")) {
         return match;
       }
       const resolvedPath = resolvePath(currentPath, src);
       const jsContent = getFileContent(resolvedPath, allFileVersions);
-      if (jsContent) {
-        return `<script>/* Inlined from ${src} */\n${jsContent}</script>`;
+      if (!jsContent) return match;
+
+      const isModule = attrs.includes("type=\"module\"") || attrs.includes("type='module'");
+      if (isModule) {
+        const rewritten = moduleResolver.rewriteImports(jsContent, resolvedPath);
+        return `<script type="module">/* Inlined from ${src} */\n${rewritten}</script>`;
       }
-      return match;
+      return `<script>/* Inlined from ${src} */\n${jsContent}</script>`;
     }
   );
 
@@ -317,10 +456,12 @@ function FileContentViewer({
   hasSession: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const { renderMarkdown } = useMessageParsing();
   const fileName = path.split("/").pop() || path;
   const ext = getFileExtension(fileName);
   const language = getLanguageFromExt(ext);
   const isImage = isImageFile(fileName) && ext !== "svg";
+  const isMarkdown = ext === "md" || ext === "markdown";
   const previewable = isPreviewableExt(ext);
   const versionList = versions ?? [];
   const [activeTab, setActiveTab] = useState<"code" | "preview">(
@@ -349,6 +490,11 @@ function FileContentViewer({
     if (!displayContent) return 0;
     return displayContent.split("\n").length;
   }, [displayContent]);
+
+  const markdownHtml = useMemo(() => {
+    if (!isMarkdown) return "";
+    return renderMarkdown(displayContent);
+  }, [displayContent, isMarkdown, renderMarkdown]);
 
   return (
     <div className="flex flex-col h-full border-t border-white/6">
@@ -457,6 +603,13 @@ function FileContentViewer({
               </div>
             )}
           </div>
+        ) : isMarkdown && activeTab === "preview" ? (
+          <div className="p-4">
+            <div
+              className="chat-markdown text-[13px] leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: markdownHtml }}
+            />
+          </div>
         ) : previewable && activeTab === "preview" ? (
           <div className="w-full h-full bg-[#0a0a0a]">
             <iframe
@@ -490,11 +643,85 @@ export function AgentFilesPanel({
 }: AgentFilesPanelProps) {
   const hasFiles = files.length > 0;
   const hasSelectedFile = selectedFilePath !== null;
+  const flattenedFiles = useMemo(() => flattenFileEntries(files), [files]);
   const versionsForSelected =
     selectedFilePath && fileVersions[selectedFilePath] ? fileVersions[selectedFilePath] : [];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [fileListHeight, setFileListHeight] = useState(180);
+  const [maxFileListHeight, setMaxFileListHeight] = useState<number | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  const clampFileListHeight = useCallback(
+    (nextHeight: number) => {
+      const maxHeight = maxFileListHeight ?? nextHeight;
+      const minHeight = 44;
+      return Math.min(maxHeight, Math.max(minHeight, nextHeight));
+    },
+    [maxFileListHeight],
+  );
+
+  const updateMaxHeight = useCallback(() => {
+    const containerHeight = containerRef.current?.getBoundingClientRect().height ?? 0;
+    if (containerHeight <= 0) return;
+    setMaxFileListHeight(Math.max(120, containerHeight - 220));
+  }, []);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const node = containerRef.current;
+    const observer = new ResizeObserver(() => {
+      updateMaxHeight();
+    });
+    observer.observe(node);
+    const raf = window.requestAnimationFrame(updateMaxHeight);
+    window.addEventListener("resize", updateMaxHeight);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", updateMaxHeight);
+      observer.disconnect();
+    };
+  }, [updateMaxHeight]);
+
+  const handleResizeStart = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsResizing(true);
+      resizeRef.current = { startY: e.clientY, startHeight: fileListHeight };
+    },
+    [fileListHeight],
+  );
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const delta = e.clientY - resizeRef.current.startY;
+      const nextHeight = clampFileListHeight(resizeRef.current.startHeight + delta);
+      setFileListHeight(nextHeight);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      resizeRef.current = null;
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [clampFileListHeight, isResizing]);
+
+  const clampedFileListHeight = hasSelectedFile
+    ? clampFileListHeight(fileListHeight)
+    : fileListHeight;
+  const isCompact = hasSelectedFile && clampedFileListHeight <= 56;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" ref={containerRef}>
       {/* Working directory */}
       <div className="px-3 py-2.5 border-b border-white/6 flex items-center gap-2 shrink-0">
         <Terminal className="h-3.5 w-3.5 text-violet-400" />
@@ -503,19 +730,46 @@ export function AgentFilesPanel({
 
       {/* File tree - takes remaining space when no file selected, or fixed height when file selected */}
       <div
-        className={`overflow-y-auto py-1 ${hasSelectedFile ? "h-[180px] shrink-0 border-b border-white/6" : "flex-1"}`}
+        className={`py-1 ${hasSelectedFile ? "shrink-0 border-b border-white/6" : "flex-1"} ${
+          isCompact ? "overflow-x-auto" : "overflow-y-auto"
+        }`}
+        style={hasSelectedFile ? { height: `${clampedFileListHeight}px` } : undefined}
       >
         {hasFiles ? (
-          files.map((entry) => (
-            <FileTreeNode
-              key={entry.name}
-              entry={entry}
-              depth={0}
-              parentPath=""
-              selectedPath={selectedFilePath}
-              onSelect={onSelectFile}
-            />
-          ))
+          isCompact ? (
+            <div className="flex items-center gap-1.5 px-2">
+              {flattenedFiles.map((file) => {
+                const Icon = fileIcon(file.name);
+                const isSelected = selectedFilePath === file.path;
+                return (
+                  <button
+                    key={file.path}
+                    onClick={() => onSelectFile(file.path)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono border transition-colors ${
+                      isSelected
+                        ? "bg-violet-500/20 text-violet-200 border-violet-500/40"
+                        : "bg-white/4 text-[#aaa] border-white/8 hover:text-[#ddd] hover:bg-white/8"
+                    }`}
+                    title={file.path}
+                  >
+                    <Icon className="h-3 w-3" />
+                    <span className="max-w-[140px] truncate">{file.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            files.map((entry) => (
+              <FileTreeNode
+                key={entry.name}
+                entry={entry}
+                depth={0}
+                parentPath=""
+                selectedPath={selectedFilePath}
+                onSelect={onSelectFile}
+              />
+            ))
+          )
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-center px-4">
             <Folder className="h-8 w-8 text-[#2a2725] mb-3" />
@@ -526,6 +780,17 @@ export function AgentFilesPanel({
           </div>
         )}
       </div>
+
+      {hasSelectedFile && (
+        <div
+          className={`h-2 cursor-row-resize flex items-center justify-center bg-[#0b0b0b] border-b border-white/6 ${
+            isResizing ? "bg-violet-500/10" : "hover:bg-white/4"
+          }`}
+          onMouseDown={handleResizeStart}
+        >
+          <div className="w-10 h-0.5 rounded-full bg-white/10" />
+        </div>
+      )}
 
       {/* File content viewer - only shown when a file is selected */}
       {hasSelectedFile && (
@@ -554,6 +819,15 @@ export function AgentFilesPanel({
           </span>
         )}
       </div>
+
+      {isResizing && (
+        <style jsx global>{`
+          body {
+            cursor: row-resize !important;
+            user-select: none !important;
+          }
+        `}</style>
+      )}
     </div>
   );
 }
@@ -565,4 +839,20 @@ function countFiles(entries: AgentFileEntry[]): number {
     if (e.children) count += countFiles(e.children);
   }
   return count;
+}
+
+function flattenFileEntries(
+  entries: AgentFileEntry[],
+  parentPath: string = "",
+): Array<{ path: string; name: string }> {
+  const result: Array<{ path: string; name: string }> = [];
+  for (const entry of entries) {
+    const fullPath = buildFilePath(entry, parentPath);
+    if (entry.type === "file") {
+      result.push({ path: fullPath, name: entry.name });
+    } else if (entry.children) {
+      result.push(...flattenFileEntries(entry.children, fullPath));
+    }
+  }
+  return result;
 }

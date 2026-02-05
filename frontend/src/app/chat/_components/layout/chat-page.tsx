@@ -218,6 +218,10 @@ export function ChatPage() {
   const agentPlan = useAppStore((state) => state.agentPlan);
   const setAgentPlan = useAppStore((state) => state.setAgentPlan);
 
+  useEffect(() => {
+    if (!agentMode) setAgentMode(true);
+  }, [agentMode, setAgentMode]);
+
   const {
     agentFiles,
     agentFileVersions,
@@ -2051,12 +2055,6 @@ export function ChatPage() {
       onOpenMcpSettings={() => setMcpSettingsOpen(true)}
       onOpenChatSettings={() => setSettingsOpen(true)}
       hasSystemPrompt={systemPrompt.trim().length > 0}
-      agentMode={agentMode}
-      onAgentModeToggle={() => {
-        const next = !agentMode;
-        setAgentMode(next);
-        if (next && !mcpEnabled) setMcpEnabled(true);
-      }}
       planDrawer={agentPlan ? <AgentPlanDrawer plan={agentPlan} onClear={clearPlan} /> : null}
     />
   );
@@ -2101,6 +2099,15 @@ export function ChatPage() {
     setSidebarTab("context");
   }, [setSidebarOpen, setSidebarTab]);
 
+  const handleOpenAgentFile = useCallback(
+    (path: string) => {
+      setSidebarOpen(true);
+      setSidebarTab("files");
+      selectAgentFile(path, sessionFromUrl || currentSessionId);
+    },
+    [currentSessionId, selectAgentFile, sessionFromUrl, setSidebarOpen, setSidebarTab],
+  );
+
   return (
     <div className="relative h-full flex overflow-hidden w-full max-w-full bg-[#0a0a0a]">
       <UnifiedSidebar
@@ -2108,13 +2115,6 @@ export function ChatPage() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         activeTab={sidebarTab}
         onSetActiveTab={setSidebarTab}
-        agentMode={agentMode}
-        onToggleAgentMode={() => {
-          const next = !agentMode;
-          setAgentMode(next);
-          // Auto-enable MCP when turning agent mode on
-          if (next && !mcpEnabled) setMcpEnabled(true);
-        }}
         hasArtifacts={sessionArtifacts.length > 0}
         activityContent={
           <div className="h-full flex flex-col">
@@ -2168,6 +2168,9 @@ export function ChatPage() {
               artifactsByMessage={artifactsByMessage}
               selectedModel={selectedModel}
               contextUsageLabel={contextUsageLabel}
+              agentFiles={agentFiles}
+              selectedAgentFilePath={selectedAgentFilePath}
+              onOpenAgentFile={handleOpenAgentFile}
               onFork={handleForkMessage}
               onReprompt={handleReprompt}
               onOpenContext={openContextPanel}

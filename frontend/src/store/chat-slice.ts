@@ -332,7 +332,7 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   splashIsMobile: false,
 
   // Agent mode
-  agentMode: false,
+  agentMode: true,
   agentPlan: null,
   agentFiles: [],
   agentFilesLoading: false,

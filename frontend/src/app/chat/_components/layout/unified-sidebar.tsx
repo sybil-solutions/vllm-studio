@@ -2,12 +2,12 @@
 "use client";
 
 import { type ReactNode, useCallback, useRef, useEffect, useState } from "react";
-import { PanelRightClose, Sparkles, GripVertical } from "lucide-react";
+import { PanelRightClose, GripVertical } from "lucide-react";
 
 export type SidebarTab = "activity" | "context" | "artifacts" | "files";
 
 const MIN_WIDTH = 280;
-const MAX_WIDTH = 700;
+const DEFAULT_MAX_WIDTH = 700;
 const DEFAULT_WIDTH = 400;
 
 interface UnifiedSidebarProps {
@@ -16,8 +16,6 @@ interface UnifiedSidebarProps {
   onToggle: () => void;
   activeTab: SidebarTab;
   onSetActiveTab: (tab: SidebarTab) => void;
-  agentMode: boolean;
-  onToggleAgentMode: () => void;
   activityContent: ReactNode;
   contextContent: ReactNode;
   artifactsContent: ReactNode;
@@ -33,8 +31,6 @@ export function UnifiedSidebar({
   onToggle,
   activeTab,
   onSetActiveTab,
-  agentMode,
-  onToggleAgentMode,
   activityContent,
   contextContent,
   artifactsContent,
@@ -71,13 +67,28 @@ export function UnifiedSidebar({
   );
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      const maxWidth = Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.9));
+      if (width > maxWidth) setWidth(maxWidth);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [setWidth, width]);
+
+  useEffect(() => {
     if (!isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!resizeRef.current) return;
       // Dragging left increases width, dragging right decreases
       const delta = resizeRef.current.startX - e.clientX;
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizeRef.current.startWidth + delta));
+      const maxWidth =
+        typeof window !== "undefined"
+          ? Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.9))
+          : DEFAULT_MAX_WIDTH;
+      const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, resizeRef.current.startWidth + delta));
       setWidth(newWidth);
     };
 
@@ -152,32 +163,16 @@ export function UnifiedSidebar({
                   label="Preview"
                 />
               )}
-              {agentMode && (
-                <>
-                  <div className="w-px h-4 bg-white/[0.06] mx-1" />
-                  <TabButton
-                    active={activeTab === "files"}
-                    onClick={() => onSetActiveTab("files")}
-                    label="Files"
-                    accent
-                  />
-                </>
-              )}
+              <div className="w-px h-4 bg-white/[0.06] mx-1" />
+              <TabButton
+                active={activeTab === "files"}
+                onClick={() => onSetActiveTab("files")}
+                label="Files"
+                accent
+              />
             </div>
 
             <div className="flex items-center gap-1 shrink-0 ml-2">
-              <button
-                onClick={onToggleAgentMode}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                  agentMode
-                    ? "bg-violet-500/20 text-violet-300 border border-violet-500/30"
-                    : "bg-white/[0.03] text-[#666] border border-white/[0.06] hover:text-[#888]"
-                }`}
-                title={agentMode ? "Agent mode on" : "Enable agent mode"}
-              >
-                <Sparkles className="h-3 w-3" />
-                Agent
-              </button>
               <button
                 onClick={onToggle}
                 className="p-1.5 rounded hover:bg-white/[0.06] text-[#555]"

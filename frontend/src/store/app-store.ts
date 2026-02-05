@@ -29,9 +29,9 @@ export const useAppStore = create<AppStore>()(
         mcpEnabled: state.mcpEnabled,
         artifactsEnabled: state.artifactsEnabled,
         deepResearch: state.deepResearch,
-        agentMode: state.agentMode,
       }),
       onRehydrateStorage: () => (state) => {
+        state?.setAgentMode(true);
         state?.setHasHydrated(true);
       },
     }),

@@ -10,7 +10,6 @@ import {
   Globe,
   Code,
   Brain,
-  Bot,
   Settings,
   SlidersHorizontal,
   Clock,
@@ -22,7 +21,6 @@ import {
   Plus,
 } from "lucide-react";
 import { ToolDropdown, DropdownItem } from "./tool-dropdown";
-import { AgentModeToggle } from "../agent";
 import type { ModelOption } from "../../types";
 
 interface ToolBeltToolbarProps {
@@ -53,8 +51,6 @@ interface ToolBeltToolbarProps {
   onStopRecording?: () => void;
   onStop?: () => void;
   onSubmit?: () => void;
-  agentMode?: boolean;
-  onAgentModeToggle?: () => void;
 }
 
 export function ToolBeltToolbar({
@@ -85,15 +81,12 @@ export function ToolBeltToolbar({
   onStopRecording,
   onStop,
   onSubmit,
-  agentMode,
-  onAgentModeToggle,
 }: ToolBeltToolbarProps) {
   const hasActiveTools = Boolean(mcpEnabled || artifactsEnabled || deepResearchEnabled);
   const hasMobileMenuActive = Boolean(
     attachmentsCount > 0 ||
       hasActiveTools ||
       hasSystemPrompt ||
-      agentMode ||
       isRecording ||
       isTranscribing ||
       isTTSEnabled
@@ -104,7 +97,7 @@ export function ToolBeltToolbar({
   const showToolsSection = Boolean(
     onMcpToggle || onArtifactsToggle || onDeepResearchToggle || onOpenMcpSettings
   );
-  const showSettingsSection = Boolean(onAgentModeToggle || onOpenChatSettings);
+  const showSettingsSection = Boolean(onOpenChatSettings);
   const voiceLabel = isTranscribing
     ? "Transcribing..."
     : isRecording
@@ -245,16 +238,6 @@ export function ToolBeltToolbar({
 
             {showSettingsSection && (
               <>
-                {onAgentModeToggle && (
-                  <DropdownItem
-                    icon={Bot}
-                    label="Agent mode"
-                    isActive={agentMode}
-                    onClick={onAgentModeToggle}
-                    disabled={disabled}
-                    closeOnClick
-                  />
-                )}
                 {onOpenChatSettings && (
                   <DropdownItem
                     icon={SlidersHorizontal}
@@ -374,12 +357,6 @@ export function ToolBeltToolbar({
             )}
           </ToolDropdown>
         </div>
-
-        {onAgentModeToggle && (
-          <div className="hidden md:flex">
-            <AgentModeToggle enabled={agentMode || false} onToggle={onAgentModeToggle} />
-          </div>
-        )}
 
         {onOpenChatSettings && (
           <button

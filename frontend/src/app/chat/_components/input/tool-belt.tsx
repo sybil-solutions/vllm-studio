@@ -33,8 +33,6 @@ interface ToolBeltProps {
   elapsedSeconds?: number;
   queuedContext?: string;
   onQueuedContextChange?: (value: string) => void;
-  agentMode?: boolean;
-  onAgentModeToggle?: () => void;
   planDrawer?: ReactNode;
 }
 
@@ -60,8 +58,6 @@ export function ToolBelt({
   elapsedSeconds = 0,
   queuedContext = "",
   onQueuedContextChange,
-  agentMode = false,
-  onAgentModeToggle,
   planDrawer,
 }: ToolBeltProps) {
   const isDisabled = false;
@@ -364,8 +360,6 @@ export function ToolBelt({
             onStopRecording={stopRecording}
             onStop={onStop}
             onSubmit={handleSubmit}
-            agentMode={agentMode}
-            onAgentModeToggle={onAgentModeToggle}
           />
         </div>
       </div>

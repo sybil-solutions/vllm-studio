@@ -6,6 +6,84 @@ import { api } from "@/lib/api";
 import type { AgentFileEntry } from "@/lib/types";
 import { useAppStore } from "@/store";
 
+const getExtension = (path: string): string => {
+  const parts = path.split(".");
+  return parts.length > 1 ? parts[parts.length - 1]?.toLowerCase() ?? "" : "";
+};
+
+const stripQueryAndHash = (value: string): string => {
+  return value.split("?")[0]?.split("#")[0] ?? value;
+};
+
+const resolvePath = (basePath: string, relativePath: string): string => {
+  const cleaned = stripQueryAndHash(relativePath).trim();
+  if (cleaned.startsWith("/")) return cleaned.replace(/^\/+/, "");
+  const baseDir = basePath.includes("/") ? basePath.substring(0, basePath.lastIndexOf("/")) : "";
+  let resolved = cleaned.replace(/^\.\//, "");
+  const parts = baseDir.split("/").filter(Boolean);
+  while (resolved.startsWith("../")) {
+    parts.pop();
+    resolved = resolved.substring(3);
+  }
+  return parts.length > 0 ? `${parts.join("/")}/${resolved}` : resolved;
+};
+
+const isLocalSpecifier = (spec: string): boolean => {
+  if (!spec) return false;
+  if (spec.startsWith("http://") || spec.startsWith("https://") || spec.startsWith("//")) return false;
+  if (spec.startsWith("data:") || spec.startsWith("blob:")) return false;
+  if (spec.startsWith("./") || spec.startsWith("../") || spec.startsWith("/")) return true;
+  return /\.[a-z0-9]+$/i.test(spec);
+};
+
+const extractHtmlDependencies = (html: string, basePath: string): string[] => {
+  const dependencies: string[] = [];
+  const linkRegex = /<link\s+[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*\/?>/gi;
+  const scriptRegex = /<script\s+[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = linkRegex.exec(html)) !== null) {
+    const href = match[1];
+    if (!isLocalSpecifier(href)) continue;
+    dependencies.push(resolvePath(basePath, href));
+  }
+  while ((match = scriptRegex.exec(html)) !== null) {
+    const src = match[1];
+    if (!isLocalSpecifier(src)) continue;
+    dependencies.push(resolvePath(basePath, src));
+  }
+  return dependencies;
+};
+
+const extractJsImports = (code: string, basePath: string): string[] => {
+  const dependencies: string[] = [];
+  const patterns = [
+    /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /import\s+[^'"]*?\s+from\s+['"]([^'"]+)['"]/g,
+    /export\s+[^'"]*?\s+from\s+['"]([^'"]+)['"]/g,
+    /import\s+['"]([^'"]+)['"]/g,
+  ];
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(code)) !== null) {
+      const spec = match[1];
+      if (!isLocalSpecifier(spec)) continue;
+      dependencies.push(resolvePath(basePath, spec));
+    }
+  }
+  return dependencies;
+};
+
+const resolveScriptPath = (path: string): string[] => {
+  const attempts = [path];
+  if (!/\.[a-z0-9]+$/i.test(path)) {
+    attempts.push(`${path}.js`);
+    attempts.push(`${path}.mjs`);
+    attempts.push(`${path}.jsx`);
+    attempts.push(`${path}/index.js`);
+  }
+  return attempts;
+};
+
 export function useAgentFiles() {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
   const agentFiles = useAppStore((state) => state.agentFiles);
@@ -22,6 +100,57 @@ export function useAgentFiles() {
   const addAgentFileVersion = useAppStore((state) => state.addAgentFileVersion);
   const moveAgentFileVersions = useAppStore((state) => state.moveAgentFileVersions);
   const clearAgentFileVersions = useAppStore((state) => state.clearAgentFileVersions);
+
+  const prefetchDependencies = useCallback(
+    async (entryPath: string, content: string, sessionId: string) => {
+      const queue: string[] = [];
+      const seen = new Set<string>();
+
+      const enqueue = (paths: string[]) => {
+        for (const p of paths) {
+          if (!p || seen.has(p)) continue;
+          queue.push(p);
+        }
+      };
+
+      enqueue(extractHtmlDependencies(content, entryPath));
+
+      while (queue.length > 0) {
+        const nextPath = queue.shift();
+        if (!nextPath || seen.has(nextPath)) continue;
+        seen.add(nextPath);
+
+        const attempts = resolveScriptPath(nextPath);
+        let loadedContent: string | null = null;
+        let resolvedPath: string | null = null;
+
+        for (const attempt of attempts) {
+          try {
+            const data = await api.readAgentFile(sessionId, attempt);
+            if (typeof data.content === "string") {
+              loadedContent = data.content;
+              resolvedPath = attempt;
+              addAgentFileVersion(attempt, data.content);
+              break;
+            }
+          } catch {
+            // ignore and try next attempt
+          }
+        }
+
+        if (!loadedContent || !resolvedPath) continue;
+
+        const ext = getExtension(resolvedPath);
+        if (ext === "html" || ext === "htm") {
+          enqueue(extractHtmlDependencies(loadedContent, resolvedPath));
+        }
+        if (["js", "mjs", "jsx"].includes(ext)) {
+          enqueue(extractJsImports(loadedContent, resolvedPath));
+        }
+      }
+    },
+    [addAgentFileVersion],
+  );
 
   // Read session ID at execution time to avoid stale closure issues.
   // When tools are called during streaming, the closure value may be stale
@@ -181,6 +310,10 @@ export function useAgentFiles() {
         setSelectedAgentFileContent(data.content);
         if (typeof data.content === "string") {
           addAgentFileVersion(path, data.content);
+          const ext = getExtension(path);
+          if (ext === "html" || ext === "htm") {
+            void prefetchDependencies(path, data.content, sessionId);
+          }
         }
       } catch (err) {
         console.error("[selectAgentFile] Error reading file:", err);
@@ -195,6 +328,7 @@ export function useAgentFiles() {
       setSelectedAgentFileContent,
       setSelectedAgentFileLoading,
       addAgentFileVersion,
+      prefetchDependencies,
     ],
   );
 
