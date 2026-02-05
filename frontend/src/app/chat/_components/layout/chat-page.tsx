@@ -1454,6 +1454,8 @@ export function ChatPage() {
   }, [isLoading, setElapsedSeconds, setStreamingStartTime, streamingStartTime]);
 
   // Stream stall detection - warn user if no events for a while while loading (skip when tools run)
+  // Keep dependency array size stable across fast refresh to avoid React dev warnings.
+  const stallDepsKey = `${isLoading ? 1 : 0}-${executingTools.size}`;
   useEffect(() => {
     if (!isLoading) {
       setStreamStalled(false);
@@ -1479,7 +1481,7 @@ export function ChatPage() {
     }, 5000);
 
     return () => clearInterval(checkInterval);
-  }, [executingTools.size, isLoading]);
+  }, [stallDepsKey]);
 
   // Load sessions on mount
   useEffect(() => {
