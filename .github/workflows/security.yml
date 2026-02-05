@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: 'weekly'
+    - cron: '0 0 * * 0'  # Run weekly on Sundays at midnight
 
 permissions:
   contents: read
