@@ -1,7 +1,7 @@
 // CRITICAL
 "use client";
 
-import { memo, useMemo, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useMemo, useState, type ReactNode, type RefObject } from "react";
 import type { AgentFileEntry, Artifact, ChatMessage } from "@/lib/types";
 import * as Icons from "../icons";
 import { ChatMessageList } from "../messages/chat-message-list";
@@ -79,11 +79,20 @@ function ChatConversationBase({
 }: ChatConversationProps) {
   const fileChips = useMemo(() => flattenAgentFiles(agentFiles ?? []), [agentFiles]);
   const hasAgentFiles = fileChips.length > 0;
+  const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
+
+  const handleScrollContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      messagesContainerRef.current = node;
+      setScrollParent(node);
+    },
+    [messagesContainerRef],
+  );
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative min-w-0">
       <div
-        ref={messagesContainerRef}
+        ref={handleScrollContainerRef}
         onScroll={onScroll}
         className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col"
       >
@@ -132,11 +141,12 @@ function ChatConversationBase({
                   artifactsByMessage={artifactsByMessage}
                   selectedModel={selectedModel}
                   contextUsageLabel={contextUsageLabel}
+                  scrollParent={scrollParent}
+                  messagesEndRef={messagesEndRef}
                   onFork={onFork}
                   onReprompt={onReprompt}
                   onOpenContext={onOpenContext}
                 />
-                <div ref={messagesEndRef} />
               </div>
             )}
           </div>

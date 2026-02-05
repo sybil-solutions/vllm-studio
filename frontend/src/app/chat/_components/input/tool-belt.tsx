@@ -11,9 +11,7 @@ import type { Attachment, ModelOption } from "../../types";
 import { useAppStore } from "@/store";
 
 interface ToolBeltProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: (attachments?: Attachment[]) => void;
+  onSubmit: (value: string, attachments?: Attachment[]) => void;
   disabled?: boolean;
   isLoading?: boolean;
   placeholder?: string;
@@ -30,15 +28,10 @@ interface ToolBeltProps {
   hasSystemPrompt?: boolean;
   deepResearchEnabled?: boolean;
   onDeepResearchToggle?: () => void;
-  elapsedSeconds?: number;
-  queuedContext?: string;
-  onQueuedContextChange?: (value: string) => void;
   planDrawer?: ReactNode;
 }
 
 export function ToolBelt({
-  value,
-  onChange,
   onSubmit,
   isLoading,
   placeholder = "Message...",
@@ -55,12 +48,14 @@ export function ToolBelt({
   hasSystemPrompt = false,
   deepResearchEnabled = false,
   onDeepResearchToggle,
-  elapsedSeconds = 0,
-  queuedContext = "",
-  onQueuedContextChange,
   planDrawer,
 }: ToolBeltProps) {
   const isDisabled = false;
+  const value = useAppStore((state) => state.input);
+  const setInput = useAppStore((state) => state.setInput);
+  const queuedContext = useAppStore((state) => state.queuedContext);
+  const setQueuedContext = useAppStore((state) => state.setQueuedContext);
+  const elapsedSeconds = useAppStore((state) => state.elapsedSeconds);
   const attachments = useAppStore((state) => state.attachments);
   const setAttachments = useAppStore((state) => state.setAttachments);
   const updateAttachments = useAppStore((state) => state.updateAttachments);
@@ -205,7 +200,7 @@ export function ToolBelt({
 
         const transcript = await transcribeAudio(audioBlob);
         if (transcript) {
-          onChange(value ? `${value} ${transcript}` : transcript);
+          setInput(value ? `${value} ${transcript}` : transcript);
           textareaRef.current?.focus();
         }
       };
@@ -248,7 +243,7 @@ export function ToolBelt({
   const handleSubmit = () => {
     if (isLoading) return;
     if (!value.trim() && attachments.length === 0) return;
-    onSubmit(attachments.length > 0 ? [...attachments] : undefined);
+    onSubmit(value, attachments.length > 0 ? [...attachments] : undefined);
     setAttachments([]);
   };
 
@@ -295,11 +290,9 @@ export function ToolBelt({
           {planDrawer}
           <textarea
             ref={textareaRef}
-            value={isLoading && onQueuedContextChange ? queuedContext : value}
+            value={isLoading ? queuedContext : value}
             onChange={(e) =>
-              isLoading && onQueuedContextChange
-                ? onQueuedContextChange(e.target.value)
-                : onChange(e.target.value)
+              isLoading ? setQueuedContext(e.target.value) : setInput(e.target.value)
             }
             onKeyDown={handleKeyDown}
             placeholder={

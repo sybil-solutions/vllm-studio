@@ -7,3 +7,4 @@ export { useChatDerived } from "./use-chat-derived";
 export { useChatSessions } from "./use-chat-sessions";
 export { useChatTools } from "./use-chat-tools";
 export { useChatUsage } from "./use-chat-usage";
+export { useRafThrottle } from "./use-raf-throttle";

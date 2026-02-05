@@ -11,6 +11,7 @@ interface UseChatDerivedOptions {
   isLoading: boolean;
   executingTools: Set<string>;
   toolResultsMap: Map<string, ToolResult>;
+  enableActivityGroups?: boolean;
 }
 
 export function useChatDerived({
@@ -18,6 +19,7 @@ export function useChatDerived({
   isLoading,
   executingTools,
   toolResultsMap,
+  enableActivityGroups = true,
 }: UseChatDerivedOptions) {
   // Extract thinking/reasoning content from a single assistant message
   const extractThinking = useCallback((message: ChatMessage) => {
@@ -55,8 +57,17 @@ export function useChatDerived({
     return part.type.startsWith("tool-") && "toolCallId" in part;
   };
 
+  const lastAssistantMessage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i];
+      if (msg.role === "assistant") return msg;
+    }
+    return null;
+  }, [messages]);
+
   // Build activity groups by run (one user prompt) with chronologically interleaved items
   const activityGroups = useMemo<ActivityGroup[]>(() => {
+    if (!enableActivityGroups) return [];
     const assistantMessages = messages.filter((m) => m.role === "assistant");
     if (assistantMessages.length === 0) return [];
 
@@ -209,12 +220,17 @@ export function useChatDerived({
     });
 
     return groups.reverse();
-  }, [messages, extractThinking, executingTools, toolResultsMap, isLoading]);
+  }, [enableActivityGroups, messages, extractThinking, executingTools, toolResultsMap, isLoading]);
 
-  const hasToolActivity =
-    activityGroups.some((group) => group.items.some(i => i.type === "tool-call")) || executingTools.size > 0;
+  const hasToolActivity = enableActivityGroups
+    ? activityGroups.some((group) => group.items.some((i) => i.type === "tool-call")) ||
+      executingTools.size > 0
+    : executingTools.size > 0;
 
   const thinkingState = useMemo<ThinkingState>(() => {
+    if (!enableActivityGroups) {
+      return { content: "", isComplete: !isLoading };
+    }
     const latestGroup = activityGroups[0];
     if (!latestGroup) return { content: "", isComplete: true };
 
@@ -226,17 +242,29 @@ export function useChatDerived({
       content: latestThinking?.content || "",
       isComplete: !isLoading,
     };
-  }, [activityGroups, isLoading]);
+  }, [enableActivityGroups, activityGroups, isLoading]);
 
-  const thinkingActive = Boolean(activityGroups[0]?.items.some(i => i.type === "thinking" && i.isActive));
+  const thinkingActive = useMemo(() => {
+    if (enableActivityGroups) {
+      return Boolean(
+        activityGroups[0]?.items.some((i) => i.type === "thinking" && i.isActive),
+      );
+    }
+    if (!isLoading || !lastAssistantMessage) return false;
+    const hasReasoning = lastAssistantMessage.parts.some(
+      (part) => part.type === "reasoning" && "text" in part && Boolean(part.text),
+    );
+    if (hasReasoning) return true;
+    const textContent = lastAssistantMessage.parts
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("");
+    return /<think(ing)?\b/i.test(textContent);
+  }, [activityGroups, enableActivityGroups, isLoading, lastAssistantMessage]);
 
-  const hasSidePanelContent =
-    activityGroups.length > 0 || hasToolActivity || thinkingState.content.length > 0;
-
-  // Last assistant message for actions
-  const lastAssistantMessage = useMemo(() => {
-    return [...messages].reverse().find((m) => m.role === "assistant") || null;
-  }, [messages]);
+  const hasSidePanelContent = enableActivityGroups
+    ? activityGroups.length > 0 || hasToolActivity || thinkingState.content.length > 0
+    : hasToolActivity;
 
   return {
     thinkingState,

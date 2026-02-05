@@ -16,6 +16,7 @@ import { ChatActionButtons } from "./chat-action-buttons";
 import { ChatToolbeltDock } from "./chat-toolbelt-dock";
 import { ChatModals } from "./chat-modals";
 import * as Hooks from "../../hooks";
+import { PerfProfiler } from "../perf/perf-profiler";
 import type {
   Artifact,
   ChatMessage,
@@ -172,7 +173,6 @@ export function ChatPage() {
   };
 
   // Local UI state (sourced from Zustand)
-  const input = useAppStore((state) => state.input);
   const setInput = useAppStore((state) => state.setInput);
   const selectedModel = useAppStore((state) => state.selectedModel);
   const setSelectedModel = useAppStore((state) => state.setSelectedModel);
@@ -186,14 +186,9 @@ export function ChatPage() {
   const setActiveArtifactId = useAppStore((state) => state.setActiveArtifactId);
   const deepResearch = useAppStore((state) => state.deepResearch);
   const setDeepResearch = useAppStore((state) => state.setDeepResearch);
-  const elapsedSeconds = useAppStore((state) => state.elapsedSeconds);
   const setElapsedSeconds = useAppStore((state) => state.setElapsedSeconds);
   const streamingStartTime = useAppStore((state) => state.streamingStartTime);
   const setStreamingStartTime = useAppStore((state) => state.setStreamingStartTime);
-  const queuedContext = useAppStore((state) => state.queuedContext);
-  const setQueuedContext = useAppStore((state) => state.setQueuedContext);
-  const userScrolledUp = useAppStore((state) => state.userScrolledUp);
-  const setUserScrolledUp = useAppStore((state) => state.setUserScrolledUp);
 
   // Modal state (Zustand)
   const settingsOpen = useAppStore((state) => state.chatSettingsOpen);
@@ -252,11 +247,15 @@ export function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesLengthRef = useRef(0);
+  const userScrolledUpRef = useRef(false);
   const messagesRef = useRef<ChatMessage[]>([]);
+  const artifactsCacheRef = useRef(new Map<string, { text: string; artifacts: Artifact[] }>());
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamStalled, setStreamStalled] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("activity");
   const activeRunIdRef = useRef<string | null>(null);
   const runAbortControllerRef = useRef<AbortController | null>(null);
   const runCompletedRef = useRef(false);
@@ -999,16 +998,24 @@ export function ChatPage() {
   }, [currentSessionId, hydrateAgentState, mapStoredMessages, setMessages, startNewSession]);
 
   // Derived state from messages
+  const activityPanelVisible = sidebarOpen && sidebarTab === "activity";
+  const contextPanelVisible = sidebarOpen && sidebarTab === "context";
+
   const { thinkingActive, activityGroups } = Hooks.useChatDerived({
     messages,
     isLoading,
     executingTools,
     toolResultsMap,
+    enableActivityGroups: activityPanelVisible,
   });
 
   const activityCount = useMemo(() => {
-    return activityGroups.reduce((sum, group) => sum + group.items.length, 0);
-  }, [activityGroups]);
+    if (activityPanelVisible) {
+      return activityGroups.reduce((sum, group) => sum + group.items.length, 0);
+    }
+    if (executingTools.size > 0) return executingTools.size;
+    return isLoading ? 1 : 0;
+  }, [activityGroups, activityPanelVisible, executingTools.size, isLoading]);
 
   const selectedModelMeta = useMemo(
     () => availableModels.find((model) => model.id === selectedModel),
@@ -1068,7 +1075,7 @@ export function ChatPage() {
   }, [contextStats, formatTokenCount]);
 
   const contextBreakdown = useMemo(() => {
-    if (!contextStats) return null;
+    if (!contextStats || !contextPanelVisible) return null;
     let userTokens = 0;
     let assistantTokens = 0;
     let thinkingTokens = 0;
@@ -1113,7 +1120,7 @@ export function ChatPage() {
       assistantTokens,
       thinkingTokens,
     };
-  }, [contextStats, estimateTokens, messages, parseThinking]);
+  }, [contextPanelVisible, contextStats, estimateTokens, messages, parseThinking]);
 
   const { sessionArtifacts, artifactsByMessage } = useMemo(() => {
     if (!artifactsEnabled || messages.length === 0) {
@@ -1123,6 +1130,8 @@ export function ChatPage() {
     const artifacts: Artifact[] = [];
     const byMessage = new Map<string, Artifact[]>();
     const versionsByGroup = new Map<string, number>();
+    const cache = artifactsCacheRef.current;
+    const activeMessageIds = new Set<string>();
     messages.forEach((msg) => {
       if (msg.role !== "assistant") return;
 
@@ -1132,18 +1141,34 @@ export function ChatPage() {
         .join("");
 
       if (!textContent) return;
+      activeMessageIds.add(msg.id);
+
+      const cached = cache.get(msg.id);
+      if (cached && cached.text === textContent) {
+        byMessage.set(msg.id, cached.artifacts);
+        cached.artifacts.forEach((artifact) => {
+          artifacts.push(artifact);
+          if (artifact.groupId) {
+            const current = versionsByGroup.get(artifact.groupId) ?? 0;
+            const version = typeof artifact.version === "number" ? artifact.version : current;
+            versionsByGroup.set(artifact.groupId, Math.max(current, version));
+          }
+        });
+        return;
+      }
 
       const { artifacts: extracted } = extractArtifacts(textContent, {
         includeImplicit: true,
         maxImplicit: 1,
       });
+      const enrichedArtifacts: Artifact[] = [];
       extracted.forEach((artifact, index) => {
         const titleKey = (artifact.title || artifact.type).trim().toLowerCase();
         const groupKey = `${artifact.type}:${titleKey}`;
         const nextVersion = (versionsByGroup.get(groupKey) ?? 0) + 1;
         versionsByGroup.set(groupKey, nextVersion);
 
-        const enriched = {
+        const enriched: Artifact = {
           ...artifact,
           id: `${msg.id}-${index}`,
           groupId: groupKey,
@@ -1152,11 +1177,19 @@ export function ChatPage() {
           session_id: currentSessionId || undefined,
         };
         artifacts.push(enriched);
-        const existing = byMessage.get(msg.id) ?? [];
-        existing.push(enriched);
-        byMessage.set(msg.id, existing);
+        enrichedArtifacts.push(enriched);
       });
+      if (enrichedArtifacts.length > 0) {
+        byMessage.set(msg.id, enrichedArtifacts);
+      }
+      cache.set(msg.id, { text: textContent, artifacts: enrichedArtifacts });
     });
+
+    for (const key of cache.keys()) {
+      if (!activeMessageIds.has(key)) {
+        cache.delete(key);
+      }
+    }
 
     return { sessionArtifacts: artifacts, artifactsByMessage: byMessage };
   }, [messages, artifactsEnabled, currentSessionId]);
@@ -1296,6 +1329,7 @@ export function ChatPage() {
     lastCompactionSignatureRef.current = null;
     setCompactionError(null);
     setCompactionHistory([]);
+    artifactsCacheRef.current.clear();
   }, [currentSessionId]);
 
   // Auto-compaction effect - only check when streaming stops (not during)
@@ -1348,13 +1382,13 @@ export function ChatPage() {
   const showEmptyState = messages.length === 0 && !isLoading && !streamError;
 
   // Scroll handling
-  const handleScroll = useCallback(() => {
+  const handleScroll = Hooks.useRafThrottle(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
     const { scrollTop, scrollHeight, clientHeight } = container;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    setUserScrolledUp(distanceFromBottom >= 160);
-  }, [setUserScrolledUp]);
+    userScrolledUpRef.current = distanceFromBottom >= 160;
+  });
 
   // Auto-scroll to bottom
   // Throttled scroll - only react to message count changes, not content updates
@@ -1364,12 +1398,12 @@ export function ChatPage() {
     if (messages.length === prevMessageCountRef.current && isLoading) return;
     prevMessageCountRef.current = messages.length;
 
-    if (!userScrolledUp) {
+    if (!userScrolledUpRef.current) {
       messagesEndRef.current?.scrollIntoView({
         behavior: isLoading ? "auto" : "smooth",
       });
     }
-  }, [isLoading, messages.length, userScrolledUp]);
+  }, [isLoading, messages.length]);
 
   // Elapsed time timer - combined start time and interval logic
   useEffect(() => {
@@ -1943,10 +1977,10 @@ export function ChatPage() {
 
   // Handle send with persistence and attachments
   const handleSend = useCallback(
-    async (attachments?: Attachment[]) => {
-      await sendUserMessage(input, attachments, { clearInput: true });
+    async (text: string, attachments?: Attachment[]) => {
+      await sendUserMessage(text, attachments, { clearInput: true });
     },
-    [input, sendUserMessage],
+    [sendUserMessage],
   );
 
   const handleReprompt = useCallback(
@@ -2024,8 +2058,6 @@ export function ChatPage() {
 
   const toolBelt = (
     <ToolBelt
-      value={input}
-      onChange={setInput}
       onSubmit={handleSend}
       onStop={handleStop}
       disabled={false}
@@ -2049,9 +2081,6 @@ export function ChatPage() {
         setDeepResearch({ ...deepResearch, enabled: nextEnabled });
         if (nextEnabled && !mcpEnabled) setMcpEnabled(true);
       }}
-      elapsedSeconds={elapsedSeconds}
-      queuedContext={queuedContext}
-      onQueuedContextChange={setQueuedContext}
       onOpenMcpSettings={() => setMcpSettingsOpen(true)}
       onOpenChatSettings={() => setSettingsOpen(true)}
       hasSystemPrompt={systemPrompt.trim().length > 0}
@@ -2062,8 +2091,6 @@ export function ChatPage() {
   // (plan processing removed — activity panel shows thinking + tool calls directly)
 
   // Sidebar state
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("activity");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const autoOpenedActivityRef = useRef(false);
 
   useEffect(() => {
@@ -2072,7 +2099,10 @@ export function ChatPage() {
 
   // Auto-open activity panel only on first activity (not every change)
   const hadActivityRef = useRef(false);
-  const hasActivity = thinkingActive || executingTools.size > 0 || activityGroups.length > 0;
+  const hasActivity =
+    (activityPanelVisible ? thinkingActive : isLoading) ||
+    executingTools.size > 0 ||
+    activityGroups.length > 0;
   useEffect(() => {
     // Only trigger on transition from no-activity to has-activity
     if (!hasActivity) {
@@ -2118,37 +2148,47 @@ export function ChatPage() {
         hasArtifacts={sessionArtifacts.length > 0}
         activityContent={
           <div className="h-full flex flex-col">
-            <ActivityPanel
-              activityGroups={activityGroups}
-              agentPlan={agentPlan}
-              isLoading={isLoading}
-            />
+            <PerfProfiler id="activity-panel">
+              <ActivityPanel
+                activityGroups={activityGroups}
+                agentPlan={agentPlan}
+                isLoading={isLoading}
+              />
+            </PerfProfiler>
           </div>
         }
         contextContent={
           <div className="p-4 overflow-y-auto h-full">
-            <ContextPanel
-              stats={contextStats}
-              breakdown={contextBreakdown}
-              compactionHistory={compactionHistory}
-              compacting={compacting}
-              compactionError={compactionError}
-              formatTokenCount={formatTokenCount}
-            />
+            <PerfProfiler id="context-panel">
+              <ContextPanel
+                stats={contextStats}
+                breakdown={contextBreakdown}
+                compactionHistory={compactionHistory}
+                compacting={compacting}
+                compactionError={compactionError}
+                formatTokenCount={formatTokenCount}
+              />
+            </PerfProfiler>
           </div>
         }
-        artifactsContent={<ArtifactPreviewPanel artifacts={sessionArtifacts} />}
+        artifactsContent={
+          <PerfProfiler id="artifact-preview-panel">
+            <ArtifactPreviewPanel artifacts={sessionArtifacts} />
+          </PerfProfiler>
+        }
         filesContent={
-          <AgentFilesPanel
-            files={agentFiles}
-            plan={agentPlan}
-            selectedFilePath={selectedAgentFilePath}
-            selectedFileContent={selectedAgentFileContent}
-            selectedFileLoading={selectedAgentFileLoading}
-            fileVersions={agentFileVersions}
-            onSelectFile={(path) => selectAgentFile(path, sessionFromUrl || currentSessionId)}
-            hasSession={!!(sessionFromUrl || currentSessionId)}
-          />
+          <PerfProfiler id="agent-files-panel">
+            <AgentFilesPanel
+              files={agentFiles}
+              plan={agentPlan}
+              selectedFilePath={selectedAgentFilePath}
+              selectedFileContent={selectedAgentFileContent}
+              selectedFileLoading={selectedAgentFileLoading}
+              fileVersions={agentFileVersions}
+              onSelectFile={(path) => selectAgentFile(path, sessionFromUrl || currentSessionId)}
+              hasSession={!!(sessionFromUrl || currentSessionId)}
+            />
+          </PerfProfiler>
         }
         width={sidebarWidth}
         onWidthChange={setSidebarWidth}

@@ -6,6 +6,7 @@ import { useAppStore } from "@/store";
 import * as Icons from "../icons";
 import { MessageRenderer, thinkingParser } from "./message-renderer";
 import { MiniArtifactCard } from "../artifacts/mini-artifact-card";
+import { PerfProfiler } from "../perf/perf-profiler";
 import type { Artifact, ChatMessage, ChatMessageMetadata } from "@/lib/types";
 
 interface ChatMessageItemProps {
@@ -438,7 +439,9 @@ function ChatMessageItemBase({
 
         {/* Text content with MessageRenderer */}
         {textContent ? (
-          <MessageRenderer content={textContent} isStreaming={isStreaming} />
+          <PerfProfiler id={`message-renderer:${message.id}`}>
+            <MessageRenderer content={textContent} isStreaming={isStreaming} />
+          </PerfProfiler>
         ) : isStreaming && !thinkingContent ? (
           <div className="flex items-center gap-2 text-[#6a6560]">
             <Icons.Loader2 className="h-4 w-4 animate-spin" />
