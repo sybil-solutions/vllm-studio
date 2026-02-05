@@ -192,6 +192,7 @@ export interface ChatSession {
   model?: string;
   parent_id?: string;
   agent_state?: AgentState | null;
+  first_user_message?: string;
   created_at: string;
   updated_at: string;
 }

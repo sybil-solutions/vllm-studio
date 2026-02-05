@@ -290,7 +290,16 @@ export function AppSidebar({ children }: AppSidebarProps) {
                         {chatHistoryOpen && (
                           <div className="space-y-0.5 max-h-96 overflow-y-auto ml-4 pr-1 scrollbar-thin">
                             {chatSessions.map((session) => {
-                              const displayTitle = session.title || "New Chat";
+                              // Fallback: first 5 words of first user message if no title
+                              let displayTitle = session.title;
+                              if (!displayTitle || displayTitle === "New Chat") {
+                                if (session.first_user_message) {
+                                  const words = session.first_user_message.trim().split(/\s+/).slice(0, 5);
+                                  displayTitle = words.join(" ") + (words.length >= 5 ? "..." : "");
+                                } else {
+                                  displayTitle = "New Chat";
+                                }
+                              }
                               return (
                                 <Link
                                   key={session.id}

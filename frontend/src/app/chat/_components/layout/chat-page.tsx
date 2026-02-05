@@ -56,16 +56,7 @@ const TEXT_MIME_TYPES = new Set([
   "application/markdown",
 ]);
 
-const TEXT_EXTENSIONS = [
-  ".txt",
-  ".md",
-  ".markdown",
-  ".json",
-  ".csv",
-  ".yaml",
-  ".yml",
-  ".log",
-];
+const TEXT_EXTENSIONS = [".txt", ".md", ".markdown", ".json", ".csv", ".yaml", ".yml", ".log"];
 
 const sanitizeAttachmentName = (value: string): string => {
   const cleaned = value.replace(/[\\/]/g, "_").replace(/[^\w.\-]+/g, "_");
@@ -88,7 +79,7 @@ const readFileAsBase64 = (file: File): Promise<string> => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === "string" ? reader.result : "";
-      const base64 = result.includes(",") ? result.split(",")[1] ?? "" : result;
+      const base64 = result.includes(",") ? (result.split(",")[1] ?? "") : result;
       resolve(base64);
     };
     reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
@@ -142,9 +133,14 @@ const buildAttachmentsBlock = (attachments: UploadedAttachment[]): string => {
   return lines.join("\n");
 };
 
-const buildRunSystemPrompt = (basePrompt: string, attachmentsBlock?: string): string | undefined => {
+const buildRunSystemPrompt = (
+  basePrompt: string,
+  attachmentsBlock?: string,
+): string | undefined => {
   const trimmed = basePrompt.trim();
-  const blocks = [trimmed, attachmentsBlock?.trim()].filter((block) => block && block.length > 0) as string[];
+  const blocks = [trimmed, attachmentsBlock?.trim()].filter(
+    (block) => block && block.length > 0,
+  ) as string[];
   if (blocks.length === 0) return undefined;
   return blocks.join("\n\n");
 };
@@ -232,7 +228,6 @@ export function ChatPage() {
     selectedAgentFileContent,
     selectedAgentFileLoading,
     selectAgentFile,
-    clearSelectedFile,
     moveAgentFileVersions,
   } = Hooks.useAgentFiles();
 
@@ -257,9 +252,11 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [streamStalled, setStreamStalled] = useState(false);
   const activeRunIdRef = useRef<string | null>(null);
   const runAbortControllerRef = useRef<AbortController | null>(null);
   const runCompletedRef = useRef(false);
+  const lastEventTimeRef = useRef<number>(0);
 
   // Sessions hook
   const {
@@ -503,23 +500,26 @@ export function ChatPage() {
     return parts;
   }, []);
 
-  const buildMetadataFromAgent = useCallback((message: Record<string, unknown>): ChatMessageMetadata | undefined => {
-    const model = typeof message["model"] === "string" ? message["model"] : undefined;
-    const usage = message["usage"] as Record<string, unknown> | undefined;
-    const input = typeof usage?.["input"] === "number" ? usage["input"] : undefined;
-    const output = typeof usage?.["output"] === "number" ? usage["output"] : undefined;
-    const total = typeof usage?.["totalTokens"] === "number" ? usage["totalTokens"] : undefined;
-    if (model || input != null || output != null || total != null) {
-      return {
-        model,
-        usage:
-          input != null || output != null || total != null
-            ? { inputTokens: input, outputTokens: output, totalTokens: total }
-            : undefined,
-      };
-    }
-    return undefined;
-  }, []);
+  const buildMetadataFromAgent = useCallback(
+    (message: Record<string, unknown>): ChatMessageMetadata | undefined => {
+      const model = typeof message["model"] === "string" ? message["model"] : undefined;
+      const usage = message["usage"] as Record<string, unknown> | undefined;
+      const input = typeof usage?.["input"] === "number" ? usage["input"] : undefined;
+      const output = typeof usage?.["output"] === "number" ? usage["output"] : undefined;
+      const total = typeof usage?.["totalTokens"] === "number" ? usage["totalTokens"] : undefined;
+      if (model || input != null || output != null || total != null) {
+        return {
+          model,
+          usage:
+            input != null || output != null || total != null
+              ? { inputTokens: input, outputTokens: output, totalTokens: total }
+              : undefined,
+        };
+      }
+      return undefined;
+    },
+    [],
+  );
 
   const mapAgentMessageToChatMessage = useCallback(
     (
@@ -529,23 +529,23 @@ export function ChatPage() {
     ): ChatMessage | null => {
       const role = rawMessage["role"];
       if (role !== "user" && role !== "assistant") return null;
-      const id = messageId
-        ?? (typeof rawMessage["id"] === "string" ? rawMessage["id"] : createUuid());
+      const id =
+        messageId ?? (typeof rawMessage["id"] === "string" ? rawMessage["id"] : createUuid());
       const content = rawMessage["content"];
-      const parts = role === "assistant"
-        ? mapAgentContentToParts(content)
-        : mapUserContentToParts(content);
+      const parts =
+        role === "assistant" ? mapAgentContentToParts(content) : mapUserContentToParts(content);
       const baseMetadata =
         role === "assistant"
           ? buildMetadataFromAgent(rawMessage)
           : (rawMessage["metadata"] as ChatMessageMetadata | undefined);
-      const mergedMetadata = (runMeta?.runId || typeof runMeta?.turnIndex === "number")
-        ? {
-            ...(baseMetadata ?? {}),
-            ...(runMeta?.runId ? { runId: runMeta.runId } : {}),
-            ...(typeof runMeta?.turnIndex === "number" ? { turnIndex: runMeta.turnIndex } : {}),
-          }
-        : baseMetadata;
+      const mergedMetadata =
+        runMeta?.runId || typeof runMeta?.turnIndex === "number"
+          ? {
+              ...(baseMetadata ?? {}),
+              ...(runMeta?.runId ? { runId: runMeta.runId } : {}),
+              ...(typeof runMeta?.turnIndex === "number" ? { turnIndex: runMeta.turnIndex } : {}),
+            }
+          : baseMetadata;
       return {
         id,
         role,
@@ -612,7 +612,9 @@ export function ChatPage() {
                 (part) => part.type === "text" && typeof part.text === "string" && part.text.trim(),
               );
               const entryHasTool = entry.parts.some((part) => isToolPart(part));
-              const isInternal = Boolean((entry.metadata as { internal?: boolean } | undefined)?.internal);
+              const isInternal = Boolean(
+                (entry.metadata as { internal?: boolean } | undefined)?.internal,
+              );
               return isInternal && entryHasTool && !entryHasText;
             });
 
@@ -656,7 +658,12 @@ export function ChatPage() {
     if (typeof result === "string") return result;
     if (Array.isArray(result)) {
       return result
-        .filter((item) => item && typeof item === "object" && (item as Record<string, unknown>)["type"] === "text")
+        .filter(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            (item as Record<string, unknown>)["type"] === "text",
+        )
         .map((item) => String((item as Record<string, unknown>)["text"] ?? ""))
         .join("\n");
     }
@@ -749,12 +756,14 @@ export function ChatPage() {
 
   const handleRunEvent = useCallback(
     (event: ChatRunStreamEvent) => {
+      // Track last event time for stall detection
+      lastEventTimeRef.current = Date.now();
+      setStreamStalled(false);
+
       const { event: eventType, data } = event;
       const runId = typeof data["run_id"] === "string" ? data["run_id"] : undefined;
       const turnIndex = typeof data["turn_index"] === "number" ? data["turn_index"] : undefined;
-      const runMeta = runId || typeof turnIndex === "number"
-        ? { runId, turnIndex }
-        : undefined;
+      const runMeta = runId || typeof turnIndex === "number" ? { runId, turnIndex } : undefined;
 
       switch (eventType) {
         case "run_start": {
@@ -838,8 +847,10 @@ export function ChatPage() {
           if (steps.length === 0) return;
           setAgentPlan({
             steps,
-            createdAt: typeof planRecord["createdAt"] === "number" ? planRecord["createdAt"] : Date.now(),
-            updatedAt: typeof planRecord["updatedAt"] === "number" ? planRecord["updatedAt"] : Date.now(),
+            createdAt:
+              typeof planRecord["createdAt"] === "number" ? planRecord["createdAt"] : Date.now(),
+            updatedAt:
+              typeof planRecord["updatedAt"] === "number" ? planRecord["updatedAt"] : Date.now(),
           });
           return;
         }
@@ -1223,12 +1234,12 @@ export function ChatPage() {
       hydrateAgentState(compactedSession);
       void loadAgentFiles({ sessionId: compactedSession.id });
 
-        const afterTokens = calculateMessageTokens(
-          compactedMessages.map((message) => ({
-            role: message.role,
-            content: buildContextContent(message),
-          })),
-        );
+      const afterTokens = calculateMessageTokens(
+        compactedMessages.map((message) => ({
+          role: message.role,
+          content: buildContextContent(message),
+        })),
+      );
 
       setCompactionHistory((prev) => [
         ...prev,
@@ -1378,6 +1389,26 @@ export function ChatPage() {
     }, 3000);
     return () => clearTimeout(timeoutId);
   }, [isLoading, setElapsedSeconds, setStreamingStartTime, streamingStartTime]);
+
+  // Stream stall detection - warn user if no events for 30+ seconds while loading
+  useEffect(() => {
+    if (!isLoading) {
+      setStreamStalled(false);
+      return;
+    }
+
+    const STALL_THRESHOLD_MS = 30000; // 30 seconds
+    const checkInterval = setInterval(() => {
+      if (lastEventTimeRef.current > 0) {
+        const timeSinceLastEvent = Date.now() - lastEventTimeRef.current;
+        if (timeSinceLastEvent >= STALL_THRESHOLD_MS) {
+          setStreamStalled(true);
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(checkInterval);
+  }, [isLoading]);
 
   // Load sessions on mount
   useEffect(() => {
@@ -1719,8 +1750,10 @@ export function ChatPage() {
       const abortController = new AbortController();
       runAbortControllerRef.current = abortController;
       runCompletedRef.current = false;
+      lastEventTimeRef.current = Date.now();
       setIsLoading(true);
       setStreamError(null);
+      setStreamStalled(false);
       setExecutingTools(new Set());
       setToolResultsMap(new Map());
 
@@ -1765,13 +1798,9 @@ export function ChatPage() {
       const results = await Promise.all(
         attachments.map(async (attachment, index) => {
           try {
-            const safeName = sanitizeAttachmentName(
-              attachment.name || `attachment-${index + 1}`,
-            );
+            const safeName = sanitizeAttachmentName(attachment.name || `attachment-${index + 1}`);
             const { content, encoding } = await readAttachmentContent(attachment);
-            const fileName = `${createUuid()}-${safeName}${
-              encoding === "base64" ? ".base64" : ""
-            }`;
+            const fileName = `${createUuid()}-${safeName}${encoding === "base64" ? ".base64" : ""}`;
             const path = `${baseDir}/${fileName}`;
             await api.writeAgentFile(sessionId, path, { content });
             return {
@@ -1809,11 +1838,7 @@ export function ChatPage() {
   );
 
   const sendUserMessage = useCallback(
-    async (
-      text: string,
-      attachments?: Attachment[],
-      options?: { clearInput?: boolean },
-    ) => {
+    async (text: string, attachments?: Attachment[], options?: { clearInput?: boolean }) => {
       if (!selectedModel) return;
       if (!text.trim() && (!attachments || attachments.length === 0)) return;
       if (isLoading) return;
@@ -2133,7 +2158,12 @@ export function ChatPage() {
             <ChatConversation
               messages={messages}
               isLoading={isLoading}
-              error={streamError ?? undefined}
+              error={
+                streamError ??
+                (streamStalled
+                  ? "Stream appears stalled. The model or a tool call may be hanging. You can cancel and try again."
+                  : undefined)
+              }
               artifactsEnabled={artifactsEnabled}
               artifactsByMessage={artifactsByMessage}
               selectedModel={selectedModel}

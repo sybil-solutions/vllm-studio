@@ -93,6 +93,7 @@ export interface ChatState {
   copiedMessageId: string | null;
   messageInlineThinkingExpanded: Record<string, boolean>;
   messageInlineToolsExpanded: Record<string, boolean>;
+  toolCallGroupsExpanded: Record<string, boolean>;
 
   // Artifacts
   activeArtifactId: string | null;
@@ -195,6 +196,7 @@ export interface ChatActions {
   setCopiedMessageId: (copiedMessageId: string | null) => void;
   setMessageInlineThinkingExpanded: (messageId: string, expanded: boolean) => void;
   setMessageInlineToolsExpanded: (messageId: string, expanded: boolean) => void;
+  setToolCallGroupExpanded: (groupId: string, expanded: boolean) => void;
 
   // Artifacts
   updateArtifactViewerState: (
@@ -316,6 +318,7 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   copiedMessageId: null,
   messageInlineThinkingExpanded: {},
   messageInlineToolsExpanded: {},
+  toolCallGroupsExpanded: {},
 
   // Artifacts
   activeArtifactId: null,
@@ -417,6 +420,13 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
       messageInlineToolsExpanded: {
         ...state.messageInlineToolsExpanded,
         [messageId]: expanded,
+      },
+    })),
+  setToolCallGroupExpanded: (groupId, expanded) =>
+    set((state) => ({
+      toolCallGroupsExpanded: {
+        ...state.toolCallGroupsExpanded,
+        [groupId]: expanded,
       },
     })),
 

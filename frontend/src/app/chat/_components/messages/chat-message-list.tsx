@@ -1,11 +1,79 @@
 // CRITICAL
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import * as Icons from "../icons";
 import { ChatMessageItem } from "./chat-message-item";
+import { ToolCallGroup } from "./tool-call-group";
 import { useAppStore } from "@/store";
 import type { Artifact, ChatMessage } from "@/lib/types";
+
+// Check if a message is tool-only (assistant message with only tool parts, no text content)
+function isToolOnlyMessage(message: ChatMessage): boolean {
+  if (message.role !== "assistant") return false;
+
+  const textContent = message.parts
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("")
+    .trim();
+
+  const hasToolParts = message.parts.some(
+    (part) =>
+      part.type === "dynamic-tool" ||
+      (typeof part.type === "string" && part.type.startsWith("tool-")),
+  );
+
+  return hasToolParts && !textContent;
+}
+
+type MessageGroup =
+  | { type: "single"; message: ChatMessage }
+  | { type: "tool-group"; messages: ChatMessage[]; groupId: string };
+
+// Group consecutive tool-only messages
+function groupMessages(messages: ChatMessage[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  let currentToolGroup: ChatMessage[] = [];
+
+  for (const message of messages) {
+    if (isToolOnlyMessage(message)) {
+      currentToolGroup.push(message);
+    } else {
+      // Flush any pending tool group
+      if (currentToolGroup.length > 0) {
+        if (currentToolGroup.length === 1) {
+          // Single tool-only message, render normally
+          groups.push({ type: "single", message: currentToolGroup[0] });
+        } else {
+          // Multiple consecutive tool-only messages, group them
+          groups.push({
+            type: "tool-group",
+            messages: currentToolGroup,
+            groupId: currentToolGroup[0].id,
+          });
+        }
+        currentToolGroup = [];
+      }
+      groups.push({ type: "single", message });
+    }
+  }
+
+  // Flush any remaining tool group
+  if (currentToolGroup.length > 0) {
+    if (currentToolGroup.length === 1) {
+      groups.push({ type: "single", message: currentToolGroup[0] });
+    } else {
+      groups.push({
+        type: "tool-group",
+        messages: currentToolGroup,
+        groupId: currentToolGroup[0].id,
+      });
+    }
+  }
+
+  return groups;
+}
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
@@ -40,6 +108,9 @@ export function ChatMessageList({
     const metadata = m.metadata as { internal?: boolean } | undefined;
     return !metadata?.internal;
   });
+
+  // Group consecutive tool-only messages
+  const messageGroups = useMemo(() => groupMessages(visibleMessages), [visibleMessages]);
 
   const lastMessage = visibleMessages[visibleMessages.length - 1];
   const showLoadingIndicator = isLoading && messages[messages.length - 1]?.role === "user";
@@ -93,23 +164,44 @@ export function ChatMessageList({
 
   return (
     <div className="flex flex-col gap-4 px-4 md:px-6 py-4 max-w-4xl mx-auto w-full">
-      {visibleMessages.map((message, index) => (
-        <ChatMessageItem
-          key={message.id}
-          message={message}
-          isStreaming={isLoading && index === visibleMessages.length - 1 && message.role === "assistant"}
-          artifactsEnabled={artifactsEnabled}
-          artifacts={artifactsByMessage?.get(message.id)}
-          selectedModel={selectedModel}
-          contextUsageLabel={contextUsageLabel}
-          copied={copiedMessageId === message.id}
-          onCopy={handleCopy}
-          onOpenContext={onOpenContext}
-          onFork={message.role === "assistant" ? onFork : undefined}
-          onReprompt={message.role === "assistant" ? onReprompt : undefined}
-          onExport={handleExport}
-        />
-      ))}
+      {messageGroups.map((group) => {
+        if (group.type === "tool-group") {
+          // Check if last message in group is the last visible message and still streaming
+          const lastGroupMsg = group.messages[group.messages.length - 1];
+          const isLastAndStreaming =
+            isLoading && lastGroupMsg.id === lastMessage?.id && lastGroupMsg.role === "assistant";
+          return (
+            <ToolCallGroup
+              key={group.groupId}
+              groupId={group.groupId}
+              messages={group.messages}
+              isStreaming={isLastAndStreaming}
+            />
+          );
+        }
+
+        const message = group.message;
+        const messageIndex = visibleMessages.indexOf(message);
+        return (
+          <ChatMessageItem
+            key={message.id}
+            message={message}
+            isStreaming={
+              isLoading && messageIndex === visibleMessages.length - 1 && message.role === "assistant"
+            }
+            artifactsEnabled={artifactsEnabled}
+            artifacts={artifactsByMessage?.get(message.id)}
+            selectedModel={selectedModel}
+            contextUsageLabel={contextUsageLabel}
+            copied={copiedMessageId === message.id}
+            onCopy={handleCopy}
+            onOpenContext={onOpenContext}
+            onFork={message.role === "assistant" ? onFork : undefined}
+            onReprompt={message.role === "assistant" ? onReprompt : undefined}
+            onExport={handleExport}
+          />
+        );
+      })}
       {showLoadingIndicator && (
         <div className="flex items-center gap-2 text-[#9a9590]">
           <Icons.Loader2 className="h-4 w-4 animate-spin" />

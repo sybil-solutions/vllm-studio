@@ -105,21 +105,116 @@ function isPreviewableExt(ext: string): boolean {
   return ["html", "svg", "js", "jsx", "ts", "tsx", "mjs", "cjs"].includes(ext);
 }
 
-function buildPreviewDocument(ext: string, content: string): string {
+function buildFilePath(entry: AgentFileEntry, parentPath: string): string {
+  return parentPath ? `${parentPath}/${entry.name}` : entry.name;
+}
+
+// Resolve a relative path from a base path
+function resolvePath(basePath: string, relativePath: string): string {
+  // Get directory of base file
+  const baseDir = basePath.includes("/") ? basePath.substring(0, basePath.lastIndexOf("/")) : "";
+
+  // Handle ./ prefix
+  let resolved = relativePath.replace(/^\.\//, "");
+
+  // Handle ../ prefixes
+  const parts = baseDir.split("/").filter(Boolean);
+  while (resolved.startsWith("../")) {
+    parts.pop();
+    resolved = resolved.substring(3);
+  }
+
+  return parts.length > 0 ? `${parts.join("/")}/${resolved}` : resolved;
+}
+
+// Get latest content for a file path from versions
+function getFileContent(path: string, allFileVersions: Record<string, AgentFileVersion[]>): string | null {
+  const versions = allFileVersions[path];
+  if (!versions || versions.length === 0) return null;
+  return versions[versions.length - 1].content;
+}
+
+// Inline local CSS and JS imports in HTML content
+function inlineLocalImports(
+  htmlContent: string,
+  currentPath: string,
+  allFileVersions: Record<string, AgentFileVersion[]>
+): string {
+  let result = htmlContent;
+
+  // Inline <link rel="stylesheet" href="..."> tags
+  result = result.replace(
+    /<link\s+[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*\/?>/gi,
+    (match, href) => {
+      // Skip external URLs
+      if (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//")) {
+        return match;
+      }
+      const resolvedPath = resolvePath(currentPath, href);
+      const cssContent = getFileContent(resolvedPath, allFileVersions);
+      if (cssContent) {
+        return `<style>/* Inlined from ${href} */\n${cssContent}</style>`;
+      }
+      return match;
+    }
+  );
+
+  // Also handle href before rel
+  result = result.replace(
+    /<link\s+[^>]*href=["']([^"']+)["'][^>]*rel=["']stylesheet["'][^>]*\/?>/gi,
+    (match, href) => {
+      if (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//")) {
+        return match;
+      }
+      const resolvedPath = resolvePath(currentPath, href);
+      const cssContent = getFileContent(resolvedPath, allFileVersions);
+      if (cssContent) {
+        return `<style>/* Inlined from ${href} */\n${cssContent}</style>`;
+      }
+      return match;
+    }
+  );
+
+  // Inline <script src="..."> tags (non-module)
+  result = result.replace(
+    /<script\s+[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi,
+    (match, src) => {
+      // Skip external URLs
+      if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("//")) {
+        return match;
+      }
+      const resolvedPath = resolvePath(currentPath, src);
+      const jsContent = getFileContent(resolvedPath, allFileVersions);
+      if (jsContent) {
+        return `<script>/* Inlined from ${src} */\n${jsContent}</script>`;
+      }
+      return match;
+    }
+  );
+
+  return result;
+}
+
+// Build preview document with inlined local imports
+function buildPreviewDocumentWithImports(
+  ext: string,
+  content: string,
+  currentPath: string,
+  allFileVersions: Record<string, AgentFileVersion[]>
+): string {
   if (ext === "svg") {
     const svgCode = content.includes("<svg")
       ? content
       : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${content}</svg>`;
     return buildSvgDocument(svgCode, 1);
   }
-  if (ext === "html") return buildHtmlDocument(content);
+  if (ext === "html") {
+    const inlined = inlineLocalImports(content, currentPath, allFileVersions);
+    return buildHtmlDocument(inlined);
+  }
   if (["js", "mjs", "cjs"].includes(ext)) return buildJsDocument(content);
   if (["jsx", "tsx", "ts"].includes(ext)) return buildReactDocument(content);
   return buildTextDocument(content);
-}
-
-function buildFilePath(entry: AgentFileEntry, parentPath: string): string {
-  return parentPath ? `${parentPath}/${entry.name}` : entry.name;
 }
 
 function FileTreeNode({
@@ -208,6 +303,7 @@ function FileContentViewer({
   path,
   content,
   versions,
+  allFileVersions,
   loading,
   onClose,
   hasSession,
@@ -215,6 +311,7 @@ function FileContentViewer({
   path: string;
   content: string | null;
   versions: AgentFileVersion[];
+  allFileVersions: Record<string, AgentFileVersion[]>;
   loading: boolean;
   onClose: () => void;
   hasSession: boolean;
@@ -363,7 +460,7 @@ function FileContentViewer({
         ) : previewable && activeTab === "preview" ? (
           <div className="w-full h-full bg-[#0a0a0a]">
             <iframe
-              srcDoc={buildPreviewDocument(ext, displayContent)}
+              srcDoc={buildPreviewDocumentWithImports(ext, displayContent, path, allFileVersions)}
               className="w-full h-full border-0"
               sandbox="allow-scripts allow-same-origin allow-forms"
               title={`${fileName} preview`}
@@ -438,6 +535,7 @@ export function AgentFilesPanel({
             path={selectedFilePath}
             content={selectedFileContent}
             versions={versionsForSelected}
+            allFileVersions={fileVersions}
             loading={selectedFileLoading}
             onClose={() => onSelectFile(null)}
             hasSession={hasSession}
