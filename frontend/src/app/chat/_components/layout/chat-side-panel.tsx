@@ -1,11 +1,83 @@
 // CRITICAL
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { safeJsonStringify } from "@/lib/safe-json";
 import type { ActivityGroup, ActivityItem } from "../../types";
 import type { CompactionEvent, ContextStats } from "@/lib/services/context-management";
+
+type ToolCategory = "file" | "search" | "plan" | "web" | "code" | "other";
+
+const TOOL_CATEGORIES: Record<string, ToolCategory> = {
+  read_file: "file",
+  write_file: "file",
+  list_files: "file",
+  delete_file: "file",
+  make_directory: "file",
+  move_file: "file",
+  create_file: "file",
+  edit_file: "file",
+  search: "search",
+  grep: "search",
+  find: "search",
+  ripgrep: "search",
+  semantic_search: "search",
+  plan: "plan",
+  update_plan: "plan",
+  create_plan: "plan",
+  web_search: "web",
+  fetch_url: "web",
+  browse: "web",
+  http_request: "web",
+  execute_code: "code",
+  run_command: "code",
+  bash: "code",
+  python: "code",
+  shell: "code",
+};
+
+const categorize = (toolName?: string): ToolCategory => {
+  if (!toolName) return "other";
+  const lower = toolName.toLowerCase();
+  for (const [pattern, category] of Object.entries(TOOL_CATEGORIES)) {
+    if (lower === pattern || lower.includes(pattern)) return category;
+  }
+  if (lower.includes("file") || lower.includes("directory") || lower.includes("folder")) return "file";
+  if (lower.includes("search") || lower.includes("find") || lower.includes("grep")) return "search";
+  if (lower.includes("web") || lower.includes("fetch") || lower.includes("http") || lower.includes("url")) return "web";
+  if (lower.includes("exec") || lower.includes("run") || lower.includes("shell") || lower.includes("bash") || lower.includes("command")) return "code";
+  return "other";
+};
+
+const CATEGORY_META: Record<ToolCategory, { label: string; color: string; iconColor: string }> = {
+  file: { label: "File ops", color: "#6aa2ff", iconColor: "#6aa2ff" },
+  search: { label: "Search", color: "#c084fc", iconColor: "#c084fc" },
+  plan: { label: "Planning", color: "#32f2c2", iconColor: "#32f2c2" },
+  web: { label: "Web", color: "#fb923c", iconColor: "#fb923c" },
+  code: { label: "Code", color: "#facc15", iconColor: "#facc15" },
+  other: { label: "Tools", color: "#8b93a5", iconColor: "#8b93a5" },
+};
+
+const getTurnSummary = (items: ActivityItem[]): { label: string; count: number; color: string } => {
+  const toolItems = items.filter((i) => i.type !== "thinking");
+  if (toolItems.length === 0) return { label: "Thinking", count: 0, color: "#8b93a5" };
+  const counts = new Map<ToolCategory, number>();
+  for (const item of toolItems) {
+    const cat = categorize(item.toolName);
+    counts.set(cat, (counts.get(cat) ?? 0) + 1);
+  }
+  let dominant: ToolCategory = "other";
+  let max = 0;
+  for (const [cat, count] of counts) {
+    if (count > max) {
+      dominant = cat;
+      max = count;
+    }
+  }
+  const meta = CATEGORY_META[dominant];
+  return { label: `${meta.label} (${toolItems.length})`, count: toolItems.length, color: meta.color };
+};
 
 export interface ActivityPanelProps {
   activityGroups: ActivityGroup[];
@@ -18,19 +90,16 @@ export function ActivityPanel({ activityGroups, agentPlan, isLoading }: Activity
     return <div className="py-8 text-center text-sm text-[#8a93a5]">No activity yet</div>;
   }
 
-  // Calculate agent progress
   const totalSteps = agentPlan?.steps.length ?? 0;
   const doneSteps = agentPlan?.steps.filter((s) => s.status === "done").length ?? 0;
   const currentStep = agentPlan?.steps.find((s) => s.status === "running");
   const hasIncomplete = doneSteps < totalSteps;
 
-  // Check if latest group has active thinking
   const latestGroup = activityGroups[0];
   const hasActiveThinking = latestGroup?.items.some((i) => i.type === "thinking" && i.isActive);
 
   return (
     <div className="h-full flex flex-col bg-[radial-gradient(140%_70%_at_12%_-10%,rgba(45,255,199,0.08),transparent_55%),radial-gradient(130%_80%_at_90%_-20%,rgba(108,140,255,0.12),transparent_60%),linear-gradient(180deg,#07080a,rgba(4,4,6,0.98))]">
-      {/* Progress Header - shows when agent is active */}
       {totalSteps > 0 && (
         <div className="px-3 py-3 border-b border-white/[0.08] mb-2 bg-[#08090b]/90">
           <div className="flex items-center justify-between mb-2">
@@ -61,44 +130,90 @@ export function ActivityPanel({ activityGroups, agentPlan, isLoading }: Activity
       )}
 
       <div className="relative flex-1 overflow-y-auto px-2">
-        {/* Vertical timeline line */}
         <div className="absolute left-4.75 top-2 bottom-2 w-px bg-white/[0.08]" />
 
         <div className="space-y-1 pb-4">
           {activityGroups.map((group) => (
-            <div key={group.id}>
-              {/* Turn header */}
-              <div className="flex items-center gap-2 py-2 pl-1">
-                <div className="w-5 h-5 rounded-full bg-[#0b0c0f] border border-white/[0.12] flex items-center justify-center z-10">
-                  <span className="text-[9px] text-[#9aa3b2] font-medium">
-                    {group.turnNumber || 1}
-                  </span>
-                </div>
-                <span className="text-[10px] text-[#8b93a5] uppercase tracking-wider">
-                  {group.isLatest ? "Current" : "Turn"}
-                </span>
-                {group.isLatest && hasActiveThinking && (
-                  <span className="relative flex h-1.5 w-1.5 ml-auto mr-2">
-                    <span className="animate-ping absolute h-full w-full rounded-full bg-[#5cf2d6] opacity-60" />
-                    <span className="relative h-1.5 w-1.5 rounded-full bg-[#5cf2d6]" />
-                  </span>
-                )}
-              </div>
-
-              {/* Chronologically interleaved thinking and tool calls */}
-              <div className="space-y-1">
-                {group.items.map((item) =>
-                  item.type === "thinking" ? (
-                    <ThinkingItem key={item.id} content={item.content} isActive={item.isActive} />
-                  ) : (
-                    <ToolItem key={item.id} item={item} />
-                  ),
-                )}
-              </div>
-            </div>
+            <TurnGroup
+              key={group.id}
+              group={group}
+              hasActiveThinking={group.isLatest && !!hasActiveThinking}
+            />
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function TurnGroup({
+  group,
+  hasActiveThinking,
+}: {
+  group: ActivityGroup;
+  hasActiveThinking: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(!group.isLatest);
+  const prevIsLatestRef = useRef(group.isLatest);
+
+  useEffect(() => {
+    if (group.isLatest && !prevIsLatestRef.current) {
+      setCollapsed(false);
+    }
+    if (!group.isLatest && prevIsLatestRef.current) {
+      setCollapsed(true);
+    }
+    prevIsLatestRef.current = group.isLatest;
+  }, [group.isLatest]);
+
+  const summary = useMemo(() => getTurnSummary(group.items), [group.items]);
+
+  return (
+    <div>
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex items-center gap-2 py-2 pl-1 pr-2 w-full text-left group"
+      >
+        <div className="w-5 h-5 rounded-full bg-[#0b0c0f] border border-white/[0.12] flex items-center justify-center z-10">
+          <span className="text-[9px] text-[#9aa3b2] font-medium">
+            {group.turnNumber || 1}
+          </span>
+        </div>
+        <span className="text-[10px] text-[#8b93a5] uppercase tracking-wider">
+          {group.isLatest ? "Current" : "Turn"}
+        </span>
+        {!group.isLatest && summary.count > 0 && (
+          <span
+            className="text-[9px] px-1.5 py-0.5 rounded-full"
+            style={{ color: summary.color, backgroundColor: `${summary.color}15` }}
+          >
+            {summary.label}
+          </span>
+        )}
+        {group.isLatest && hasActiveThinking && (
+          <span className="relative flex h-1.5 w-1.5 ml-auto mr-2">
+            <span className="animate-ping absolute h-full w-full rounded-full bg-[#5cf2d6] opacity-60" />
+            <span className="relative h-1.5 w-1.5 rounded-full bg-[#5cf2d6]" />
+          </span>
+        )}
+        {!group.isLatest && (
+          <span className="ml-auto text-[9px] text-[#444] group-hover:text-[#666] transition-colors">
+            {collapsed ? "+" : "−"}
+          </span>
+        )}
+      </button>
+
+      {!collapsed && (
+        <div className="space-y-1">
+          {group.items.map((item) =>
+            item.type === "thinking" ? (
+              <ThinkingItem key={item.id} content={item.content} isActive={item.isActive} />
+            ) : (
+              <ToolItem key={item.id} item={item} />
+            ),
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -115,7 +230,6 @@ function ThinkingItem({ content, isActive }: { content?: string; isActive?: bool
 
   return (
     <div className="relative pl-7 pr-2 py-2">
-      {/* Timeline node - subtle dot */}
       <div className="absolute left-1.75 top-2.5 w-2.25 h-2.25 rounded-full border border-white/[0.16] bg-[#111217] flex items-center justify-center">
         {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#5cf2d6] animate-pulse" />}
       </div>
@@ -225,7 +339,6 @@ export function ContextPanel({
           {fmt(stats.currentTokens)} / {fmt(stats.maxContext)} tokens • headroom {fmt(headroom)}
         </div>
         <div className="mt-2 h-1.5 w-full rounded-full bg-[#252321] relative">
-          {/* 80% threshold marker */}
           <div className="absolute top-0 bottom-0 w-px bg-[#444] z-10" style={{ left: "80%" }} />
           <div
             className={`h-full rounded-full ${isOverEighty ? "bg-[#633]" : "bg-[#555]"}`}
@@ -303,8 +416,11 @@ interface ToolItemProps {
 function ToolItem({ item }: ToolItemProps) {
   const [expanded, setExpanded] = useState(false);
   const isExecuting = item.state === "running";
+  const isComplete = item.state === "complete";
   const hasResult = item.output != null;
   const isError = item.state === "error";
+  const category = categorize(item.toolName);
+  const meta = CATEGORY_META[category];
 
   const getToolDisplayName = (name?: string) => {
     if (!name) return "Tool";
@@ -341,7 +457,6 @@ function ToolItem({ item }: ToolItemProps) {
 
   return (
     <div className="relative pl-7 pr-2 py-2 bg-white/1 rounded hover:bg-white/2 transition-colors">
-      {/* Timeline node - subtle status indicator */}
       <div
         className="absolute left-1.75 top-3 w-2.25 h-2.25 rounded-full border flex items-center justify-center"
         style={{
@@ -354,34 +469,34 @@ function ToolItem({ item }: ToolItemProps) {
         {hasResult && !isError && <div className="w-1 h-1 rounded-full bg-[#464]" />}
       </div>
 
-      {/* Tool header - clickable to expand */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full text-left group"
       >
         {isExecuting ? (
-          <Loader2 className="h-3 w-3 text-[#555] animate-spin shrink-0" />
-        ) : isError ? (
-          <WrenchIcon className="h-3 w-3 text-[#633] shrink-0" />
-        ) : hasResult ? (
-          <WrenchIcon className="h-3 w-3 text-[#464] shrink-0" />
+          <Loader2 className="h-3 w-3 animate-spin shrink-0" style={{ color: meta.iconColor }} />
         ) : (
-          <WrenchIcon className="h-3 w-3 text-[#333] shrink-0" />
+          <CategoryIcon category={category} className="h-3 w-3 shrink-0" />
         )}
         <span
           className={`text-[11px] truncate ${isExecuting ? "text-[#777]" : isError ? "text-[#755]" : hasResult ? "text-[#797]" : "text-[#555]"}`}
         >
           {toolName}
         </span>
+        {/* State badge */}
+        {isComplete && !isError && (
+          <span className="text-[10px] text-[#4a7]">✓</span>
+        )}
+        {isError && (
+          <span className="text-[10px] text-[#a54]">✗</span>
+        )}
         <span className="ml-auto text-[9px] text-[#333]">{expanded ? "−" : "+"}</span>
       </button>
 
-      {/* Arguments preview */}
       {mainArg && (
         <p className="mt-1 text-[10px] text-[#444] line-clamp-1 pl-5">{mainArg.slice(0, 100)}</p>
       )}
 
-      {/* Expanded details */}
       {expanded && (
         <div className="mt-2 space-y-2 pl-5">
           {item.input != null && (
@@ -409,18 +524,47 @@ function ToolItem({ item }: ToolItemProps) {
   );
 }
 
-function WrenchIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </svg>
-  );
+function CategoryIcon({ category, className }: { category: ToolCategory; className?: string }) {
+  const color = CATEGORY_META[category].iconColor;
+  switch (category) {
+    case "file":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+      );
+    case "plan":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+      );
+    case "web":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M2 12h20" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+      );
+    case "code":
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+        </svg>
+      );
+    default:
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+        </svg>
+      );
+  }
 }

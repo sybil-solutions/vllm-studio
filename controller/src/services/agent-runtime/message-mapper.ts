@@ -190,7 +190,18 @@ const buildToolResults = (message: StoredMessageRecord): ToolResultMessage[] => 
     const id = getString(record["id"]) ?? "";
     const functionPayload = record["function"] as Record<string, unknown> | undefined;
     const name = getString(functionPayload?.["name"]) ?? "tool";
-    if (agentFsTools.has(name)) continue;
+    if (agentFsTools.has(name)) {
+      results.push({
+        role: "toolResult",
+        toolCallId: id,
+        toolName: name,
+        content: [{ type: "text", text: "[completed]" }],
+        details: {},
+        isError: false,
+        timestamp: parseTimestamp(record["created_at"] ?? message["created_at"]),
+      });
+      continue;
+    }
     const result = extractToolResult(record["result"]);
     if (!id || !result) continue;
     results.push({

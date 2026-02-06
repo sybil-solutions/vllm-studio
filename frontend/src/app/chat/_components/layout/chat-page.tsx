@@ -806,8 +806,13 @@ export function ChatPage() {
                 .filter((part) => part.type === "text")
                 .map((part) => (part as { text: string }).text)
                 .join("");
-              if (assistantText) {
-                lastAssistantContentRef.current = assistantText;
+              const reasoningText = mapped.parts
+                .filter((part) => part.type === "reasoning")
+                .map((part) => (part as { text: string }).text)
+                .join("");
+              const contentForTitle = assistantText || reasoningText;
+              if (contentForTitle) {
+                lastAssistantContentRef.current = contentForTitle;
               }
             }
           }
@@ -901,13 +906,12 @@ export function ChatPage() {
           if (
             currentSessionId &&
             (currentSessionTitle === "New Chat" || currentSessionTitle === "Chat") &&
-            lastUserInputRef.current &&
-            lastAssistantContentRef.current
+            lastUserInputRef.current
           ) {
             void generateTitle(
               currentSessionId,
               lastUserInputRef.current,
-              lastAssistantContentRef.current,
+              lastAssistantContentRef.current || "",
             );
           }
           return;
