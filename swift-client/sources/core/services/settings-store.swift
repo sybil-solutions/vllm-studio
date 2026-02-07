@@ -12,7 +12,8 @@ final class SettingsStore: ObservableObject {
     let defaults = UserDefaults.standard
     backendUrl = defaults.string(forKey: "backend-url") ?? "http://localhost:8080"
     apiKey = defaults.string(forKey: "api-key") ?? ""
-    voiceUrl = defaults.string(forKey: "voice-url") ?? "https://voice.homelabai.org"
+    // Voice endpoint is optional and intentionally has no hard-coded default.
+    voiceUrl = defaults.string(forKey: "voice-url") ?? ""
     voiceModel = defaults.string(forKey: "voice-model") ?? "whisper-large-v3-turbo"
     mcpEnabled = defaults.object(forKey: "mcp-enabled") as? Bool ?? true
     planModeEnabled = defaults.object(forKey: "plan-mode-enabled") as? Bool ?? false

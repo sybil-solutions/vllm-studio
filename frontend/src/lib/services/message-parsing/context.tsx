@@ -8,20 +8,12 @@
 
 import { createContext, useMemo, type ReactNode } from "react";
 import { messageParsingServiceFactory } from "./factory";
+import { DEFAULT_CONFIG } from "./types";
 import type {
   IMessageParsingService,
   MessageParsingConfig,
   MessageParsingContextValue,
 } from "./types";
-
-// Default configuration
-const DEFAULT_CONFIG: MessageParsingConfig = {
-  enableArtifacts: true,
-  enableThinkingExtraction: true,
-  enableMcpXmlStripping: true,
-  enableBoxTagStripping: true,
-  cacheSize: 100,
-};
 
 // Create context with undefined default (must be used within provider)
 export const MessageParsingContext = createContext<MessageParsingContextValue | null>(null);

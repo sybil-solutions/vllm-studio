@@ -49,6 +49,11 @@ export function useControllerEvents(
 
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const currentSessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
 
   const upsertSession = useCallback(
     (session: ChatSession | null | undefined) => {
@@ -57,7 +62,7 @@ export function useControllerEvents(
         const filtered = prev.filter((item) => item.id !== session.id);
         return [session, ...filtered];
       });
-      if (currentSessionId === session.id) {
+      if (currentSessionIdRef.current === session.id) {
         setCurrentSessionTitle(session.title || "Chat");
         const agentState = session.agent_state as AgentState | null | undefined;
         const plan = normalizePlan(agentState?.plan)
@@ -66,7 +71,7 @@ export function useControllerEvents(
         setAgentPlan(plan);
       }
     },
-    [currentSessionId, setAgentPlan, setCurrentSessionTitle, updateSessions],
+    [setAgentPlan, setCurrentSessionTitle, updateSessions],
   );
 
   const refreshAgentFiles = useCallback(
@@ -95,6 +100,7 @@ export function useControllerEvents(
         const payload = JSON.parse(event.data) as SSEPayload<Record<string, unknown>>;
         const eventType = (event as { type?: string }).type || "message";
         const data = payload.data ?? {};
+        const currentId = currentSessionIdRef.current;
 
         switch (eventType) {
           case "chat_session_created":
@@ -110,7 +116,7 @@ export function useControllerEvents(
             const sessionId = String(data["session_id"] ?? "");
             if (sessionId) {
               updateSessions((prev) => prev.filter((item) => item.id !== sessionId));
-              if (currentSessionId === sessionId) {
+              if (currentId === sessionId) {
                 setCurrentSessionId(null);
                 setCurrentSessionTitle("New Chat");
                 setAgentPlan(null);
@@ -127,7 +133,7 @@ export function useControllerEvents(
             if (session) {
               upsertSession(session);
             }
-            if (sessionId && currentSessionId === sessionId && message) {
+            if (sessionId && currentId === sessionId && message) {
               dispatchCustomEvent("vllm:chat-event", { type: eventType, data });
             }
             break;
@@ -135,7 +141,7 @@ export function useControllerEvents(
           case "chat_usage_updated": {
             const usage = data["usage"] as Record<string, number> | undefined;
             const sessionId = String(data["session_id"] ?? "");
-            if (usage && sessionId && currentSessionId === sessionId) {
+            if (usage && sessionId && currentId === sessionId) {
               setSessionUsage({
                 prompt_tokens: Number(usage["prompt_tokens"] ?? 0),
                 completion_tokens: Number(usage["completion_tokens"] ?? 0),
@@ -148,7 +154,7 @@ export function useControllerEvents(
           }
           case "agent_files_listed": {
             const sessionId = String(data["session_id"] ?? "");
-            if (sessionId && currentSessionId === sessionId) {
+            if (sessionId && currentId === sessionId) {
               const files = Array.isArray(data["files"]) ? data["files"] : [];
               setAgentFiles(files);
             }
@@ -164,7 +170,7 @@ export function useControllerEvents(
           case "agent_directory_created":
           case "agent_file_moved": {
             const sessionId = String(data["session_id"] ?? "");
-            if (sessionId && currentSessionId === sessionId) {
+            if (sessionId && currentId === sessionId) {
               refreshAgentFiles(sessionId);
             }
             dispatchCustomEvent("vllm:chat-event", { type: eventType, data });
@@ -173,7 +179,7 @@ export function useControllerEvents(
           case "agent_plan_updated": {
             const sessionId = String(data["session_id"] ?? "");
             const plan = normalizePlan(data["plan"]);
-            if (sessionId && currentSessionId === sessionId) {
+            if (sessionId && currentId === sessionId) {
               setAgentPlan(plan);
             }
             dispatchCustomEvent("vllm:chat-event", { type: eventType, data });
@@ -216,7 +222,6 @@ export function useControllerEvents(
       }
     },
     [
-      currentSessionId,
       refreshAgentFiles,
       setAgentFiles,
       setAgentPlan,

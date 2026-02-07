@@ -12,107 +12,50 @@ import {
 import { Virtuoso } from "react-virtuoso";
 import * as Icons from "../icons";
 import { ChatMessageItem } from "./chat-message-item";
-import { ToolCallGroup } from "./tool-call-group";
 import { PerfProfiler } from "../perf/perf-profiler";
-import { useAppStore } from "@/store";
 import type { AgentFileEntry, Artifact, ChatMessage } from "@/lib/types";
 
 // Check if a message is tool-only (assistant message with only tool parts, no text content)
 function isToolOnlyMessage(message: ChatMessage): boolean {
   if (message.role !== "assistant") return false;
 
-  const textContent = message.parts
-    .filter((part): part is { type: "text"; text: string } => part.type === "text")
-    .map((part) => part.text)
-    .join("")
-    .trim();
+  let hasToolParts = false;
+  for (const part of message.parts) {
+    if (part.type === "text") {
+      const text = (part as { text?: unknown }).text;
+      if (typeof text === "string" && text.trim().length > 0) return false;
+      continue;
+    }
+    if (part.type === "dynamic-tool") {
+      hasToolParts = true;
+      continue;
+    }
+    if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+      hasToolParts = true;
+    }
+  }
 
-  const hasToolParts = message.parts.some(
-    (part) =>
-      part.type === "dynamic-tool" ||
-      (typeof part.type === "string" && part.type.startsWith("tool-")),
-  );
-
-  return hasToolParts && !textContent;
+  return hasToolParts;
 }
 
 type MessageGroup =
   | { type: "single"; message: ChatMessage; messageIndex: number }
-  | {
-      type: "tool-group";
-      messages: ChatMessage[];
-      groupId: string;
-      startIndex: number;
-      endIndex: number;
-    };
+  ;
 
-// Group consecutive tool-only messages
-function groupMessages(messages: ChatMessage[]): MessageGroup[] {
-  const groups: MessageGroup[] = [];
-  let currentToolGroup: ChatMessage[] = [];
-  let currentToolStartIndex = -1;
-
-  for (let index = 0; index < messages.length; index += 1) {
-    const message = messages[index];
-    if (isToolOnlyMessage(message)) {
-      if (currentToolGroup.length === 0) {
-        currentToolStartIndex = index;
-      }
-      currentToolGroup.push(message);
-    } else {
-      // Flush any pending tool group
-      if (currentToolGroup.length > 0) {
-        if (currentToolGroup.length === 1) {
-          // Single tool-only message, render normally
-          groups.push({
-            type: "single",
-            message: currentToolGroup[0],
-            messageIndex: currentToolStartIndex,
-          });
-        } else {
-          // Multiple consecutive tool-only messages, group them
-          groups.push({
-            type: "tool-group",
-            messages: currentToolGroup,
-            groupId: currentToolGroup[0].id,
-            startIndex: currentToolStartIndex,
-            endIndex: index - 1,
-          });
-        }
-        currentToolGroup = [];
-        currentToolStartIndex = -1;
-      }
-      groups.push({ type: "single", message, messageIndex: index });
-    }
+function hasNonEmptyText(message: ChatMessage): boolean {
+  for (const part of message.parts ?? []) {
+    if (!part || typeof part !== "object") continue;
+    const type = (part as { type?: unknown }).type;
+    if (type !== "text") continue;
+    const text = (part as { text?: unknown }).text;
+    if (typeof text === "string" && text.trim().length > 0) return true;
   }
-
-  // Flush any remaining tool group
-  if (currentToolGroup.length > 0) {
-    if (currentToolGroup.length === 1) {
-      groups.push({
-        type: "single",
-        message: currentToolGroup[0],
-        messageIndex: currentToolStartIndex,
-      });
-    } else {
-      groups.push({
-        type: "tool-group",
-        messages: currentToolGroup,
-        groupId: currentToolGroup[0].id,
-        startIndex: currentToolStartIndex,
-        endIndex: messages.length - 1,
-      });
-    }
-  }
-
-  return groups;
+  return false;
 }
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
   isLoading: boolean;
-  thinkingSnippet?: string;
-  error?: string | null;
   artifactsEnabled?: boolean;
   artifactsByMessage?: Map<string, Artifact[]>;
   selectedModel?: string;
@@ -129,7 +72,7 @@ interface ChatMessageListProps {
 
 const VirtuosoList = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={`flex flex-col gap-4 ${className ?? ""}`} {...props} />
+    <div ref={ref} className={`flex flex-col gap-3 md:gap-4 ${className ?? ""}`} {...props} />
   ),
 );
 
@@ -138,8 +81,6 @@ VirtuosoList.displayName = "VirtuosoList";
 export function ChatMessageList({
   messages,
   isLoading,
-  thinkingSnippet,
-  error,
   artifactsEnabled = false,
   artifactsByMessage,
   selectedModel,
@@ -153,57 +94,57 @@ export function ChatMessageList({
   onReprompt,
   onOpenContext,
 }: ChatMessageListProps) {
-  const copiedMessageId = useAppStore((state) => state.copiedMessageId);
-  const setCopiedMessageId = useAppStore((state) => state.setCopiedMessageId);
+  const lastRawMessageId = messages[messages.length - 1]?.id;
 
   // Filter out internal/continuation messages from display
   const visibleMessages = useMemo(
     () =>
       messages.filter((m) => {
         const metadata = m.metadata as { internal?: boolean } | undefined;
-        return !metadata?.internal;
+        if (metadata?.internal) return false;
+
+        // Keep the in-flight assistant message mounted while loading to avoid flicker
+        // (it may start empty and later receive streamed text).
+        if (isLoading && m.role === "assistant" && m.id === lastRawMessageId) return true;
+
+        // Desktop transcript should be "conversation only":
+        // Hide tool-only assistant messages (they live in the Activity panel).
+        if (isToolOnlyMessage(m)) return false;
+
+        // Also hide assistant messages that carry no user-visible text.
+        // (Reasoning/tool telemetry is handled elsewhere; artifacts are still shown.)
+        if (m.role === "assistant") {
+          const hasArtifacts = Boolean(artifactsByMessage?.get(m.id)?.length);
+          if (!hasArtifacts && !hasNonEmptyText(m)) return false;
+        }
+        return true;
       }),
-    [messages],
+    [artifactsByMessage, isLoading, lastRawMessageId, messages],
   );
 
   const deferredVisibleMessages = useDeferredValue(visibleMessages);
   const baseMessages = isLoading ? deferredVisibleMessages : visibleMessages;
 
-  // Group consecutive tool-only messages
-  const baseGroups = useMemo(() => groupMessages(baseMessages), [baseMessages]);
+  const messageGroups = useMemo<MessageGroup[]>(() => {
+    const groups: MessageGroup[] = baseMessages.map((message, idx) => ({
+      type: "single",
+      message,
+      messageIndex: idx,
+    }));
 
-  const messageGroups = useMemo(() => {
-    if (!isLoading) return baseGroups;
+    // While streaming, keep the last assistant message "live" (avoid deferred tearing).
+    if (!isLoading) return groups;
     const liveLast = visibleMessages[visibleMessages.length - 1];
-    if (!liveLast || liveLast.role !== "assistant") return baseGroups;
-    const lastGroup = baseGroups[baseGroups.length - 1];
+    if (!liveLast || liveLast.role !== "assistant") return groups;
+    const lastGroup = groups[groups.length - 1];
     if (lastGroup?.type === "single" && lastGroup.message.id === liveLast.id) {
-      return [...baseGroups.slice(0, -1), { ...lastGroup, message: liveLast }];
+      return [...groups.slice(0, -1), { ...lastGroup, message: liveLast }];
     }
-    return baseGroups;
-  }, [baseGroups, isLoading, visibleMessages]);
-
-  const lastMessage = visibleMessages[visibleMessages.length - 1];
-  const showLoadingIndicator = isLoading && messages[messages.length - 1]?.role === "user";
+    return groups;
+  }, [baseMessages, isLoading, visibleMessages]);
 
   const fileChips = useMemo(() => flattenAgentFiles(agentFiles ?? []), [agentFiles]);
   const hasAgentFiles = fileChips.length > 0 && onOpenAgentFile;
-
-  const handleCopy = useCallback(async (text: string, messageId: string) => {
-    if (!text.trim()) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedMessageId(messageId);
-      window.setTimeout(() => {
-        const current = useAppStore.getState().copiedMessageId;
-        if (current === messageId) {
-          setCopiedMessageId(null);
-        }
-      }, 2000);
-    } catch (err) {
-      console.error("Failed to copy message:", err);
-    }
-  }, [setCopiedMessageId]);
 
   const handleExport = useCallback(
     (payload: {
@@ -237,22 +178,7 @@ export function ChatMessageList({
   );
 
   const renderGroup = useCallback(
-    (index: number, group: MessageGroup) => {
-      if (group.type === "tool-group") {
-        // Check if last message in group is the last visible message and still streaming
-        const lastGroupMsg = group.messages[group.messages.length - 1];
-        const isLastAndStreaming =
-          isLoading && lastGroupMsg.id === lastMessage?.id && lastGroupMsg.role === "assistant";
-        return (
-          <ToolCallGroup
-            key={group.groupId}
-            groupId={group.groupId}
-            messages={group.messages}
-            isStreaming={isLastAndStreaming}
-          />
-        );
-      }
-
+    (_index: number, group: MessageGroup) => {
       const message = group.message;
       return (
         <ChatMessageItem
@@ -267,8 +193,6 @@ export function ChatMessageList({
           artifacts={artifactsByMessage?.get(message.id)}
           selectedModel={selectedModel}
           contextUsageLabel={contextUsageLabel}
-          copied={copiedMessageId === message.id}
-          onCopy={handleCopy}
           onOpenContext={onOpenContext}
           onFork={message.role === "assistant" ? onFork : undefined}
           onReprompt={message.role === "assistant" ? onReprompt : undefined}
@@ -279,12 +203,9 @@ export function ChatMessageList({
     [
       artifactsByMessage,
       artifactsEnabled,
-      copiedMessageId,
       contextUsageLabel,
-      handleCopy,
       handleExport,
       isLoading,
-      lastMessage?.id,
       onFork,
       onOpenContext,
       onReprompt,
@@ -293,70 +214,68 @@ export function ChatMessageList({
     ],
   );
 
-  const Footer = () => (
-    <div className="pt-4">
-      {thinkingSnippet && isLoading && (
-        <div className="flex items-center gap-2 text-[#9a9590] mb-2">
-          <Icons.Brain className="h-3.5 w-3.5 text-violet-300/70" />
-          <span className="text-xs truncate">{thinkingSnippet}</span>
-        </div>
-      )}
-      {hasAgentFiles && onOpenAgentFile && (
-        <div className="mb-4">
-          <div className="text-[10px] uppercase tracking-[0.24em] text-[#6a6560] mb-2">
-            Agent Files
+  const Footer = useCallback(() => {
+    return (
+      <div className="pt-4">
+        {hasAgentFiles && onOpenAgentFile && (
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-[0.24em] text-[#6a6560] mb-2">
+              Agent Files
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {fileChips.map((file) => {
+                const Icon = fileIcon(file.name);
+                const isSelected = selectedAgentFilePath === file.path;
+                return (
+                  <button
+                    key={file.path}
+                    onClick={() => onOpenAgentFile(file.path)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono border transition-colors whitespace-nowrap ${
+                      isSelected
+                        ? "bg-violet-500/20 text-violet-200 border-violet-500/40"
+                        : "bg-white/4 text-[#b6b1aa] border-white/10 hover:text-[#e8e4dd] hover:bg-white/8"
+                    }`}
+                    title={file.path}
+                  >
+                    <Icon className="h-3 w-3" />
+                    <span className="max-w-[160px] truncate">{file.name}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {fileChips.map((file) => {
-              const Icon = fileIcon(file.name);
-              const isSelected = selectedAgentFilePath === file.path;
-              return (
-                <button
-                  key={file.path}
-                  onClick={() => onOpenAgentFile(file.path)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono border transition-colors whitespace-nowrap ${
-                    isSelected
-                      ? "bg-violet-500/20 text-violet-200 border-violet-500/40"
-                      : "bg-white/4 text-[#b6b1aa] border-white/10 hover:text-[#e8e4dd] hover:bg-white/8"
-                  }`}
-                  title={file.path}
-                >
-                  <Icon className="h-3 w-3" />
-                  <span className="max-w-[160px] truncate">{file.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      {showLoadingIndicator && (
-        <div className="flex items-center gap-2 text-[#9a9590]">
-          <Icons.Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Generating response...</span>
-        </div>
-      )}
-      {error && (
-        <div className="mt-3 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-          {error}
-        </div>
-      )}
-      <div ref={messagesEndRef} />
-    </div>
-  );
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+    );
+  }, [
+    fileChips,
+    hasAgentFiles,
+    isLoading,
+    messagesEndRef,
+    onOpenAgentFile,
+    selectedAgentFilePath,
+  ]);
+
+  const virtuosoComponents = useMemo(() => {
+    return { List: VirtuosoList, Footer };
+  }, [Footer]);
+
+  const computeItemKey = useCallback((_index: number, group: MessageGroup) => {
+    return group.message.id;
+  }, []);
 
   const scrollParentElement = scrollParent ?? undefined;
 
   return (
-    <div className="flex flex-col gap-4 px-4 md:px-6 py-4 max-w-4xl mx-auto w-full">
+    <div className="flex flex-col gap-3 md:gap-4 px-4 md:px-6 py-3 md:py-4 max-w-4xl mx-auto w-full">
       <PerfProfiler id="chat-message-list">
         <Virtuoso
           customScrollParent={scrollParentElement}
           data={messageGroups}
           itemContent={renderGroup}
-          components={{ List: VirtuosoList, Footer }}
-          computeItemKey={(index, group) =>
-            group.type === "tool-group" ? group.groupId : group.message.id
-          }
+          components={virtuosoComponents}
+          computeItemKey={computeItemKey}
         />
       </PerfProfiler>
     </div>

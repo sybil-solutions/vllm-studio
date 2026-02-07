@@ -13,15 +13,7 @@ struct UsageView: View {
         if let tokens = model.stats?.tokensPerRequest { UsageTokensCard(tokens: tokens) }
         if let cache = model.stats?.cache { UsageCacheCard(cache: cache) }
         if let rows = model.stats?.byModel, !rows.isEmpty {
-          CardView {
-            VStack(alignment: .leading, spacing: 8) {
-              Text("Top Models").font(AppTheme.titleFont)
-              ForEach(Array(rows.prefix(5))) { row in
-                UsageModelRowView(row: row)
-                if row.id != Array(rows.prefix(5)).last?.id { Divider() }
-              }
-            }
-          }
+          UsageTopModelsCard(rows: rows)
         }
         if let daily = model.stats?.daily, let hourly = model.stats?.hourlyPattern {
           UsageActivityCard(daily: daily, hourly: hourly)

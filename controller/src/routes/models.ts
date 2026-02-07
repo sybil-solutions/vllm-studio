@@ -8,6 +8,13 @@ import type { OpenAIModelInfo, OpenAIModelList, Recipe } from "../types/models";
 import { buildModelInfo, discoverModelDirectories } from "../services/model-browser";
 import { notFound } from "../core/errors";
 
+function isMockInferenceEnabled(): boolean {
+  const raw = process.env["VLLM_STUDIO_MOCK_INFERENCE"];
+  if (!raw) return false;
+  const normalized = String(raw).trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 /**
  * Register model-related routes.
  * @param app - Hono app.
@@ -61,6 +68,24 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
         owned_by: "vllm-studio",
         active: isActive,
         max_model_len: maxModelLength,
+      });
+    }
+
+    // Dev / mock-friendly fallback: when there are no recipes configured, still return a model so the UI
+    // can render a model selector (and avoid "no models" dead-ends on mobile).
+    if (models.length === 0 && (isMockInferenceEnabled() || current)) {
+      const inferredId =
+        process.env["VLLM_STUDIO_MOCK_MODEL_ID"]?.trim() ||
+        current?.served_model_name ||
+        (current?.model_path ? basename(current.model_path) : "") ||
+        "mock";
+      models.push({
+        id: inferredId,
+        object: "model",
+        created: now,
+        owned_by: "vllm-studio",
+        active: true,
+        max_model_len: activeModelData?.data?.[0]?.max_model_len ?? 32768,
       });
     }
 

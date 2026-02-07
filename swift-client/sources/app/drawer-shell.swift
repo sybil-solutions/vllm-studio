@@ -8,15 +8,7 @@ struct DrawerShell: View {
 
   var body: some View {
     ZStack {
-      NavigationStack { contentView }
-        .toolbar {
-          ToolbarItem(placement: .navigationBarLeading) {
-            Button(action: { withAnimation { isOpen.toggle() } }) {
-              Image(systemName: "line.3.horizontal")
-            }
-          }
-        }
-        .background(AppTheme.background)
+      contentView
         .simultaneousGesture(
           DragGesture()
             .onChanged { value in
@@ -42,13 +34,28 @@ struct DrawerShell: View {
   @ViewBuilder
   private var contentView: some View {
     switch selection {
-    case .dashboard: DashboardView()
-    case .chat: ChatListView()
-    case .discover: DiscoverView()
-    case .usage: UsageView()
-    case .configs: ConfigsView()
-    case .logs: LogsView()
+    case .dashboard: navRoot { DashboardView() }
+    case .chat: navRoot { ChatListView() }
+    case .discover: navRoot { DiscoverView() }
+    case .usage: navRoot { UsageView() }
+    case .configs: navRoot { ConfigsView() }
+    case .logs: navRoot { LogsView() }
     }
+  }
+
+  @ViewBuilder
+  private func navRoot(@ViewBuilder _ content: () -> some View) -> some View {
+    NavigationStack {
+      content()
+    }
+    .toolbar {
+      ToolbarItem(placement: .navigationBarLeading) {
+        Button(action: { withAnimation { isOpen.toggle() } }) {
+          Image(systemName: "line.3.horizontal")
+        }
+      }
+    }
+    .background(AppTheme.background)
   }
 }
 

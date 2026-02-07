@@ -1,77 +1,11 @@
 // CRITICAL
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import type { Config } from "../config/env";
 import type { RuntimeBackendInfo, RuntimeCudaInfo, SystemRuntimeInfo } from "../types/models";
 import { getGpuInfo } from "./gpu";
 import { getVllmRuntimeInfo } from "./vllm-runtime";
-
-type CommandResult = {
-  status: number | null;
-  stdout: string;
-  stderr: string;
-};
-
-const DEFAULT_TIMEOUT_MS = 3_000;
-
-const runCommand = (command: string, args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): CommandResult => {
-  try {
-    const result = spawnSync(command, args, { timeout: timeoutMs, env: process.env });
-    return {
-      status: result.status,
-      stdout: result.stdout ? result.stdout.toString("utf-8").trim() : "",
-      stderr: result.stderr ? result.stderr.toString("utf-8").trim() : "",
-    };
-  } catch (error) {
-    return {
-      status: null,
-      stdout: "",
-      stderr: error instanceof Error ? error.message : String(error),
-    };
-  }
-};
-
-const resolveBinary = (binaryName: string): string | null => {
-  if (!binaryName) {
-    return null;
-  }
-  if (binaryName.includes("/")) {
-    const resolved = resolve(binaryName);
-    return existsSync(resolved) ? resolved : null;
-  }
-  const searchPaths: string[] = [];
-  const runtimeOverride = process.env["VLLM_STUDIO_RUNTIME_BIN"];
-  const runtimeBin = runtimeOverride ?? (process.env["SNAP"] ? resolve(process.cwd(), "runtime", "bin") : null);
-  if (runtimeBin && existsSync(runtimeBin)) {
-    searchPaths.push(runtimeBin);
-  }
-  const pathValue = process.env["PATH"];
-  if (pathValue) {
-    for (const entry of pathValue.split(":")) {
-      if (entry) {
-        searchPaths.push(entry);
-      }
-    }
-  }
-  const home = process.env["HOME"];
-  if (home) {
-    searchPaths.push(join(home, ".local", "bin"));
-    searchPaths.push(join(home, "bin"));
-  }
-  const user = process.env["USER"] ?? process.env["LOGNAME"];
-  if (user) {
-    searchPaths.push(join("/home", user, ".local", "bin"));
-    searchPaths.push(join("/home", user, "bin"));
-  }
-  for (const entry of searchPaths) {
-    const candidate = join(entry, binaryName);
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return null;
-};
+import { resolveBinary, runCommand } from "./command/command-utilities";
 
 const extractCudaVersion = (output: string): string | null => {
   const match = output.match(/CUDA Version\s*:\s*([0-9.]+)/i);

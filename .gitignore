@@ -1,3 +1,4 @@
+# CRITICAL
 # Environment files
 .env
 .env.*
@@ -20,18 +21,18 @@ build/
 data/
 *.db
 *.sqlite
-docs
 # Logs
 *.log
 /logs/
 
 # Recipes (user-specific)
-recipes/
+/recipes/
 
 # Node.js
 node_modules/
 .next/
 .turbo/
+bun.lock
 
 # IDE
 .idea/
@@ -49,6 +50,15 @@ Thumbs.db
 # Build artifacts
 *.tar.gz
 *.zip
+.tmp/
+frontend/playwright-report/
+frontend/test-results/
+
+# Local proofs / scratch
+proof-*.png
+proof-*.md
+proof-snapshot-*.md
+work/
 
 # Local config
 .claude/

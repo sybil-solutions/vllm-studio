@@ -9,6 +9,7 @@ import { createMetrics } from "./services/metrics";
 import { createProcessManager } from "./services/process-manager";
 import { DownloadManager } from "./services/download-manager";
 import { createLogger, resolveLogLevel } from "./core/logger";
+import { primaryLogPathFor } from "./core/log-files";
 import { ChatStore } from "./stores/chat-store";
 import { DownloadStore } from "./stores/download-store";
 import { PeakMetricsStore, LifetimeMetricsStore } from "./stores/metrics-store";
@@ -22,7 +23,6 @@ import { ChatRunManager } from "./services/agent-runtime/run-manager";
  */
 export const createAppContext = (): AppContext => {
   const config = createConfig();
-  const logger = createLogger(resolveLogLevel("info"));
 
   mkdirSync(config.data_dir, { recursive: true });
   const dbPath = resolve(config.db_path);
@@ -34,6 +34,10 @@ export const createAppContext = (): AppContext => {
   const lifetimeMetricsStore = new LifetimeMetricsStore(dbPath);
   const mcpStore = new McpStore(dbPath);
   const eventManager = createEventManager();
+  const logger = createLogger(resolveLogLevel("info"), {
+    filePath: primaryLogPathFor(config.data_dir, "controller"),
+    onLine: (line) => eventManager.publishLogLine("controller", line),
+  });
   const launchState = createLaunchState();
   const { registry: metricsRegistry, metrics } = createMetrics();
   const processManager = createProcessManager(config, logger, eventManager);

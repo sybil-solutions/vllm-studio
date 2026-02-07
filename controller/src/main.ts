@@ -1,13 +1,16 @@
+// CRITICAL
 import { execSync } from "node:child_process";
 import { createAppContext } from "./app-context";
+import type { Logger } from "./core/logger";
 import { createApp } from "./http/app";
 import { startMetricsCollector } from "./metrics-collector";
 
 /**
  * Check if nvidia-smi is accessible (important for GPU monitoring).
  * Snap-installed bun has sandbox restrictions that block nvidia-smi.
+ * @param logger - Logger for emitting warnings.
  */
-const checkNvidiaSmi = (): void => {
+const checkNvidiaSmi = (logger: Logger): void => {
   try {
     execSync("nvidia-smi --query-gpu=name --format=csv,noheader,nounits", {
       encoding: "utf-8",
@@ -16,26 +19,25 @@ const checkNvidiaSmi = (): void => {
     });
   } catch {
     const isSnapBun = process.execPath.includes("/snap/");
-    console.warn("╔════════════════════════════════════════════════════════════════╗");
-    console.warn("║  WARNING: nvidia-smi is not accessible                         ║");
-    console.warn("║  GPU monitoring will not work.                                 ║");
+    logger.warn("╔════════════════════════════════════════════════════════════════╗");
+    logger.warn("║  WARNING: nvidia-smi is not accessible                         ║");
+    logger.warn("║  GPU monitoring will not work.                                 ║");
     if (isSnapBun) {
-      console.warn("║                                                                ║");
-      console.warn("║  You are using snap-installed bun which has sandbox            ║");
-      console.warn("║  restrictions. Use native bun instead:                         ║");
-      console.warn("║                                                                ║");
-      console.warn("║    curl -fsSL https://bun.sh/install | bash                    ║");
-      console.warn("║    ~/.bun/bin/bun run controller/src/main.ts                   ║");
-      console.warn("║                                                                ║");
-      console.warn("║  Or use the start script: ./start.sh                           ║");
+      logger.warn("║                                                                ║");
+      logger.warn("║  You are using snap-installed bun which has sandbox            ║");
+      logger.warn("║  restrictions. Use native bun instead:                         ║");
+      logger.warn("║                                                                ║");
+      logger.warn("║    curl -fsSL https://bun.sh/install | bash                    ║");
+      logger.warn("║    ~/.bun/bin/bun run controller/src/main.ts                   ║");
+      logger.warn("║                                                                ║");
+      logger.warn("║  Or use the start script: ./start.sh                           ║");
     }
-    console.warn("╚════════════════════════════════════════════════════════════════╝");
+    logger.warn("╚════════════════════════════════════════════════════════════════╝");
   }
 };
 
-checkNvidiaSmi();
-
 const context = createAppContext();
+checkNvidiaSmi(context.logger);
 const app = createApp(context);
 const stopMetrics = startMetricsCollector(context);
 

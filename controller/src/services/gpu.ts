@@ -1,6 +1,19 @@
 // CRITICAL
-import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { GpuInfo } from "../types/models";
+import { resolveBinary, runCommand } from "./command/command-utilities";
+
+const resolveNvidiaSmiBinary = (): string | null => {
+  const configured = process.env["NVIDIA_SMI_PATH"] || "nvidia-smi";
+  const resolved = resolveBinary(configured);
+  if (resolved) return resolved;
+  if (configured.includes("/")) {
+    const abs = resolve(configured);
+    return existsSync(abs) ? abs : null;
+  }
+  return null;
+};
 
 /**
  * Query GPU info from nvidia-smi.
@@ -19,16 +32,17 @@ export const getGpuInfo = (): GpuInfo[] => {
   ].join(",");
 
   try {
-    // Use full path to nvidia-smi with explicit env to ensure it can find CUDA libs
-    const nvidiaSmi = process.env["NVIDIA_SMI_PATH"] || "/usr/bin/nvidia-smi";
-    const output = execSync(
-      `${nvidiaSmi} --query-gpu=${query} --format=csv,noheader,nounits`,
-      {
-        encoding: "utf-8",
-        timeout: 5000,
-        env: { ...process.env, PATH: `/usr/bin:/usr/local/bin:${process.env["PATH"] || ""}` },
-      }
-    ).trim();
+    const nvidiaSmi = resolveNvidiaSmiBinary();
+    if (!nvidiaSmi) return [];
+
+    const result = runCommand(
+      nvidiaSmi,
+      [`--query-gpu=${query}`, "--format=csv,noheader,nounits"],
+      5_000,
+    );
+    if (result.status !== 0 || !result.stdout) return [];
+
+    const output = result.stdout.trim();
 
     if (!output) {
       return [];

@@ -18,10 +18,10 @@ import {
   Plus,
   ScrollText,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAppStore } from "@/store";
-import { useControllerEvents } from "@/hooks/use-controller-events";
+import { useSidebarStatus } from "@/hooks/use-sidebar-status";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -37,20 +37,59 @@ interface AppSidebarProps {
   children: React.ReactNode;
 }
 
+type SidebarStatusView = {
+  online: boolean;
+  inferenceOnline: boolean;
+  model: string | null;
+  activityLine: string;
+};
+
+const SidebarStatus = memo(function SidebarStatus(props: { collapsed: boolean; isMobile: boolean }) {
+  const { collapsed, isMobile } = props;
+  const status = useSidebarStatus();
+  return (
+    <div className={`flex items-center gap-2 ${collapsed && !isMobile ? "" : ""}`}>
+      <div
+        className={`relative flex items-center justify-center ${
+          status.inferenceOnline ? "text-emerald-400" : status.online ? "text-amber-400" : "text-red-400"
+        }`}
+      >
+        <div
+          className={`w-2 h-2 rounded-full ${
+            status.inferenceOnline ? "bg-emerald-400" : status.online ? "bg-amber-400" : "bg-red-400"
+          } ${status.inferenceOnline ? "animate-pulse" : ""}`}
+        />
+        {status.inferenceOnline && (
+          <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-30" />
+        )}
+      </div>
+      {(!collapsed || isMobile) && (
+        <span className="text-xs text-[#a0a0a0] truncate font-medium">{status.activityLine}</span>
+      )}
+    </div>
+  );
+});
+
+const MobileHeaderStatus = memo(function MobileHeaderStatus() {
+  const status = useSidebarStatus();
+  const text = status.activityLine;
+  return (
+    <>
+      <div
+        className={`w-1.5 h-1.5 rounded-full ${
+          status.inferenceOnline ? "bg-(--success)" : status.online ? "bg-yellow-500" : "bg-(--error)"
+        }`}
+      />
+      <span className="text-[11px] text-[#9a9590] truncate">{text}</span>
+    </>
+  );
+});
+
 export function AppSidebar({ children }: AppSidebarProps) {
-  useControllerEvents();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [status, setStatus] = useState<{
-    online: boolean;
-    inferenceOnline: boolean;
-    model?: string;
-  }>({
-    online: false,
-    inferenceOnline: false,
-  });
   const [chatHistoryOpen, setChatHistoryOpen] = useState(true);
   const loadingSessionsRef = useRef(false);
   const router = useRouter();
@@ -107,72 +146,6 @@ export function AppSidebar({ children }: AppSidebarProps) {
   };
 
 
-
-  // Check status
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        // Use both health and status endpoints for accurate info
-        const [health, statusData] = await Promise.all([
-          api.getHealth(),
-          api.getStatus(),
-        ]);
-        
-        // Determine if inference is running from status endpoint (more reliable)
-        const isRunning = statusData.running || !!statusData.process;
-        const modelName = statusData.process?.served_model_name 
-          || statusData.process?.model_path?.split("/").pop()
-          || health.running_model?.split("/").pop();
-        
-        setStatus({
-          online: health.status === "ok",
-          inferenceOnline: isRunning || health.backend_reachable,
-          model: modelName,
-        });
-      } catch {
-        setStatus({ online: false, inferenceOnline: false });
-      }
-    };
-    checkStatus();
-    const interval = setInterval(checkStatus, 5000);
-
-    // Also check when page becomes visible (mobile PWA support)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        checkStatus();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const custom = event as CustomEvent<{ type?: string; data?: Record<string, unknown> }>;
-      if (custom.detail?.type !== "status") return;
-      const payload = custom.detail?.data ?? {};
-      const process = payload["process"] as Record<string, unknown> | null | undefined;
-      const running = Boolean(payload["running"] ?? process);
-      const modelName =
-        (process?.["served_model_name"] as string | undefined) ||
-        (typeof process?.["model_path"] === "string"
-          ? String(process?.["model_path"]).split("/").pop()
-          : undefined);
-      setStatus((prev) => ({
-        online: true,
-        inferenceOnline: running,
-        model: modelName ?? prev.model,
-      }));
-    };
-    window.addEventListener("vllm:controller-event", handler as EventListener);
-    return () => {
-      window.removeEventListener("vllm:controller-event", handler as EventListener);
-    };
-  }, []);
 
   // Load chat sessions once when on chat page
   useEffect(() => {
@@ -329,23 +302,7 @@ export function AppSidebar({ children }: AppSidebarProps) {
         <div
           className={`px-3 py-3 border-t border-white/[0.06] ${collapsed && !isMobile ? "flex justify-center" : ""}`}
         >
-          <div className={`flex items-center gap-2 ${collapsed && !isMobile ? "" : ""}`}>
-            <div className={`relative flex items-center justify-center ${status.inferenceOnline ? 'text-emerald-400' : status.online ? 'text-amber-400' : 'text-red-400'}`}>
-              <div className={`w-2 h-2 rounded-full ${status.inferenceOnline ? 'bg-emerald-400' : status.online ? 'bg-amber-400' : 'bg-red-400'} ${status.inferenceOnline ? 'animate-pulse' : ''}`} />
-              {status.inferenceOnline && (
-                <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-30" />
-              )}
-            </div>
-            {(!collapsed || isMobile) && (
-              <span className="text-xs text-[#a0a0a0] truncate font-medium">
-                {status.inferenceOnline
-                  ? status.model || "Ready"
-                  : status.online
-                    ? "No model"
-                    : "Offline"}
-              </span>
-            )}
-          </div>
+          <SidebarStatus collapsed={collapsed} isMobile={isMobile} />
         </div>
 
         {/* Collapse toggle - desktop only */}
@@ -381,22 +338,7 @@ export function AppSidebar({ children }: AppSidebarProps) {
               {navItems.find((item) => item.href === pathname)?.label || "vLLM Studio"}
             </span>
             <div className="ml-auto flex items-center gap-1.5">
-              <div
-                className={`w-1.5 h-1.5 rounded-full ${
-                  status.inferenceOnline
-                    ? "bg-(--success)"
-                    : status.online
-                      ? "bg-yellow-500"
-                      : "bg-(--error)"
-                }`}
-              />
-              <span className="text-[11px] text-[#9a9590]">
-                {status.inferenceOnline
-                  ? status.model?.slice(0, 12) || "Ready"
-                  : status.online
-                    ? "No model"
-                    : "Offline"}
-              </span>
+              <MobileHeaderStatus />
             </div>
           </div>
         )}

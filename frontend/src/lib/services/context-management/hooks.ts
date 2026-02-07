@@ -8,6 +8,7 @@
 import { useContext, useCallback } from "react";
 import { ContextManagementContext } from "./context";
 import { getContextManagementService } from "./factory";
+import { DEFAULT_CONTEXT_CONFIG } from "./types";
 import type {
   IContextManagementService,
   ContextConfig,
@@ -36,13 +37,7 @@ export function useContextManagementConfig(): ContextConfig {
   const context = useContext(ContextManagementContext);
 
   if (!context) {
-    return {
-      compactionThreshold: 0.8,
-      targetAfterCompaction: 0.5,
-      preserveRecentMessages: 4,
-      autoCompact: true,
-      checkInterval: 5000,
-    };
+    return DEFAULT_CONTEXT_CONFIG;
   }
 
   return context.config;

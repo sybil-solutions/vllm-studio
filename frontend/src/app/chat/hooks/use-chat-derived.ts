@@ -6,6 +6,15 @@ import type { ActivityGroup, ActivityItem, ThinkingState } from "../types";
 import type { ToolResult, ChatMessage, ChatMessagePart } from "@/lib/types";
 import { thinkingParser } from "@/lib/services/message-parsing";
 
+const TOOL_PENDING_STATES = new Set([
+  "input-streaming",
+  "input-available",
+  "approval-requested",
+  "approval-responded",
+]);
+
+const TOOL_ERROR_STATES = new Set(["output-error", "output-denied"]);
+
 interface UseChatDerivedOptions {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -24,28 +33,40 @@ export function useChatDerived({
   // Extract thinking/reasoning content from a single assistant message
   const extractThinking = useCallback((message: ChatMessage) => {
     // 1. Extract reasoning parts
-    const reasoningParts = message.parts.filter(
-      (part): part is { type: "reasoning"; text: string } => part.type === "reasoning",
-    );
-    const reasoningFromParts = reasoningParts
-      .map((p) => p.text)
-      .filter(Boolean)
-      .join("\n");
+    const reasoningLines: string[] = [];
+    let textContent = "";
 
-    // 2. Extract <think>/<thinking> tags from text content
-    const textContent = message.parts
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("");
-    const parsed = thinkingParser.parse(textContent);
-    const thinkTagContent = parsed.thinkingContent || "";
+    for (const part of message.parts) {
+      if (part.type === "reasoning") {
+        const text = (part as { text?: unknown }).text;
+        if (typeof text === "string" && text) reasoningLines.push(text);
+        continue;
+      }
+      if (part.type === "text") {
+        const text = (part as { text?: unknown }).text;
+        if (typeof text === "string" && text) textContent += text;
+      }
+    }
+
+    const reasoningFromParts = reasoningLines.join("\n");
+
+    // 2. Extract <think>/<thinking> tags from text content (fast-path when no tags exist).
+    const lower = textContent.toLowerCase();
+    const hasThinkTags =
+      lower.includes("<think") ||
+      lower.includes("</think") ||
+      lower.includes("<thinking") ||
+      lower.includes("</thinking");
+
+    const parsed = hasThinkTags ? thinkingParser.parse(textContent) : null;
+    const thinkTagContent = parsed?.thinkingContent || "";
 
     // 3. Combine both sources
     const combined = [reasoningFromParts, thinkTagContent].filter(Boolean).join("\n\n");
 
     return {
       content: combined,
-      isComplete: parsed.isThinkingComplete,
+      isComplete: parsed?.isThinkingComplete ?? true,
     };
   }, []);
 
@@ -96,8 +117,14 @@ export function useChatDerived({
       }
     }
 
-    const buildItemsForMessage = (msg: ChatMessage, isLatestMessage: boolean): ActivityItem[] => {
+    const buildItemsForMessage = (
+      msg: ChatMessage,
+      isLatestMessage: boolean,
+      turnNumber: number,
+      messageOrdinal: number,
+    ): ActivityItem[] => {
       const items: ActivityItem[] = [];
+      const tsBase = turnNumber * 1_000_000 + messageOrdinal * 1_000;
 
       // Process parts in chronological order to interleave thinking and tool calls
       msg.parts.forEach((part, partIndex) => {
@@ -106,7 +133,7 @@ export function useChatDerived({
           items.push({
             id: `activity-${msg.id}-thinking-${partIndex}`,
             type: "thinking",
-            timestamp: Date.now() - (msg.parts.length - partIndex) * 10,
+            timestamp: tsBase + partIndex,
             content: part.text,
             isActive: isLatestMessage && isLoading && partIndex === msg.parts.length - 1,
           });
@@ -135,30 +162,22 @@ export function useChatDerived({
 
         // Determine state
         let itemState: "pending" | "running" | "complete" | "error" = "pending";
-        const pendingStates = new Set([
-          "input-streaming",
-          "input-available",
-          "approval-requested",
-          "approval-responded",
-        ]);
-        const errorStates = new Set(["output-error", "output-denied"]);
-
         if (isExecuting) {
           itemState = "running";
         } else if (result) {
           itemState = result.isError ? "error" : "complete";
-        } else if (partState && errorStates.has(partState)) {
+        } else if (partState && TOOL_ERROR_STATES.has(partState)) {
           itemState = "error";
         } else if (partState === "output-available" || partState === "result" || partHasOutput) {
           itemState = "complete";
-        } else if (partState && pendingStates.has(partState)) {
+        } else if (partState && TOOL_PENDING_STATES.has(partState)) {
           itemState = "running";
         }
 
         items.push({
           id: `activity-${msg.id}-${toolCallId}`,
           type: "tool-call",
-          timestamp: Date.now() - (msg.parts.length - partIndex) * 10,
+          timestamp: tsBase + partIndex,
           toolName,
           toolCallId,
           state: itemState,
@@ -173,7 +192,7 @@ export function useChatDerived({
         items.unshift({
           id: `activity-${msg.id}-thinking-text`,
           type: "thinking",
-          timestamp: Date.now() - 1000,
+          timestamp: tsBase - 1,
           content: textThinking.content,
           isActive: isLatestMessage && isLoading,
         });
@@ -188,6 +207,7 @@ export function useChatDerived({
     let currentTurnNumber = 0;
     currentRunKey = null;
 
+    let assistantOrdinal = 0;
     for (const msg of messages) {
       if (msg.role === "user") {
         currentRunKey = getRunKey(msg) ?? msg.id;
@@ -199,6 +219,7 @@ export function useChatDerived({
       }
       if (msg.role !== "assistant") continue;
 
+      assistantOrdinal += 1;
       const key = getRunKey(msg) ?? currentRunKey ?? msg.id;
       if (!runKeyToTurn.has(key)) {
         currentTurnNumber += 1;
@@ -206,7 +227,7 @@ export function useChatDerived({
       }
       const turnNumber = runKeyToTurn.get(key) ?? currentTurnNumber;
       const isLatestMessage = msg.id === lastAssistantId;
-      const items = buildItemsForMessage(msg, isLatestMessage);
+      const items = buildItemsForMessage(msg, isLatestMessage, turnNumber, assistantOrdinal);
       if (items.length === 0) continue;
 
       let group = groupsByKey.get(key);

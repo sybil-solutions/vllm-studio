@@ -8,6 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const MarkdownIt = require("markdown-it");
 import type { IMarkdownParser, MarkdownSegment } from "../types";
+import { LRUCache, hashString } from "../../types";
 
 // Pattern for code fences
 const CODE_FENCE_PATTERN = /```([^\s`]+)?\r?\n([\s\S]*?)```/g;
@@ -59,6 +60,7 @@ markdownIt.renderer.rules.link_open = (
 
 export class MarkdownParser implements IMarkdownParser {
   readonly name = "markdown" as const;
+  private readonly htmlCache = new LRUCache<string, string>(512);
 
   parse(input: string): MarkdownSegment[] {
     if (!input) return [];
@@ -111,7 +113,12 @@ export class MarkdownParser implements IMarkdownParser {
 
   renderToHtml(markdown: string): string {
     if (!markdown) return "";
-    return markdownIt.render(markdown);
+    const key = hashString(markdown);
+    const cached = this.htmlCache.get(key);
+    if (cached) return cached;
+    const html = markdownIt.render(markdown);
+    this.htmlCache.set(key, html);
+    return html;
   }
 
   /**

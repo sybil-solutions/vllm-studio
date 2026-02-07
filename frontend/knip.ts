@@ -13,31 +13,10 @@ const config = {
     '**/*.test.tsx',
     // Barrel/index files export for external use
     '**/index.ts',
-    // Components - all may be used dynamically
-    'src/components/**',
-    // Libraries - exported for various uses
-    'src/lib/**',
-    // Store exports
-    'src/store/**',
   ],
-  ignoreDependencies: [
-    // Ignore all @types packages
-    '@types/*',
-    // Next.js config
-    'eslint-config-next',
-    'tailwindcss',
-    // Markdown processing
-    // PostCSS
-    'postcss',
-    '@tailwindcss/postcss',
-    // Dev tooling
-    'husky',
-    'jscpd',
-    'lint-staged',
-    'depcheck',
-    'prettier',
-  ],
-  ignoreBinaries: ['husky', 'knip', 'jscpd'],
+  // Some tooling is used implicitly (CSS/postcss pipeline, git hooks), which knip can't reliably
+  // infer from source imports. Keep this list small and intentional.
+  ignoreDependencies: ['tailwindcss', 'postcss', 'lint-staged'],
   ignoreExportsUsedInFile: true,
 };
 

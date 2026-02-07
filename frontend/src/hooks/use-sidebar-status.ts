@@ -1,0 +1,184 @@
+// CRITICAL
+"use client";
+
+import { useEffect, useSyncExternalStore } from "react";
+import api from "@/lib/api";
+
+type LaunchStage = "preempting" | "evicting" | "launching" | "waiting" | "ready" | "cancelled" | "error";
+
+export type SidebarStatusSnapshot = {
+  online: boolean;
+  inferenceOnline: boolean;
+  model: string | null;
+  activityLine: string;
+};
+
+type InternalState = SidebarStatusSnapshot & {
+  launchActive: boolean;
+  launchMessage: string | null;
+  lastUpdateAt: number;
+};
+
+const initialState: InternalState = {
+  online: false,
+  inferenceOnline: false,
+  model: null,
+  activityLine: "Offline",
+  launchActive: false,
+  launchMessage: null,
+  lastUpdateAt: 0,
+};
+
+let state: InternalState = initialState;
+const listeners = new Set<() => void>();
+let started = false;
+let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+function emitIfChanged(next: InternalState) {
+  if (
+    next.online === state.online &&
+    next.inferenceOnline === state.inferenceOnline &&
+    next.model === state.model &&
+    next.activityLine === state.activityLine &&
+    next.launchActive === state.launchActive &&
+    next.launchMessage === state.launchMessage
+  ) {
+    state = { ...state, lastUpdateAt: next.lastUpdateAt };
+    return;
+  }
+  state = next;
+  for (const l of listeners) l();
+}
+
+function recomputeActivityLine(s: InternalState): string {
+  if (s.launchActive && s.launchMessage) return s.launchMessage;
+  if (s.inferenceOnline) return s.model || "Ready";
+  if (s.online) return "No model";
+  return "Offline";
+}
+
+function computeModelName(process: unknown): string | null {
+  if (!process || typeof process !== "object") return null;
+  const p = process as Record<string, unknown>;
+  const served = p["served_model_name"];
+  if (typeof served === "string" && served.trim()) return served.trim();
+  const modelPath = p["model_path"];
+  if (typeof modelPath === "string" && modelPath.trim()) return modelPath.split("/").pop() ?? modelPath;
+  return null;
+}
+
+function updateFromStatusPayload(payload: Record<string, unknown>) {
+  const process = payload["process"] ?? null;
+  const running = Boolean(payload["running"] ?? process);
+  const model = computeModelName(process);
+
+  const nextBase: InternalState = {
+    ...state,
+    online: true,
+    inferenceOnline: running,
+    model: model ?? state.model,
+    lastUpdateAt: Date.now(),
+  };
+  const next: InternalState = { ...nextBase, activityLine: recomputeActivityLine(nextBase) };
+  emitIfChanged(next);
+}
+
+function updateFromLaunchProgressPayload(payload: Record<string, unknown>) {
+  const stage = payload["stage"] as LaunchStage | undefined;
+  const message = typeof payload["message"] === "string" ? payload["message"] : null;
+  const active = stage === "preempting" || stage === "evicting" || stage === "launching" || stage === "waiting";
+
+  const nextBase: InternalState = {
+    ...state,
+    online: true,
+    launchActive: active,
+    launchMessage: active ? (message ?? state.launchMessage) : null,
+    lastUpdateAt: Date.now(),
+  };
+  const next: InternalState = { ...nextBase, activityLine: recomputeActivityLine(nextBase) };
+  emitIfChanged(next);
+}
+
+async function fetchNow() {
+  try {
+    const [health, status] = await Promise.all([api.getHealth().catch(() => null), api.getStatus()]);
+    const inferenceOnline = Boolean(status.running || status.process);
+    const model =
+      computeModelName(status.process) ??
+      (typeof health?.running_model === "string" ? health.running_model.split("/").pop() ?? health.running_model : null);
+
+    const nextBase: InternalState = {
+      ...state,
+      online: Boolean(health ? health.status === "ok" : true),
+      inferenceOnline,
+      model: model ?? state.model,
+      lastUpdateAt: Date.now(),
+    };
+    const next: InternalState = { ...nextBase, activityLine: recomputeActivityLine(nextBase) };
+    emitIfChanged(next);
+  } catch {
+    const nextBase: InternalState = {
+      ...state,
+      online: false,
+      inferenceOnline: false,
+      model: null,
+      launchActive: false,
+      launchMessage: null,
+      lastUpdateAt: Date.now(),
+    };
+    const next: InternalState = { ...nextBase, activityLine: recomputeActivityLine(nextBase) };
+    emitIfChanged(next);
+  }
+}
+
+function start() {
+  if (started) return;
+  started = true;
+  if (typeof window === "undefined") return;
+
+  const onControllerEvent = (event: Event) => {
+    const custom = event as CustomEvent<{ type?: string; data?: Record<string, unknown> }>;
+    const type = custom.detail?.type;
+    const payload = custom.detail?.data ?? {};
+    if (type === "status") updateFromStatusPayload(payload);
+    if (type === "launch_progress") updateFromLaunchProgressPayload(payload);
+  };
+
+  window.addEventListener("vllm:controller-event", onControllerEvent as EventListener);
+
+  // Polling fallback for initial state and missed events (low frequency).
+  void fetchNow();
+  pollInterval = setInterval(fetchNow, 10_000);
+
+  const onVisibility = () => {
+    if (document.visibilityState === "visible") {
+      void fetchNow();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+
+  const onPageShow = (e: PageTransitionEvent) => {
+    if (e.persisted) void fetchNow();
+  };
+  window.addEventListener("pageshow", onPageShow);
+
+  // Note: we intentionally don't tear these down; the app has a single root lifetime.
+}
+
+export function useSidebarStatus(): SidebarStatusSnapshot {
+  useEffect(() => {
+    start();
+  }, []);
+
+  const snap = useSyncExternalStore(
+    (onStoreChange) => {
+      listeners.add(onStoreChange);
+      return () => listeners.delete(onStoreChange);
+    },
+    () => state,
+    () => initialState,
+  );
+
+  return snap;
+}
+

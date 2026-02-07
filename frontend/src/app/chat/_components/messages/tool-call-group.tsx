@@ -1,7 +1,7 @@
 // CRITICAL
 "use client";
 
-import { memo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { useAppStore } from "@/store";
 import * as Icons from "../icons";
 import type { ChatMessage, ChatMessageMetadata } from "@/lib/types";
@@ -18,6 +18,13 @@ interface ToolPart {
   state?: string;
   toolName?: string;
 }
+
+const TOOL_PENDING_STATES = new Set([
+  "input-streaming",
+  "input-available",
+  "approval-requested",
+  "approval-responded",
+]);
 
 function extractToolParts(message: ChatMessage): ToolPart[] {
   return message.parts
@@ -44,41 +51,47 @@ function ToolCallGroupBase({ groupId, messages, isStreaming }: ToolCallGroupProp
   const setExpanded = useAppStore((state) => state.setToolCallGroupExpanded);
 
   // Aggregate tool calls from all messages
-  const allToolParts: Array<{ messageId: string; toolPart: ToolPart; model?: string }> = [];
-  for (const msg of messages) {
-    const metadata = msg.metadata as ChatMessageMetadata | undefined;
-    const model = metadata?.model;
-    const parts = extractToolParts(msg);
-    for (const part of parts) {
-      allToolParts.push({ messageId: msg.id, toolPart: part, model });
+  const { totalCalls, hasError, isRunning, toolNamesPreview, moreCount, allToolParts } = useMemo(() => {
+    const allToolParts: Array<{ messageId: string; toolPart: ToolPart; model?: string }> = [];
+    const toolNames = new Set<string>();
+    let hasError = false;
+    let hasPendingCalls = false;
+
+    for (const msg of messages) {
+      const metadata = msg.metadata as ChatMessageMetadata | undefined;
+      const model = metadata?.model;
+      const parts = extractToolParts(msg);
+      for (const part of parts) {
+        allToolParts.push({ messageId: msg.id, toolPart: part, model });
+        if (part.toolName) toolNames.add(part.toolName);
+
+        if (
+          part.state === "output-error" ||
+          part.state === "error" ||
+          part.state === "output-denied"
+        ) {
+          hasError = true;
+        }
+        if (part.state && TOOL_PENDING_STATES.has(part.state)) {
+          hasPendingCalls = true;
+        }
+      }
     }
-  }
 
-  const totalCalls = allToolParts.length;
-  const hasError = allToolParts.some(
-    (t) =>
-      t.toolPart.state === "output-error" ||
-      t.toolPart.state === "error" ||
-      t.toolPart.state === "output-denied",
-  );
+    const totalCalls = allToolParts.length;
+    const orderedToolNames = [...toolNames];
+    const toolNamesPreview = orderedToolNames.slice(0, 3).join(", ");
+    const moreCount = orderedToolNames.length - 3;
+    const isRunning = Boolean(isStreaming) && hasPendingCalls;
 
-  const pendingStates = new Set([
-    "input-streaming",
-    "input-available",
-    "approval-requested",
-    "approval-responded",
-  ]);
-  const hasPendingCalls = allToolParts.some(
-    (t) => t.toolPart.state && pendingStates.has(t.toolPart.state),
-  );
-  const isRunning = Boolean(isStreaming) && hasPendingCalls;
-
-  // Get unique tool names for collapsed summary
-  const toolNames = [...new Set(allToolParts.map((t) => t.toolPart.toolName).filter(Boolean))];
-  const toolNamesPreview = toolNames.slice(0, 3).join(", ");
-  const moreCount = toolNames.length - 3;
+    return { totalCalls, hasError, isRunning, toolNamesPreview, moreCount, allToolParts };
+  }, [isStreaming, messages]);
 
   const label = hasError ? "error" : isRunning ? "running" : "done";
+
+  const handleToggleExpanded = useCallback(() => {
+    setExpanded(groupId, !expanded);
+  }, [expanded, groupId, setExpanded]);
 
   if (totalCalls === 0) return null;
 
@@ -86,7 +99,7 @@ function ToolCallGroupBase({ groupId, messages, isStreaming }: ToolCallGroupProp
     <div className="group">
       {/* Collapsed view */}
       <button
-        onClick={() => setExpanded(groupId, !expanded)}
+        onClick={handleToggleExpanded}
         className="flex items-center gap-2 text-xs text-[#6a6560] hover:text-[#9a9590] transition-colors w-full text-left py-1"
       >
         {isRunning ? (
@@ -122,18 +135,18 @@ function ToolCallGroupBase({ groupId, messages, isStreaming }: ToolCallGroupProp
       </button>
 
       {/* Expanded view */}
-      {expanded && (
-        <div className="mt-2 space-y-1 pl-5 border-l border-(--border) ml-1.5">
-          {allToolParts.map(({ toolPart }, idx) => {
-            const isComplete =
-              toolPart.state === "output-available" ||
-              toolPart.state === "result" ||
-              !toolPart.state;
-            const isPending = toolPart.state && pendingStates.has(toolPart.state);
-            const isError =
-              toolPart.state === "output-error" ||
-              toolPart.state === "error" ||
-              toolPart.state === "output-denied";
+        {expanded && (
+          <div className="mt-2 space-y-1 pl-5 border-l border-(--border) ml-1.5">
+            {allToolParts.map(({ toolPart }, idx) => {
+              const isComplete =
+                toolPart.state === "output-available" ||
+                toolPart.state === "result" ||
+                !toolPart.state;
+              const isPending = toolPart.state && TOOL_PENDING_STATES.has(toolPart.state);
+              const isError =
+                toolPart.state === "output-error" ||
+                toolPart.state === "error" ||
+                toolPart.state === "output-denied";
 
             return (
               <div

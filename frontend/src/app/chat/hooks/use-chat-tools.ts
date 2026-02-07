@@ -2,26 +2,42 @@
 "use client";
 
 import { useCallback, useRef, useEffect } from "react";
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import { safeJsonStringify } from "@/lib/safe-json";
 import type { MCPTool, MCPServer, ToolResult } from "@/lib/types";
 import { useAppStore } from "@/store";
+import { useShallow } from "zustand/react/shallow";
 
 interface UseChatToolsOptions {
   mcpEnabled: boolean;
 }
 
 export function useChatTools({ mcpEnabled }: UseChatToolsOptions) {
-  const mcpTools = useAppStore((state) => state.mcpTools);
-  const mcpServers = useAppStore((state) => state.mcpServers);
-  const executingTools = useAppStore((state) => state.executingTools);
-  const toolResultsMap = useAppStore((state) => state.toolResultsMap);
-  const setMcpTools = useAppStore((state) => state.setMcpTools);
-  const setMcpServers = useAppStore((state) => state.setMcpServers);
-  const setExecutingTools = useAppStore((state) => state.setExecutingTools);
-  const updateExecutingTools = useAppStore((state) => state.updateExecutingTools);
-  const setToolResultsMap = useAppStore((state) => state.setToolResultsMap);
-  const updateToolResultsMap = useAppStore((state) => state.updateToolResultsMap);
+  const {
+    mcpTools,
+    mcpServers,
+    executingTools,
+    toolResultsMap,
+    setMcpTools,
+    setMcpServers,
+    setExecutingTools,
+    updateExecutingTools,
+    setToolResultsMap,
+    updateToolResultsMap,
+  } = useAppStore(
+    useShallow((state) => ({
+      mcpTools: state.mcpTools,
+      mcpServers: state.mcpServers,
+      executingTools: state.executingTools,
+      toolResultsMap: state.toolResultsMap,
+      setMcpTools: state.setMcpTools,
+      setMcpServers: state.setMcpServers,
+      setExecutingTools: state.setExecutingTools,
+      updateExecutingTools: state.updateExecutingTools,
+      setToolResultsMap: state.setToolResultsMap,
+      updateToolResultsMap: state.updateToolResultsMap,
+    })),
+  );
 
   // Use ref to avoid re-creating loadMCPTools when mcpServers changes
   const mcpServersRef = useRef(mcpServers);

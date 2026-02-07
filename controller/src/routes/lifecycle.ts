@@ -1,11 +1,10 @@
 // CRITICAL
 import type { Hono } from "hono";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { AppContext } from "../types/context";
 import type { LaunchResult, Recipe } from "../types/models";
 import { AsyncLock, delay } from "../core/async";
 import { badRequest, notFound } from "../core/errors";
+import { primaryLogPathFor, readFileTailBytes, sanitizeLogSessionId } from "../core/log-files";
 import { parseRecipe } from "../stores/recipe-serializer";
 import { Event } from "../services/event-manager";
 
@@ -39,15 +38,8 @@ export const registerLifecycleRoutes = (app: Hono, context: AppContext): void =>
    * @returns Log tail string.
    */
   const readLogTail = (path: string, limit: number): string => {
-    if (!existsSync(path)) {
-      return "";
-    }
-    try {
-      const content = readFileSync(path, "utf-8");
-      return content.slice(Math.max(0, content.length - limit));
-    } catch {
-      return "";
-    }
+    // Byte-based tail to avoid reading large logs into memory.
+    return readFileTailBytes(path, limit);
   };
 
   const serializeRecipeDetail = (recipe: Recipe): Record<string, unknown> => {
@@ -198,7 +190,11 @@ export const registerLifecycleRoutes = (app: Hono, context: AppContext): void =>
         "EngineCore failed to start",
       ];
 
-      const logFilePath = join("/tmp", `vllm_${recipeId}.log`);
+      const safeRecipeId = sanitizeLogSessionId(recipeId);
+      if (!safeRecipeId) {
+        throw badRequest("Invalid recipe id");
+      }
+      const logFilePath = primaryLogPathFor(context.config.data_dir, safeRecipeId);
 
       while (Date.now() - start < timeout) {
         if (cancelController.signal.aborted) {

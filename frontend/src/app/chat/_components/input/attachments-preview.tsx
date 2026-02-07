@@ -1,6 +1,7 @@
 // CRITICAL
 "use client";
 
+import { memo } from "react";
 import Image from "next/image";
 import { Mic, FileText, X } from "lucide-react";
 import type { Attachment } from "../../types";
@@ -11,7 +12,7 @@ interface AttachmentsPreviewProps {
   formatFileSize: (bytes: number) => string;
 }
 
-export function AttachmentsPreview({
+export const AttachmentsPreview = memo(function AttachmentsPreview({
   attachments,
   onRemove,
   formatFileSize,
@@ -69,4 +70,4 @@ export function AttachmentsPreview({
       ))}
     </div>
   );
-}
+});

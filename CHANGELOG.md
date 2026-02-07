@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.11.0 (2026-02-07)
+
+### Highlights
+- **Frontend**: New Recipes, Usage, and Logs pages; improved Configs connection flow; Discover UI improvements; better chat UX (artifacts viewer, agent files panel + previews + versions, mobile results drawer, toast stack).
+- **Controller**: Agent runtime refactor (SSE streaming + persistence + system prompt builder + modular tool registries), improved runtime/process utilities, download helpers, usage backends (SQLite + Postgres), and log retention utilities.
+- **Swift client**: Feature re-org for Chat (detail/list/agent/parsing), plus new/expanded Logs, Recipes, and Usage views.
+- **Ops/docs**: Repo hygiene updates (.gitignore + workflows) and documentation refresh; removed environment-specific endpoints from docs.
+
+### Not New
+- No new required environment variables: additions (like mock inference) are optional.
+- No intentional breaking changes to the OpenAI-compatible API surface.
+
 ## v1.10.0 (2026-02-05)
 
 ### Bug Fixes

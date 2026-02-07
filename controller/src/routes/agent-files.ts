@@ -124,6 +124,11 @@ export const registerAgentFilesRoutes = (app: Hono, context: AppContext): void =
     const agent = await getAgentFs(context, sessionId);
     const normalized = normalizeAgentPath(rawPath);
     const target = toFsPath(normalized);
+    const includeVersions =
+      ctx.req.query("versions") === "true" ||
+      ctx.req.query("versions") === "1" ||
+      ctx.req.query("include_versions") === "true" ||
+      ctx.req.query("include_versions") === "1";
     try {
       const stat = await agent.fs.stat(target);
       if (stat.isDirectory()) throw badRequest("Path is a directory");
@@ -133,7 +138,21 @@ export const registerAgentFilesRoutes = (app: Hono, context: AppContext): void =
         path: normalized,
         bytes: Buffer.byteLength(content, "utf8"),
       }));
-      return ctx.json({ path: normalized, content });
+      if (!includeVersions) return ctx.json({ path: normalized, content });
+
+      const rows = context.stores.chatStore.listAgentFileVersions(sessionId, normalized);
+      const versions = rows
+        .map((row) => ({
+          version: typeof row["version"] === "number" ? row["version"] : Number(row["version"] ?? 0),
+          content: typeof row["content"] === "string" ? row["content"] : "",
+          timestamp:
+            typeof row["created_at_ms"] === "number"
+              ? row["created_at_ms"]
+              : Number(row["created_at_ms"] ?? Date.now()),
+        }))
+        .filter((v) => Number.isFinite(v.version) && v.version > 0);
+
+      return ctx.json({ path: normalized, content, versions });
     } catch (error) {
       const code = (error as { code?: string } | null)?.code;
       if (code === "ENOENT") throw notFound("File not found");
@@ -158,6 +177,8 @@ export const registerAgentFilesRoutes = (app: Hono, context: AppContext): void =
     const data = encoding === "base64" ? Buffer.from(content, "base64") : content;
     await agent.fs.writeFile(target, data);
     const byteLength = typeof data === "string" ? Buffer.byteLength(data, "utf8") : data.length;
+    // Persist a snapshot for sidebar versioning (v1/v2/...).
+    context.stores.chatStore.addAgentFileVersion(sessionId, normalized, content, byteLength);
     await context.eventManager.publish(new Event("agent_file_written", {
       session_id: sessionId,
       path: normalized,
@@ -175,6 +196,7 @@ export const registerAgentFilesRoutes = (app: Hono, context: AppContext): void =
     const normalized = normalizeAgentPath(rawPath);
     const target = toFsPath(normalized);
     await agent.fs.rm(target, { recursive: true, force: true });
+    context.stores.chatStore.deleteAgentFileVersionsForPath(sessionId, normalized);
     await context.eventManager.publish(new Event("agent_file_deleted", { session_id: sessionId, path: normalized }));
     return ctx.json({ success: true });
   });
@@ -205,6 +227,7 @@ export const registerAgentFilesRoutes = (app: Hono, context: AppContext): void =
       await mkdirp(agent.fs, targetDirectory);
     }
     await agent.fs.rename(toFsPath(normalizedFrom), toFsPath(normalizedTo));
+    context.stores.chatStore.moveAgentFileVersions(sessionId, normalizedFrom, normalizedTo);
     await context.eventManager.publish(new Event("agent_file_moved", {
       session_id: sessionId,
       from: normalizedFrom,

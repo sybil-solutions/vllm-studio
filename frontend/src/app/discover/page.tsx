@@ -1,3 +1,4 @@
+// CRITICAL
 "use client";
 
 import { DiscoverView } from "./_components/discover-view";
@@ -20,12 +21,16 @@ export default function DiscoverPage() {
     hasMore,
     providerFilter,
     providers,
+    recommendations,
+    maxVramGb,
+    excludedQuantizations,
     setSearch,
     setTask,
     setSort,
     setLibrary,
     setShowFilters,
     setProviderFilter,
+    setExcludedQuantizations,
     copyModelId,
     loadMore,
     refreshModels,
@@ -76,12 +81,16 @@ export default function DiscoverPage() {
       hasMore={hasMore}
       providerFilter={providerFilter}
       providers={providers}
+      recommendations={recommendations}
+      maxVramGb={maxVramGb}
+      excludedQuantizations={excludedQuantizations}
       onSearchChange={setSearch}
       onTaskChange={setTask}
       onSortChange={setSort}
       onLibraryChange={setLibrary}
       onToggleFilters={() => setShowFilters(!showFilters)}
       onProviderFilterChange={setProviderFilter}
+      onExcludedQuantizationsChange={setExcludedQuantizations}
       onCopyModelId={copyModelId}
       onLoadMore={loadMore}
       onRefresh={refreshModels}

@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+// CRITICAL
 /**
  * Script to retitle all existing chats based on first user message.
  * Run with: bun run scripts/retitle-chats.ts

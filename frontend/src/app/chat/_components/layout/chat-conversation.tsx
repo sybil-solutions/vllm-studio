@@ -10,7 +10,6 @@ interface ChatConversationProps {
   messages: ChatMessage[];
   isLoading: boolean;
   thinkingSnippet?: string;
-  error?: string | null;
   artifactsEnabled?: boolean;
   artifactsByMessage?: Map<string, Artifact[]>;
   selectedModel?: string;
@@ -32,7 +31,6 @@ function ChatConversationBase({
   messages,
   isLoading,
   thinkingSnippet,
-  error,
   artifactsEnabled,
   artifactsByMessage,
   selectedModel,
@@ -64,9 +62,9 @@ function ChatConversationBase({
       <div
         ref={handleScrollContainerRef}
         onScroll={onScroll}
-        className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col"
+        className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col chat-scroll-pad"
       >
-        <div className="pb-16 md:pb-4 flex-1 flex flex-col">
+        <div className="md:pb-4 flex-1 flex flex-col">
           <div className="flex-1 relative overflow-hidden flex items-center justify-center px-4 md:px-6 py-10 transition-opacity duration-500 ease-out bg-[hsl(30,5%,10.5%)]">
             <ChatSplashCanvas active={showEmptyState} />
             {showEmptyState ? (
@@ -78,8 +76,6 @@ function ChatConversationBase({
                 <ChatMessageList
                   messages={messages}
                   isLoading={isLoading}
-                  thinkingSnippet={thinkingSnippet}
-                  error={error || undefined}
                   artifactsEnabled={artifactsEnabled}
                   artifactsByMessage={artifactsByMessage}
                   selectedModel={selectedModel}
@@ -111,7 +107,6 @@ function areChatConversationPropsEqual(
       prev.messages === next.messages &&
       prev.isLoading === next.isLoading &&
       prev.thinkingSnippet === next.thinkingSnippet &&
-      prev.error === next.error &&
       prev.artifactsEnabled === next.artifactsEnabled &&
       prev.artifactsByMessage === next.artifactsByMessage &&
       prev.selectedModel === next.selectedModel &&
@@ -134,7 +129,6 @@ function areChatConversationPropsEqual(
     prev.messages === next.messages &&
     prev.isLoading === next.isLoading &&
     prev.thinkingSnippet === next.thinkingSnippet &&
-    prev.error === next.error &&
     prev.artifactsEnabled === next.artifactsEnabled &&
     prev.artifactsByMessage === next.artifactsByMessage &&
     prev.selectedModel === next.selectedModel &&

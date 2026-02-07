@@ -1,7 +1,7 @@
 // CRITICAL
 "use client";
 
-import { useEffect, useRef, useId, useMemo } from "react";
+import { memo, useEffect, useRef, useId, useMemo } from "react";
 import { AlertCircle } from "lucide-react";
 import { EnhancedCodeBlock } from "../code/enhanced-code-block";
 import { TypingIndicator, StreamingCursor } from "./typing-indicator";
@@ -23,6 +23,7 @@ export function splitThinking(content: string): ThinkingResult {
 // Mermaid is loaded dynamically to avoid chunk loading errors
 let mermaidInstance: typeof import("mermaid").default | null = null;
 let mermaidInitialized = false;
+const EMPTY_MERMAID_STATE = { svg: "", error: null } as const;
 
 /**
  * Sanitize mermaid code to fix common syntax issues from LLM output.
@@ -95,11 +96,12 @@ interface MessageRendererProps {
   isStreaming?: boolean;
 }
 
-function MermaidDiagram({ code }: { code: string }) {
+const MermaidDiagram = memo(function MermaidDiagram({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const id = useId().replace(/:/g, "_");
-  const mermaidState = useAppStore((state) => state.mermaidState[id] ?? { svg: "", error: null });
+  const mermaidState = useAppStore((state) => state.mermaidState[id] ?? EMPTY_MERMAID_STATE);
   const setMermaidState = useAppStore((state) => state.setMermaidState);
+  const deleteMermaidState = useAppStore((state) => state.deleteMermaidState);
   const { svg, error } = mermaidState;
   const renderSeqRef = useRef(0);
 
@@ -141,8 +143,11 @@ function MermaidDiagram({ code }: { code: string }) {
     const handle = window.setTimeout(() => {
       renderDiagram();
     }, 250);
-    return () => window.clearTimeout(handle);
-  }, [code, id, setMermaidState]);
+    return () => {
+      window.clearTimeout(handle);
+      deleteMermaidState(id);
+    };
+  }, [code, deleteMermaidState, id, setMermaidState]);
 
   if (error) {
     return (
@@ -164,14 +169,14 @@ function MermaidDiagram({ code }: { code: string }) {
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
-}
+});
 
 interface CodeBlockProps {
   segment: MarkdownSegment;
   isStreaming?: boolean;
 }
 
-function CodeBlock({ segment, isStreaming }: CodeBlockProps) {
+const CodeBlock = memo(function CodeBlock({ segment, isStreaming }: CodeBlockProps) {
   const lang = segment.language || "";
 
   // Handle mermaid diagrams
@@ -195,17 +200,17 @@ function CodeBlock({ segment, isStreaming }: CodeBlockProps) {
       {segment.content}
     </EnhancedCodeBlock>
   );
-}
+});
 
 interface MarkdownBlockProps {
   html: string;
 }
 
-function MarkdownBlock({ html }: MarkdownBlockProps) {
+const MarkdownBlock = memo(function MarkdownBlock({ html }: MarkdownBlockProps) {
   return <div className="chat-markdown" dangerouslySetInnerHTML={{ __html: html }} />;
-}
+});
 
-export function MessageRenderer({ content, isStreaming }: MessageRendererProps) {
+function MessageRendererBase({ content, isStreaming }: MessageRendererProps) {
   const parsingService = useMessageParsingService();
   const { renderMarkdown } = useMessageParsing();
 
@@ -220,6 +225,12 @@ export function MessageRenderer({ content, isStreaming }: MessageRendererProps) 
   const mainContent = parsed?.thinking.mainContent ?? content;
   const segments = parsed?.segments ?? [];
   const thinkingContent = parsed?.thinking.thinkingContent ?? null;
+  const renderedMarkdown = useMemo(() => {
+    if (isStreaming) return [];
+    return segments.map((segment) =>
+      segment.type === "code" ? null : renderMarkdown(segment.content),
+    );
+  }, [isStreaming, segments, renderMarkdown]);
 
   return (
     <div className="message-content min-w-0 break-words overflow-hidden max-w-full group relative text-inherit">
@@ -228,28 +239,17 @@ export function MessageRenderer({ content, isStreaming }: MessageRendererProps) 
         <div style={{ color: "#e8e4dd" }}>
           {isStreaming ? (
             (() => {
-              const lineCount = mainContent.split("\n").length;
               const isCodeLike =
                 mainContent.includes("```") ||
                 mainContent.includes("<artifact") ||
                 mainContent.includes("</artifact>");
-              const shouldClamp = lineCount > 8 || mainContent.length > 800 || isCodeLike;
               return (
                 <div
-                  className={`rounded-xl border border-(--border) bg-(--card)/70 p-3 ${
-                    shouldClamp ? "max-h-64 overflow-auto" : ""
+                  className={`whitespace-pre-wrap break-words ${
+                    isCodeLike ? "font-mono text-[13px]" : "text-[15px] leading-relaxed"
                   }`}
                 >
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-[#6a6560] mb-2">
-                    Streaming
-                  </div>
-                  <div
-                    className={`whitespace-pre-wrap break-words ${
-                      isCodeLike ? "font-mono text-[13px]" : "text-[15px] leading-relaxed"
-                    }`}
-                  >
-                    {mainContent}
-                  </div>
+                  {mainContent}
                 </div>
               );
             })()
@@ -261,7 +261,7 @@ export function MessageRenderer({ content, isStreaming }: MessageRendererProps) 
                 );
               }
 
-              const html = renderMarkdown(segment.content);
+              const html = renderedMarkdown[index] ?? "";
               return <MarkdownBlock key={`md-${index}`} html={html} />;
             })
           )}
@@ -279,3 +279,9 @@ export function MessageRenderer({ content, isStreaming }: MessageRendererProps) 
     </div>
   );
 }
+
+function areMessageRendererPropsEqual(prev: MessageRendererProps, next: MessageRendererProps): boolean {
+  return prev.content === next.content && prev.isStreaming === next.isStreaming;
+}
+
+export const MessageRenderer = memo(MessageRendererBase, areMessageRendererPropsEqual);

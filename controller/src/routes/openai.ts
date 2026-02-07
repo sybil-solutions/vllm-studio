@@ -1,8 +1,8 @@
 // CRITICAL
 import type { Hono } from "hono";
-import { readFileSync } from "node:fs";
 import { AsyncLock, delay } from "../core/async";
 import { HttpStatus, serviceUnavailable } from "../core/errors";
+import { primaryLogPathFor, readFileTailBytes, sanitizeLogSessionId } from "../core/log-files";
 import { buildSseHeaders } from "../http/sse";
 import type { AppContext } from "../types/context";
 import type { ProcessInfo, Recipe } from "../types/models";
@@ -57,12 +57,7 @@ export const registerOpenAIRoutes = (app: Hono, context: AppContext): void => {
   };
 
   const readLogTail = (path: string, limit: number): string => {
-    try {
-      const content = readFileSync(path, "utf-8");
-      return content.slice(Math.max(0, content.length - limit));
-    } catch {
-      return "";
-    }
+    return readFileTailBytes(path, limit);
   };
 
   const ensureModelRunning = async (recipe: Recipe): Promise<string | null> => {
@@ -88,7 +83,10 @@ export const registerOpenAIRoutes = (app: Hono, context: AppContext): void => {
       const timeout = 300_000;
       while (Date.now() - start < timeout) {
         if (launch.pid && !pidExists(launch.pid)) {
-          const logFile = `/tmp/vllm_${recipe.id}.log`;
+          const safeRecipeId = sanitizeLogSessionId(recipe.id);
+          const logFile = safeRecipeId
+            ? primaryLogPathFor(context.config.data_dir, safeRecipeId)
+            : primaryLogPathFor(context.config.data_dir, recipe.id);
           const errorTail = readLogTail(logFile, 500);
           return `Model ${recipe.id} crashed during startup: ${errorTail.slice(-200)}`;
         }

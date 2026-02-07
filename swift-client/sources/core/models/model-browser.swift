@@ -24,12 +24,29 @@ struct StudioRoot: Codable, Identifiable {
 
 struct HfModel: Codable, Identifiable {
   var id: String { modelId }
+  let hfId: String?
   let modelId: String
   let pipelineTag: String?
   let likes: Int?
   let downloads: Int?
+  let tags: [String]?
   let libraryName: String?
   let lastModified: String?
+  let author: String?
+  let isPrivate: Bool?
+
+  enum CodingKeys: String, CodingKey {
+    case hfId = "_id"
+    case modelId
+    case pipelineTag
+    case likes
+    case downloads
+    case tags
+    case libraryName
+    case lastModified
+    case author
+    case isPrivate = "private"
+  }
 }
 
 struct HfQuery {

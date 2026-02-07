@@ -5,33 +5,36 @@ struct LogsView: View {
   @StateObject private var model = LogsViewModel()
 
   var body: some View {
-    VStack(spacing: 12) {
-      Picker("Session", selection: $model.selectedId) {
-        ForEach(model.sessions) { session in
-          Text(session.model ?? session.recipeName ?? session.id).tag(Optional(session.id))
-        }
+    List {
+      if model.sessions.isEmpty && model.loading {
+        ProgressView()
       }
-      .pickerStyle(.menu)
-      .onChange(of: model.selectedId) { _, _ in
-        Task { await model.loadSelected() }
-      }
-
-      ScrollView {
-        VStack(alignment: .leading, spacing: 4) {
-          ForEach(model.lines, id: \.self) { line in
-            Text(line).font(AppTheme.monoFont)
+      ForEach(model.sessions) { session in
+        NavigationLink {
+          LogDetailView(session: session)
+        } label: {
+          VStack(alignment: .leading, spacing: 4) {
+            Text(session.model ?? session.recipeName ?? session.id)
+              .font(.headline)
               .foregroundColor(AppTheme.foreground)
-              .frame(maxWidth: .infinity, alignment: .leading)
+            Text(session.createdAt)
+              .font(.caption)
+              .foregroundColor(AppTheme.muted)
           }
+          .padding(.vertical, 6)
         }
-        .padding(12)
       }
-      .background(AppTheme.card)
-      .cornerRadius(12)
     }
-    .padding(16)
+    .scrollContentBackground(.hidden)
     .background(AppTheme.background)
     .navigationTitle("Logs")
+    .toolbar {
+      ToolbarItem(placement: .topBarTrailing) {
+        Button("Refresh") {
+          Task { await model.load() }
+        }
+      }
+    }
     .onAppear { model.connect(api: container.api) }
   }
 }

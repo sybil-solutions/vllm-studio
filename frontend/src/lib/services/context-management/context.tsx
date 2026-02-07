@@ -13,14 +13,7 @@ import type {
   ContextConfig,
   ContextManagementContextValue,
 } from "./types";
-
-const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
-  compactionThreshold: 0.8,
-  targetAfterCompaction: 0.5,
-  preserveRecentMessages: 4,
-  autoCompact: true,
-  checkInterval: 5000,
-};
+import { DEFAULT_CONTEXT_CONFIG } from "./types";
 
 export const ContextManagementContext = createContext<ContextManagementContextValue | null>(null);
 

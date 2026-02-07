@@ -1,6 +1,9 @@
 // CRITICAL
 import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
+import { hydrateMessageRow, hydrateSessionRow, parseJsonOrNull } from "./chat-store-hydration";
+import { migrateChatStore } from "./chat-store-schema";
+import * as RunOps from "./chat-store-runs";
 
 /**
  * SQLite-backed chat session storage.
@@ -23,101 +26,7 @@ export class ChatStore {
    * @returns void
    */
   private migrate(): void {
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS chat_sessions (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL DEFAULT 'New Chat',
-        model TEXT,
-        parent_id TEXT,
-        agent_state TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS chat_messages (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT,
-        model TEXT,
-        tool_calls TEXT,
-        tool_call_id TEXT,
-        name TEXT,
-        parts TEXT,
-        metadata TEXT,
-        request_prompt_tokens INTEGER,
-        request_tools_tokens INTEGER,
-        request_total_input_tokens INTEGER,
-        request_completion_tokens INTEGER,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
-      )
-    `);
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS chat_runs (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        user_message_id TEXT,
-        model TEXT,
-        system TEXT,
-        toolset_id TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        finished_at TEXT,
-        status TEXT NOT NULL DEFAULT 'running',
-        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
-      )
-    `);
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS chat_run_events (
-        id TEXT PRIMARY KEY,
-        run_id TEXT NOT NULL,
-        seq INTEGER NOT NULL,
-        type TEXT NOT NULL,
-        data TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (run_id) REFERENCES chat_runs(id) ON DELETE CASCADE,
-        UNIQUE (run_id, seq)
-      )
-    `);
-    this.db.run("CREATE INDEX IF NOT EXISTS idx_run_events_run ON chat_run_events(run_id)");
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS chat_tool_executions (
-        id TEXT PRIMARY KEY,
-        run_id TEXT NOT NULL,
-        tool_call_id TEXT NOT NULL,
-        tool_name TEXT NOT NULL,
-        tool_server TEXT,
-        arguments_json TEXT NOT NULL,
-        result_text TEXT,
-        is_error INTEGER NOT NULL DEFAULT 0,
-        started_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        finished_at TEXT,
-        FOREIGN KEY (run_id) REFERENCES chat_runs(id) ON DELETE CASCADE,
-        UNIQUE (run_id, tool_call_id)
-      )
-    `);
-    this.db.run("CREATE INDEX IF NOT EXISTS idx_tool_exec_run ON chat_tool_executions(run_id)");
-    this.db.run("CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id)");
-    this.ensureColumn("chat_sessions", "agent_state", "TEXT");
-    this.ensureColumn("chat_messages", "tool_call_id", "TEXT");
-    this.ensureColumn("chat_messages", "name", "TEXT");
-    this.ensureColumn("chat_messages", "parts", "TEXT");
-    this.ensureColumn("chat_messages", "metadata", "TEXT");
-  }
-
-  /**
-   * Ensures a column exists in a table, adding it if missing.
-   * @param table - Table name.
-   * @param column - Column name.
-   * @param type - SQLite column type.
-   */
-  private ensureColumn(table: string, column: string, type: string): void {
-    const columns = this.db.query(`PRAGMA table_info(${table})`).all() as Array<Record<string, unknown>>;
-    const exists = columns.some((entry) => entry["name"] === column);
-    if (!exists) {
-      this.db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-    }
+    migrateChatStore(this.db);
   }
 
   /**
@@ -137,22 +46,12 @@ export class ChatStore {
    * @returns Session summary or null.
    */
   public getSessionSummary(sessionId: string): Record<string, unknown> | null {
-    const session = this.db
+    const session = hydrateSessionRow(
+      this.db
       .query("SELECT id, title, model, parent_id, agent_state, created_at, updated_at FROM chat_sessions WHERE id = ?")
-      .get(sessionId) as Record<string, unknown> | null;
-    if (!session) {
-      return null;
-    }
-
-    if (typeof session["agent_state"] === "string") {
-      try {
-        session["agent_state"] = JSON.parse(String(session["agent_state"]));
-      } catch {
-        session["agent_state"] = null;
-      }
-    }
-
-    return { ...session };
+      .get(sessionId) as Record<string, unknown> | null,
+    );
+    return session ? { ...session } : null;
   }
 
   /**
@@ -170,11 +69,7 @@ export class ChatStore {
 
     let agentState: unknown = session["agent_state"] ?? null;
     if (typeof agentState === "string") {
-      try {
-        agentState = JSON.parse(agentState);
-      } catch {
-        agentState = null;
-      }
+      agentState = parseJsonOrNull(agentState);
     }
 
     const messages = this.db
@@ -184,31 +79,7 @@ export class ChatStore {
               FROM chat_messages WHERE session_id = ? ORDER BY created_at, rowid`)
       .all(sessionId) as Array<Record<string, unknown>>;
 
-    const hydrated = messages.map((message) => {
-      const next: Record<string, unknown> = { ...message };
-      if (typeof next["tool_calls"] === "string") {
-        try {
-          next["tool_calls"] = JSON.parse(String(next["tool_calls"]));
-        } catch {
-          next["tool_calls"] = null;
-        }
-      }
-      if (typeof next["parts"] === "string") {
-        try {
-          next["parts"] = JSON.parse(String(next["parts"]));
-        } catch {
-          next["parts"] = null;
-        }
-      }
-      if (typeof next["metadata"] === "string") {
-        try {
-          next["metadata"] = JSON.parse(String(next["metadata"]));
-        } catch {
-          next["metadata"] = null;
-        }
-      }
-      return next;
-    });
+    const hydrated = messages.map((message) => hydrateMessageRow(message));
 
     return { ...session, agent_state: agentState, messages: hydrated };
   }
@@ -238,14 +109,8 @@ export class ChatStore {
     const row = this.db
       .query("SELECT id, title, model, parent_id, agent_state, created_at, updated_at FROM chat_sessions WHERE id = ?")
       .get(sessionId) as Record<string, unknown>;
-    if (typeof row["agent_state"] === "string") {
-      try {
-        row["agent_state"] = JSON.parse(String(row["agent_state"]));
-      } catch {
-        row["agent_state"] = null;
-      }
-    }
-    return { ...row };
+    const hydrated = hydrateSessionRow(row);
+    return { ...(hydrated ?? row) };
   }
 
   /**
@@ -377,28 +242,7 @@ export class ChatStore {
          FROM chat_messages WHERE id = ?`,
       )
       .get(messageId) as Record<string, unknown>;
-    if (typeof row["tool_calls"] === "string") {
-      try {
-        row["tool_calls"] = JSON.parse(String(row["tool_calls"]));
-      } catch {
-        row["tool_calls"] = null;
-      }
-    }
-    if (typeof row["parts"] === "string") {
-      try {
-        row["parts"] = JSON.parse(String(row["parts"]));
-      } catch {
-        row["parts"] = null;
-      }
-    }
-    if (typeof row["metadata"] === "string") {
-      try {
-        row["metadata"] = JSON.parse(String(row["metadata"]));
-      } catch {
-        row["metadata"] = null;
-      }
-    }
-    return row;
+    return hydrateMessageRow(row);
   }
 
   /**
@@ -512,14 +356,8 @@ export class ChatStore {
     const row = this.db
       .query("SELECT id, title, model, parent_id, agent_state, created_at, updated_at FROM chat_sessions WHERE id = ?")
       .get(newId) as Record<string, unknown>;
-    if (typeof row["agent_state"] === "string") {
-      try {
-        row["agent_state"] = JSON.parse(String(row["agent_state"]));
-      } catch {
-        row["agent_state"] = null;
-      }
-    }
-    return { ...row };
+    const hydrated = hydrateSessionRow(row);
+    return { ...(hydrated ?? row) };
   }
 
   /**
@@ -545,25 +383,7 @@ export class ChatStore {
       status?: string;
     } = {},
   ): Record<string, unknown> {
-    this.db.query(
-      `INSERT INTO chat_runs
-      (id, session_id, user_message_id, model, system, toolset_id, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      runId,
-      sessionId,
-      options.userMessageId ?? null,
-      options.model ?? null,
-      options.system ?? null,
-      options.toolsetId ?? null,
-      options.status ?? "running",
-    );
-    return this.db
-      .query(
-        `SELECT id, session_id, user_message_id, model, system, toolset_id, created_at, finished_at, status
-         FROM chat_runs WHERE id = ?`,
-      )
-      .get(runId) as Record<string, unknown>;
+    return RunOps.createRun(this.db, runId, sessionId, options);
   }
 
   /**
@@ -582,22 +402,7 @@ export class ChatStore {
     data: Record<string, unknown>,
     eventId: string = randomUUID(),
   ): Record<string, unknown> {
-    const dataJson = JSON.stringify(data);
-    this.db.query(
-      `INSERT INTO chat_run_events (id, run_id, seq, type, data)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(eventId, runId, seq, type, dataJson);
-    const row = this.db
-      .query("SELECT id, run_id, seq, type, data, created_at FROM chat_run_events WHERE id = ?")
-      .get(eventId) as Record<string, unknown>;
-    if (typeof row["data"] === "string") {
-      try {
-        row["data"] = JSON.parse(String(row["data"]));
-      } catch {
-        row["data"] = null;
-      }
-    }
-    return row;
+    return RunOps.addRunEvent(this.db, runId, seq, type, data, eventId);
   }
 
   /**
@@ -629,32 +434,7 @@ export class ChatStore {
       id?: string;
     } = {},
   ): Record<string, unknown> {
-    const argumentsJson = typeof options.arguments === "string"
-      ? options.arguments
-      : JSON.stringify(options.arguments ?? {});
-    const id = options.id ?? randomUUID();
-    this.db.query(
-      `INSERT INTO chat_tool_executions
-      (id, run_id, tool_call_id, tool_name, tool_server, arguments_json, result_text, is_error, started_at, finished_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      id,
-      runId,
-      toolCallId,
-      toolName,
-      options.toolServer ?? null,
-      argumentsJson,
-      options.resultText ?? null,
-      options.isError ? 1 : 0,
-      options.startedAt ?? null,
-      options.finishedAt ?? null,
-    );
-    return this.db
-      .query(
-        `SELECT id, run_id, tool_call_id, tool_name, tool_server, arguments_json, result_text, is_error,
-         started_at, finished_at FROM chat_tool_executions WHERE id = ?`,
-      )
-      .get(id) as Record<string, unknown>;
+    return RunOps.addToolExecution(this.db, runId, toolCallId, toolName, options);
   }
 
   /**
@@ -672,26 +452,110 @@ export class ChatStore {
       finishedAt?: string | null;
     },
   ): boolean {
-    const assignments: string[] = [];
-    const params: Array<string | null> = [];
+    return RunOps.updateRun(this.db, runId, updates);
+  }
 
-    if (updates.status !== undefined) {
-      assignments.push("status = ?");
-      params.push(updates.status ?? null);
+  /**
+   * Append a version snapshot for an agent workspace file.
+   * Versions are session-scoped and monotonically increasing per path.
+   * Dedupe: if the latest stored content matches, no new version is created.
+   */
+  public addAgentFileVersion(
+    sessionId: string,
+    path: string,
+    content: string,
+    bytes?: number | null,
+  ): { version: number; created_at_ms: number } {
+    const last = this.db
+      .query(
+        "SELECT version, content FROM chat_agent_file_versions WHERE session_id = ? AND path = ? ORDER BY version DESC LIMIT 1",
+      )
+      .get(sessionId, path) as { version?: number; content?: string } | null;
+
+    if (last && typeof last.content === "string" && last.content === content) {
+      return { version: typeof last.version === "number" ? last.version : 1, created_at_ms: Date.now() };
     }
 
-    if (updates.finishedAt !== undefined) {
-      assignments.push("finished_at = ?");
-      params.push(updates.finishedAt ?? null);
-    }
+    const nextVersion = (typeof last?.version === "number" ? last.version : 0) + 1;
+    const createdAtMs = Date.now();
+    this.db
+      .query(
+        `INSERT INTO chat_agent_file_versions
+         (id, session_id, path, version, content, bytes, created_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(randomUUID(), sessionId, path, nextVersion, content, bytes ?? null, createdAtMs);
 
-    if (assignments.length === 0) {
-      return false;
-    }
+    return { version: nextVersion, created_at_ms: createdAtMs };
+  }
 
-    const statement = `UPDATE chat_runs SET ${assignments.join(", ")} WHERE id = ?`;
-    params.push(runId);
-    const result = this.db.query(statement).run(...params);
-    return result.changes > 0;
+  /**
+   * List all versions for an agent workspace file.
+   */
+  public listAgentFileVersions(sessionId: string, path: string): Array<Record<string, unknown>> {
+    const rows = this.db
+      .query(
+        "SELECT version, content, created_at_ms FROM chat_agent_file_versions WHERE session_id = ? AND path = ? ORDER BY version ASC",
+      )
+      .all(sessionId, path) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({ ...row }));
+  }
+
+  /**
+   * Delete agent file versions for a file or directory prefix.
+   * If `path` is a file path, deletes exact match.
+   * If `path` is a directory, deletes all descendants as well.
+   */
+  public deleteAgentFileVersionsForPath(sessionId: string, path: string): void {
+    const trimmed = (path ?? "").trim();
+    if (!trimmed) {
+      this.db.query("DELETE FROM chat_agent_file_versions WHERE session_id = ?").run(sessionId);
+      return;
+    }
+    this.db
+      .query(
+        "DELETE FROM chat_agent_file_versions WHERE session_id = ? AND (path = ? OR path LIKE ?)",
+      )
+      .run(sessionId, trimmed, `${trimmed}/%`);
+  }
+
+  /**
+   * Move agent file versions when a file is renamed/moved.
+   * If destination already has versions, the moved versions are appended after the last destination version.
+   */
+  public moveAgentFileVersions(sessionId: string, from: string, to: string): void {
+    if (!from || !to || from === to) return;
+
+    const sourceRows = this.db
+      .query(
+        "SELECT version, content, bytes, created_at_ms FROM chat_agent_file_versions WHERE session_id = ? AND path = ? ORDER BY version ASC",
+      )
+      .all(sessionId, from) as Array<{ version: number; content: string; bytes?: number | null; created_at_ms: number }>;
+
+    if (sourceRows.length === 0) return;
+
+    const destMax = this.db
+      .query(
+        "SELECT MAX(version) AS max_version FROM chat_agent_file_versions WHERE session_id = ? AND path = ?",
+      )
+      .get(sessionId, to) as { max_version?: number | null } | null;
+    const offset = (typeof destMax?.max_version === "number" ? destMax.max_version : 0) ?? 0;
+
+    const tx = this.db.transaction(() => {
+      for (let i = 0; i < sourceRows.length; i += 1) {
+        const row = sourceRows[i]!;
+        const nextVersion = offset + i + 1;
+        this.db
+          .query(
+            `INSERT INTO chat_agent_file_versions
+             (id, session_id, path, version, content, bytes, created_at_ms)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(randomUUID(), sessionId, to, nextVersion, row.content, row.bytes ?? null, row.created_at_ms);
+      }
+      this.db.query("DELETE FROM chat_agent_file_versions WHERE session_id = ? AND path = ?").run(sessionId, from);
+    });
+
+    tx();
   }
 }

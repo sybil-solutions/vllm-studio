@@ -2,39 +2,18 @@
 "use client";
 
 import { useCallback } from "react";
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import type { AgentFileEntry } from "@/lib/types";
 import { useAppStore } from "@/store";
+import { isLocalImportSpecifier, resolvePath } from "../utils/path-resolver";
+import { useShallow } from "zustand/react/shallow";
 
 const getExtension = (path: string): string => {
   const parts = path.split(".");
   return parts.length > 1 ? parts[parts.length - 1]?.toLowerCase() ?? "" : "";
 };
 
-const stripQueryAndHash = (value: string): string => {
-  return value.split("?")[0]?.split("#")[0] ?? value;
-};
-
-const resolvePath = (basePath: string, relativePath: string): string => {
-  const cleaned = stripQueryAndHash(relativePath).trim();
-  if (cleaned.startsWith("/")) return cleaned.replace(/^\/+/, "");
-  const baseDir = basePath.includes("/") ? basePath.substring(0, basePath.lastIndexOf("/")) : "";
-  let resolved = cleaned.replace(/^\.\//, "");
-  const parts = baseDir.split("/").filter(Boolean);
-  while (resolved.startsWith("../")) {
-    parts.pop();
-    resolved = resolved.substring(3);
-  }
-  return parts.length > 0 ? `${parts.join("/")}/${resolved}` : resolved;
-};
-
-const isLocalSpecifier = (spec: string): boolean => {
-  if (!spec) return false;
-  if (spec.startsWith("http://") || spec.startsWith("https://") || spec.startsWith("//")) return false;
-  if (spec.startsWith("data:") || spec.startsWith("blob:")) return false;
-  if (spec.startsWith("./") || spec.startsWith("../") || spec.startsWith("/")) return true;
-  return /\.[a-z0-9]+$/i.test(spec);
-};
+const isLocalSpecifier = isLocalImportSpecifier;
 
 const extractHtmlDependencies = (html: string, basePath: string): string[] => {
   const dependencies: string[] = [];
@@ -85,21 +64,43 @@ const resolveScriptPath = (path: string): string[] => {
 };
 
 export function useAgentFiles() {
-  const currentSessionId = useAppStore((state) => state.currentSessionId);
-  const agentFiles = useAppStore((state) => state.agentFiles);
-  const agentFilesLoading = useAppStore((state) => state.agentFilesLoading);
-  const setAgentFiles = useAppStore((state) => state.setAgentFiles);
-  const setAgentFilesLoading = useAppStore((state) => state.setAgentFilesLoading);
-  const selectedAgentFilePath = useAppStore((state) => state.selectedAgentFilePath);
-  const selectedAgentFileContent = useAppStore((state) => state.selectedAgentFileContent);
-  const selectedAgentFileLoading = useAppStore((state) => state.selectedAgentFileLoading);
-  const setSelectedAgentFilePath = useAppStore((state) => state.setSelectedAgentFilePath);
-  const setSelectedAgentFileContent = useAppStore((state) => state.setSelectedAgentFileContent);
-  const setSelectedAgentFileLoading = useAppStore((state) => state.setSelectedAgentFileLoading);
-  const agentFileVersions = useAppStore((state) => state.agentFileVersions);
-  const addAgentFileVersion = useAppStore((state) => state.addAgentFileVersion);
-  const moveAgentFileVersions = useAppStore((state) => state.moveAgentFileVersions);
-  const clearAgentFileVersions = useAppStore((state) => state.clearAgentFileVersions);
+  const {
+    currentSessionId,
+    agentFiles,
+    agentFilesLoading,
+    setAgentFiles,
+    setAgentFilesLoading,
+    selectedAgentFilePath,
+    selectedAgentFileContent,
+    selectedAgentFileLoading,
+    setSelectedAgentFilePath,
+    setSelectedAgentFileContent,
+    setSelectedAgentFileLoading,
+    agentFileVersions,
+    addAgentFileVersion,
+    hydrateAgentFileVersions,
+    moveAgentFileVersions,
+    clearAgentFileVersions,
+  } = useAppStore(
+    useShallow((state) => ({
+      currentSessionId: state.currentSessionId,
+      agentFiles: state.agentFiles,
+      agentFilesLoading: state.agentFilesLoading,
+      setAgentFiles: state.setAgentFiles,
+      setAgentFilesLoading: state.setAgentFilesLoading,
+      selectedAgentFilePath: state.selectedAgentFilePath,
+      selectedAgentFileContent: state.selectedAgentFileContent,
+      selectedAgentFileLoading: state.selectedAgentFileLoading,
+      setSelectedAgentFilePath: state.setSelectedAgentFilePath,
+      setSelectedAgentFileContent: state.setSelectedAgentFileContent,
+      setSelectedAgentFileLoading: state.setSelectedAgentFileLoading,
+      agentFileVersions: state.agentFileVersions,
+      addAgentFileVersion: state.addAgentFileVersion,
+      hydrateAgentFileVersions: state.hydrateAgentFileVersions,
+      moveAgentFileVersions: state.moveAgentFileVersions,
+      clearAgentFileVersions: state.clearAgentFileVersions,
+    })),
+  );
 
   const prefetchDependencies = useCallback(
     async (entryPath: string, content: string, sessionId: string) => {
@@ -306,10 +307,14 @@ export function useAgentFiles() {
       setSelectedAgentFileLoading(true);
 
       try {
-        const data = await api.readAgentFile(sessionId, path);
+        const data = await api.readAgentFileWithVersions(sessionId, path);
         setSelectedAgentFileContent(data.content);
         if (typeof data.content === "string") {
-          addAgentFileVersion(path, data.content);
+          if (Array.isArray(data.versions) && data.versions.length > 0) {
+            hydrateAgentFileVersions(path, data.versions);
+          } else {
+            addAgentFileVersion(path, data.content);
+          }
           const ext = getExtension(path);
           if (ext === "html" || ext === "htm") {
             void prefetchDependencies(path, data.content, sessionId);
@@ -328,6 +333,7 @@ export function useAgentFiles() {
       setSelectedAgentFileContent,
       setSelectedAgentFileLoading,
       addAgentFileVersion,
+      hydrateAgentFileVersions,
       prefetchDependencies,
     ],
   );

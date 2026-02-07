@@ -1,12 +1,15 @@
 // CRITICAL
 import { createWriteStream, existsSync, mkdirSync, renameSync, statSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Config } from "../config/env";
 import type { Logger } from "../core/logger";
 import { Event, type EventManager } from "./event-manager";
 import type { DownloadFileInfo, DownloadStatus, ModelDownload } from "../types/models";
 import type { DownloadStore } from "../stores/download-store";
+import { resolveDownloadRoot, sanitizePathSegments } from "./downloads/download-paths";
+import { buildHuggingFaceFileList, fetchHuggingFaceModelInfo } from "./downloads/huggingface-api";
+import { sumDownloadedBytes, sumTotalBytes } from "./downloads/download-math";
 
 type DownloadRequest = {
   model_id: string;
@@ -22,92 +25,13 @@ type ActiveDownload = {
   running: boolean;
 };
 
-type HuggingFaceModelInfo = {
-  modelId?: string;
-  sha?: string;
-  siblings?: Array<{ rfilename: string; size?: number | null }>;
-};
-
 const DEFAULT_IGNORE = [".gitattributes", ".gitignore"];
 const PROGRESS_THROTTLE_MS = 750;
 
 const toTimestamp = (): string => new Date().toISOString();
 
-const compileGlob = (pattern: string): RegExp => {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  const regex = "^" + escaped.replace(/\*/g, ".*") + "$";
-  return new RegExp(regex, "i");
-};
-
-const matchesAny = (value: string, patterns: string[]): boolean => {
-  if (patterns.length === 0) {
-    return false;
-  }
-  return patterns.some((pattern) => compileGlob(pattern).test(value));
-};
-
-const sanitizePathSegments = (value: string): string[] => {
-  return value
-    .split(/[\\/]/)
-    .map((segment) => segment.trim())
-    .filter((segment) => Boolean(segment) && segment !== "." && segment !== "..");
-};
-
-const resolveDownloadRoot = (config: Config, modelId: string, destination?: string | null): string => {
-  const base = resolve(config.models_dir);
-  const segments = destination ? sanitizePathSegments(destination) : sanitizePathSegments(modelId);
-  const target = resolve(base, ...segments);
-  const normalizedBase = base.endsWith(sep) ? base : base + sep;
-  if (!target.startsWith(normalizedBase)) {
-    throw new Error("Invalid destination path");
-  }
-  return target;
-};
-
-const buildFileList = (
-  modelInfo: HuggingFaceModelInfo,
-  allowPatterns: string[],
-  ignorePatterns: string[],
-): DownloadFileInfo[] => {
-  const siblings = modelInfo.siblings ?? [];
-  const files: DownloadFileInfo[] = [];
-  for (const sibling of siblings) {
-    const filename = sibling.rfilename;
-    if (!filename) {
-      continue;
-    }
-    if (matchesAny(filename, ignorePatterns)) {
-      continue;
-    }
-    if (allowPatterns.length > 0 && !matchesAny(filename, allowPatterns)) {
-      continue;
-    }
-    files.push({
-      path: filename,
-      size_bytes: typeof sibling.size === "number" ? sibling.size : null,
-      downloaded_bytes: 0,
-      status: "pending",
-    });
-  }
-  return files;
-};
-
-const sumBytes = (files: DownloadFileInfo[]): number => {
-  return files.reduce((total, file) => total + (file.downloaded_bytes || 0), 0);
-};
-
-const sumTotalBytes = (files: DownloadFileInfo[]): number | null => {
-  const known = files.filter((file) => typeof file.size_bytes === "number") as Array<
-    DownloadFileInfo & { size_bytes: number }
-  >;
-  if (known.length === 0) {
-    return null;
-  }
-  return known.reduce((total, file) => total + file.size_bytes, 0);
-};
-
 /**
- *
+ * Manages model downloads (queue/pause/resume/cancel), persisting state and emitting progress events.
  */
 export class DownloadManager {
   private readonly active = new Map<string, ActiveDownload>();
@@ -174,8 +98,8 @@ export class DownloadManager {
     const targetDirectory = resolveDownloadRoot(this.config, modelId, request.destination_dir);
     const hfToken = request.hf_token ?? null;
 
-    const info = await this.fetchModelInfo(modelId, request.revision, hfToken);
-    const files = buildFileList(info, allowPatterns, ignorePatterns);
+    const info = await fetchHuggingFaceModelInfo(modelId, request.revision, hfToken);
+    const files = buildHuggingFaceFileList(info, allowPatterns, ignorePatterns);
     if (files.length === 0) {
       throw new Error("No downloadable files found for this model");
     }
@@ -272,30 +196,6 @@ export class DownloadManager {
   }
 
   /**
-   * Fetches model information from HuggingFace API.
-   * @param modelId - The model id to fetch info for.
-   * @param revision - Optional revision/branch.
-   * @param hfToken - Optional HuggingFace token.
-   * @returns Model information from HuggingFace.
-   */
-  private async fetchModelInfo(modelId: string, revision?: string | null, hfToken?: string | null): Promise<HuggingFaceModelInfo> {
-    const url = new URL(`https://huggingface.co/api/models/${encodeURIComponent(modelId)}`);
-    if (revision) {
-      url.searchParams.set("revision", revision);
-    }
-    const headers: Record<string, string> = {};
-    if (hfToken) {
-      headers["Authorization"] = `Bearer ${hfToken}`;
-    }
-    const response = await fetch(url.toString(), { headers });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Hugging Face API error: ${response.status} ${text}`);
-    }
-    return (await response.json()) as HuggingFaceModelInfo;
-  }
-
-  /**
    * Runs the download process for a given download id.
    * @param id - Download id to process.
    * @param hfToken - Optional HuggingFace token.
@@ -339,7 +239,7 @@ export class DownloadManager {
       const allComplete = current.files.every((file) => file.status === "completed");
       current.status = allComplete ? "completed" : "failed";
       current.error = allComplete ? null : current.error ?? "Download incomplete";
-      current.downloaded_bytes = sumBytes(current.files);
+      current.downloaded_bytes = sumDownloadedBytes(current.files);
       current.total_bytes = current.total_bytes ?? sumTotalBytes(current.files);
       current.updated_at = toTimestamp();
       this.store.save(current);
@@ -352,7 +252,7 @@ export class DownloadManager {
         latest.status = "failed";
       }
       latest.error = controller.signal.aborted ? latest.error : String(error);
-      latest.downloaded_bytes = sumBytes(latest.files);
+      latest.downloaded_bytes = sumDownloadedBytes(latest.files);
       latest.updated_at = toTimestamp();
       this.store.save(latest);
       this.publishState(latest, latest.status);
@@ -377,6 +277,13 @@ export class DownloadManager {
     controller: AbortController,
     hfToken: string | null,
   ): Promise<void> {
+    const closeWriter = (writer: ReturnType<typeof createWriteStream>): Promise<void> =>
+      new Promise((resolve, reject) => {
+        writer.once("error", reject);
+        writer.once("close", resolve);
+        writer.end();
+      });
+
     let currentDownload = download;
     const localPath = resolve(download.target_dir, ...sanitizePathSegments(file.path));
     const temporaryPath = `${localPath}.part`;
@@ -432,7 +339,7 @@ export class DownloadManager {
     const writer = createWriteStream(temporaryPath, { flags: shouldAppend ? "a" : "w" });
     const reader = response.body?.getReader();
     if (!reader) {
-      writer.close();
+      await closeWriter(writer);
       throw new Error("Download response has no body");
     }
 
@@ -445,7 +352,13 @@ export class DownloadManager {
           break;
         }
         if (value) {
-          writer.write(Buffer.from(value));
+          const ok = writer.write(Buffer.from(value));
+          if (!ok) {
+            await new Promise<void>((resolveDrain, rejectDrain) => {
+              writer.once("drain", resolveDrain);
+              writer.once("error", rejectDrain);
+            });
+          }
           downloaded += value.length;
           file.downloaded_bytes = downloaded;
           if (Date.now() - lastUpdate > PROGRESS_THROTTLE_MS) {
@@ -456,7 +369,7 @@ export class DownloadManager {
         }
       }
     } finally {
-      writer.close();
+      await closeWriter(writer);
     }
 
     file.downloaded_bytes = downloaded;
@@ -484,7 +397,7 @@ export class DownloadManager {
     const updated: ModelDownload = {
       ...latest,
       files: updatedFiles,
-      downloaded_bytes: sumBytes(updatedFiles),
+      downloaded_bytes: sumDownloadedBytes(updatedFiles),
       total_bytes: latest.total_bytes ?? sumTotalBytes(updatedFiles),
       updated_at: toTimestamp(),
     };

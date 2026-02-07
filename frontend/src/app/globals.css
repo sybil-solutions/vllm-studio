@@ -23,6 +23,8 @@
   --accent-purple-shine: hsl(270, 60%, 60%);
   --highlight: hsl(270, 50%, 55%);
   --highlight-bg: hsl(270, 50%, 95%);
+  --scrollbar-thumb: hsla(270, 50%, 55%, 0.18);
+  --scrollbar-thumb-hover: hsla(270, 60%, 60%, 0.32);
   --app-height: 100vh;
 }
 
@@ -48,6 +50,8 @@
   --accent-purple-shine: hsl(270, 60%, 60%);
   --highlight: hsl(270, 60%, 65%);
   --highlight-bg: hsl(270, 30%, 18%);
+  --scrollbar-thumb: hsla(270, 60%, 70%, 0.18);
+  --scrollbar-thumb-hover: hsla(270, 70%, 78%, 0.34);
 }
 
 @supports (height: 100dvh) {
@@ -65,6 +69,8 @@
 
 * {
   border-color: var(--border);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 html,
@@ -164,10 +170,10 @@ a.nav-link:hover,
   text-decoration: none;
 }
 
-/* Scrollbar - Premium thin design */
+/* Scrollbar - minimal + branded (subtle violet) */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -175,12 +181,15 @@ a.nav-link:hover,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--scrollbar-thumb);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--muted);
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
 }
 
 /* Thin scrollbar variant - invisible until hover */
@@ -190,12 +199,12 @@ a.nav-link:hover,
 }
 
 .scrollbar-thin:hover {
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
-  width: 3px;
-  height: 3px;
+  width: 4px;
+  height: 4px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
@@ -208,11 +217,11 @@ a.nav-link:hover,
 }
 
 .scrollbar-thin:hover::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--scrollbar-thumb);
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Hide scrollbar but keep functionality */
@@ -548,6 +557,41 @@ a.nav-link:hover,
   font-size: 16px;
   line-height: 1.6;
   color: #e8e4dd;
+}
+
+.chat-scroll-pad {
+  padding-bottom: 0;
+}
+
+@media (max-width: 768px) {
+  .chat-scroll-pad {
+    padding-bottom: calc(var(--chat-composer-height, 128px) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-markdown {
+    font-size: 15px;
+    line-height: 1.62;
+  }
+
+  .chat-markdown p {
+    margin-bottom: 0.75rem;
+  }
+
+  .chat-markdown ul,
+  .chat-markdown ol {
+    margin-bottom: 0.75rem;
+    padding-left: 0.9rem;
+  }
+
+  .chat-markdown h1 {
+    font-size: 1.15rem;
+    margin: 0.85rem 0 0.5rem;
+  }
+
+  .chat-markdown h2 {
+    font-size: 1.05rem;
+    margin: 0.75rem 0 0.45rem;
+  }
 }
 
 .chat-markdown p {

@@ -1,25 +1,12 @@
 // CRITICAL
-import {
-  Check,
-  CheckCircle2,
-  Copy,
-  Download,
-  DownloadCloud,
-  ExternalLink,
-  Filter,
-  Heart,
-  Pause,
-  Play,
-  XCircle,
-  RefreshCw,
-  Search,
-  X,
-} from "lucide-react";
-import type { HuggingFaceModel, ModelDownload } from "@/lib/types";
-import { formatNumber } from "@/lib/formatters";
-import { RefreshButton } from "@/components/shared";
+import type { HuggingFaceModel, ModelDownload, ModelRecommendation } from "@/lib/types";
 import { SORT_OPTIONS, TASKS } from "./config";
-import { extractProvider, extractQuantizations } from "./utils";
+import { DiscoverHeader } from "./discover/discover-header";
+import { DiscoverSearchToolbar } from "./discover/discover-search-toolbar";
+import { DiscoverFiltersPanel } from "./discover/discover-filters-panel";
+import { DiscoverSortChips } from "./discover/discover-sort-chips";
+import { DiscoverDownloadQueue } from "./discover/discover-download-queue";
+import { DiscoverResults } from "./discover/discover-results";
 
 interface DiscoverViewProps {
   models: HuggingFaceModel[];
@@ -35,6 +22,9 @@ interface DiscoverViewProps {
   hasMore: boolean;
   providerFilter: string;
   providers: string[];
+  recommendations: ModelRecommendation[];
+  maxVramGb: number;
+  excludedQuantizations: string[];
   downloads: ModelDownload[];
   getDownloadForModel: (modelId: string) => ModelDownload | null;
   onSearchChange: (value: string) => void;
@@ -43,6 +33,7 @@ interface DiscoverViewProps {
   onLibraryChange: (value: string) => void;
   onToggleFilters: () => void;
   onProviderFilterChange: (value: string) => void;
+  onExcludedQuantizationsChange: (value: string[]) => void;
   onCopyModelId: (modelId: string) => void;
   onLoadMore: () => void;
   onRefresh: () => void;
@@ -67,6 +58,9 @@ export function DiscoverView({
   hasMore,
   providerFilter,
   providers,
+  recommendations,
+  maxVramGb,
+  excludedQuantizations,
   downloads,
   getDownloadForModel,
   onSearchChange,
@@ -75,6 +69,7 @@ export function DiscoverView({
   onLibraryChange,
   onToggleFilters,
   onProviderFilterChange,
+  onExcludedQuantizationsChange,
   onCopyModelId,
   onLoadMore,
   onRefresh,
@@ -84,449 +79,95 @@ export function DiscoverView({
   onResumeDownload,
   onCancelDownload,
 }: DiscoverViewProps) {
-  const renderDownloadStatus = (download: ModelDownload) => {
-    const total = download.total_bytes ?? 0;
-    const progress = total > 0 ? Math.min(100, Math.round((download.downloaded_bytes / total) * 100)) : 0;
-    const statusLabel = download.status.replace("_", " ");
-    return (
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 text-xs text-(--muted-foreground)">
-          <span className="uppercase tracking-wide">{statusLabel}</span>
-          {total > 0 && <span>{progress}%</span>}
-        </div>
-        <div className="h-1.5 w-full rounded-full bg-(--card)">
-          <div
-            className="h-1.5 rounded-full bg-(--accent-purple) transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        {download.error && download.status === "failed" && (
-          <div className="text-xs text-(--error)">{download.error}</div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="flex flex-col h-full bg-(--background) text-(--foreground)">
-      {/* Header */}
-      <div
-        className="flex items-center justify-between border-b border-(--border)"
-        style={{
-          paddingLeft: "1.5rem",
-          paddingRight: "1.5rem",
-          paddingTop: "1rem",
-          paddingBottom: "1rem",
-        }}
-      >
-        <h1 className="text-xl font-semibold">Discover Models</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onToggleFilters}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-              showFilters
-                ? "bg-(--accent-purple) text-white"
-                : "bg-(--card) border border-(--border) text-(--muted-foreground) hover:text-(--foreground)"
-            }`}
-          >
-            <Filter className="h-4 w-4" />
-            <span className="hidden sm:inline">Filters</span>
-          </button>
-          {RefreshButton({
-            onRefresh,
-            loading,
-            className: "hover:bg-(--card-hover) disabled:opacity-50",
-          })}
-        </div>
-      </div>
+      <DiscoverHeader showFilters={showFilters} onToggleFilters={onToggleFilters} onRefresh={onRefresh} loading={loading} />
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
         <div style={{ padding: "1.5rem" }}>
-          {downloads.length > 0 && (
-            <div className="mb-5 border border-(--border) rounded-lg bg-(--card) p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-medium">Download Queue</div>
-                <div className="text-xs text-(--muted-foreground)">{downloads.length} active</div>
+          <DiscoverDownloadQueue
+            downloads={downloads}
+            onPauseDownload={onPauseDownload}
+            onResumeDownload={onResumeDownload}
+            onCancelDownload={onCancelDownload}
+          />
+
+          {/* Toolbar */}
+          <DiscoverSearchToolbar search={search} onSearchChange={onSearchChange} />
+
+          {/* Filters */}
+          <DiscoverFiltersPanel
+            showFilters={showFilters}
+            task={task}
+            providerFilter={providerFilter}
+            providers={providers}
+            library={library}
+            sort={sort}
+            tasks={TASKS}
+            sortOptions={SORT_OPTIONS}
+            excludedQuantizations={excludedQuantizations}
+            onTaskChange={onTaskChange}
+            onProviderFilterChange={onProviderFilterChange}
+            onLibraryChange={onLibraryChange}
+            onSortChange={onSortChange}
+            onExcludedQuantizationsChange={onExcludedQuantizationsChange}
+          />
+
+          {/* Quick sort chips */}
+          <DiscoverSortChips sort={sort} sortOptions={SORT_OPTIONS} onSortChange={onSortChange} />
+
+          {recommendations.length > 0 && (
+            <div className="mb-4 p-4 bg-(--card) border border-(--border) rounded-lg">
+              <div className="flex items-baseline justify-between gap-3 mb-2">
+                <h3 className="text-sm font-semibold text-(--foreground)">VRAM-aware Recommendations</h3>
+                <div className="text-xs text-(--muted-foreground)">
+                  {maxVramGb > 0 ? `Max VRAM ${Math.round(maxVramGb)} GB` : "VRAM unknown"}
+                </div>
               </div>
-              <div className="space-y-3">
-                {downloads.map((download) => (
-                  <div key={download.id} className="flex items-center justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{download.model_id}</div>
-                      {renderDownloadStatus(download)}
+              <div className="space-y-2">
+                {recommendations.slice(0, 5).map((rec) => (
+                  <div key={rec.id} className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-sm text-(--foreground) truncate">{rec.name}</div>
+                      <div className="text-xs text-(--muted-foreground) truncate">{rec.description}</div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {download.status === "downloading" && (
-                        <button
-                          onClick={() => onPauseDownload(download.id)}
-                          className="p-2 rounded-lg border border-(--border) hover:bg-(--card-hover)"
-                          title="Pause"
-                        >
-                          <Pause className="h-4 w-4" />
-                        </button>
-                      )}
-                      {(download.status === "paused" || download.status === "failed") && (
-                        <button
-                          onClick={() => onResumeDownload(download.id)}
-                          className="p-2 rounded-lg border border-(--border) hover:bg-(--card-hover)"
-                          title="Resume"
-                        >
-                          <Play className="h-4 w-4" />
-                        </button>
-                      )}
-                      {download.status !== "completed" && download.status !== "canceled" && (
-                        <button
-                          onClick={() => onCancelDownload(download.id)}
-                          className="p-2 rounded-lg border border-(--border) hover:bg-(--card-hover) text-(--error)"
-                          title="Cancel"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
+                    {typeof rec.min_vram_gb === "number" && (
+                      <div
+                        className={
+                          "shrink-0 text-xs px-2 py-1 rounded-md border " +
+                          ((maxVramGb === 0 || rec.min_vram_gb <= maxVramGb)
+                            ? "text-[#4ade80] border-[#4ade80]/30 bg-[#4ade80]/10"
+                            : "text-[#fb7185] border-[#fb7185]/30 bg-[#fb7185]/10")
+                        }
+                      >
+                        min {Math.round(rec.min_vram_gb)} GB
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Toolbar */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-(--muted-foreground)" />
-              <input
-                type="text"
-                value={search}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Search models..."
-                className="w-full pl-10 pr-4 py-2 bg-(--card) border border-(--border) rounded-lg text-sm text-(--foreground) placeholder:text-(--muted-foreground)/50 focus:outline-none focus:border-(--accent-purple)"
-              />
-              {search && (
-                <button
-                  onClick={() => onSearchChange("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-(--card-hover) rounded transition-colors"
-                >
-                  <X className="h-3.5 w-3.5 text-(--muted-foreground)" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Filters */}
-          {showFilters && (
-            <div className="mb-4 p-4 bg-(--card) border border-(--border) rounded-lg">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                {/* Task filter */}
-                <div>
-                  <label className="block text-xs text-(--muted-foreground) mb-1.5">Task</label>
-                  <select
-                    value={task}
-                    onChange={(event) => onTaskChange(event.target.value)}
-                    className="w-full px-3 py-2 bg-(--background) border border-(--border) rounded-lg text-sm text-(--foreground) focus:outline-none focus:border-(--accent-purple)"
-                  >
-                    {TASKS.map((taskOption) => (
-                      <option key={taskOption.value} value={taskOption.value}>
-                        {taskOption.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Provider filter */}
-                <div>
-                  <label className="block text-xs text-(--muted-foreground) mb-1.5">Provider</label>
-                  <select
-                    value={providerFilter}
-                    onChange={(event) => onProviderFilterChange(event.target.value)}
-                    className="w-full px-3 py-2 bg-(--background) border border-(--border) rounded-lg text-sm text-(--foreground) focus:outline-none focus:border-(--accent-purple)"
-                  >
-                    <option value="">All Providers</option>
-                    {providers.map((provider) => (
-                      <option key={provider} value={provider}>
-                        {provider}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Library filter */}
-                <div>
-                  <label className="block text-xs text-(--muted-foreground) mb-1.5">Library</label>
-                  <select
-                    value={library}
-                    onChange={(event) => onLibraryChange(event.target.value)}
-                    className="w-full px-3 py-2 bg-(--background) border border-(--border) rounded-lg text-sm text-(--foreground) focus:outline-none focus:border-(--accent-purple)"
-                  >
-                    <option value="">All Libraries</option>
-                    <option value="transformers">Transformers</option>
-                    <option value="pytorch">PyTorch</option>
-                    <option value="safetensors">Safetensors</option>
-                    <option value="gguf">GGUF</option>
-                    <option value="exl2">EXL2</option>
-                    <option value="awq">AWQ</option>
-                    <option value="gptq">GPTQ</option>
-                  </select>
-                </div>
-
-                {/* Sort */}
-                <div>
-                  <label className="block text-xs text-(--muted-foreground) mb-1.5">Sort By</label>
-                  <select
-                    value={sort}
-                    onChange={(event) => onSortChange(event.target.value)}
-                    className="w-full px-3 py-2 bg-(--background) border border-(--border) rounded-lg text-sm text-(--foreground) focus:outline-none focus:border-(--accent-purple)"
-                  >
-                    {SORT_OPTIONS.map((sortOption) => (
-                      <option key={sortOption.value} value={sortOption.value}>
-                        {sortOption.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Quick sort chips */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            {SORT_OPTIONS.map((option) => {
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => onSortChange(option.value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
-                    sort === option.value
-                      ? "bg-(--accent-purple) text-white"
-                      : "bg-(--card) border border-(--border) text-(--muted-foreground) hover:text-(--foreground) hover:bg-(--card-hover)"
-                  }`}
-                >
-                  <Icon className="h-3 w-3" />
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-
           {/* Results */}
-          {error ? (
-            <div className="text-center py-12">
-              <p className="text-(--error) mb-4">{error}</p>
-              <button
-                onClick={onRefresh}
-                className="px-4 py-2 bg-(--card) border border-(--border) rounded-lg text-(--foreground) hover:bg-(--card-hover) transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          ) : loading && models.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-(--muted-foreground)">
-              <RefreshCw className="h-5 w-5 animate-spin" />
-            </div>
-          ) : filteredModels.length === 0 ? (
-            <div className="text-center py-12 text-(--muted-foreground)">
-              <p>No models found</p>
-              <p className="text-sm mt-1">Try adjusting your search or filters</p>
-            </div>
-          ) : (
-            <>
-              <div className="text-xs text-(--muted-foreground) mb-3">
-                {filteredModels.length} {filteredModels.length === 1 ? "model" : "models"}
-                {providerFilter && ` from ${providerFilter}`}
-              </div>
-              <div className="border border-(--border) rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-(--card) border-b border-(--border)">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
-                        Model
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
-                        Provider
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
-                        Task
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
-                        Quantization
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
-                        Stats
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-(--muted-foreground) uppercase tracking-wider w-8"></th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-(--border)">
-                    {filteredModels.map((model) => {
-                      const provider = extractProvider(model.modelId);
-                      const quantizations = extractQuantizations(model.tags);
-                      const isLocal = isModelLocal(model.modelId);
-                      const activeDownload = getDownloadForModel(model.modelId);
-
-                      return (
-                        <tr key={model._id} className="hover:bg-(--card)/30 transition-colors">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="text-sm font-medium text-(--foreground) truncate max-w-xs"
-                                title={model.modelId}
-                              >
-                                {model.modelId}
-                              </div>
-                              <button
-                                onClick={() => onCopyModelId(model.modelId)}
-                                className="p-1 hover:bg-(--card-hover) rounded transition-colors shrink-0"
-                                title="Copy model ID"
-                              >
-                                {copiedId === model.modelId ? (
-                                  <Check className="h-3 w-3 text-(--success)" />
-                                ) : (
-                                  <Copy className="h-3 w-3 text-(--muted-foreground)" />
-                                )}
-                              </button>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="px-2 py-1 bg-(--card) border border-(--border) rounded text-xs text-(--foreground)">
-                              {provider}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            {model.pipeline_tag ? (
-                              <span className="px-2 py-1 bg-(--card) border border-(--border) rounded text-xs text-(--muted-foreground)">
-                                {model.pipeline_tag}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-(--muted-foreground)">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1">
-                              {quantizations.length > 0 ? (
-                                quantizations.map((quantization) => (
-                                  <span
-                                    key={quantization}
-                                    className="px-2 py-1 bg-(--warning)/20 text-(--warning) border border-(--warning)/30 rounded text-xs font-medium"
-                                  >
-                                    {quantization}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-xs text-(--muted-foreground)">—</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            {isLocal ? (
-                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-(--success)/20 text-(--success) border border-(--success)/30">
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Local
-                              </span>
-                            ) : (
-                              <span className="text-xs text-(--muted-foreground)">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-4 text-xs text-(--muted-foreground)">
-                              <div className="flex items-center gap-1" title="Downloads">
-                                <Download className="h-3.5 w-3.5" />
-                                <span>{formatNumber(model.downloads)}</span>
-                              </div>
-                              <div className="flex items-center gap-1" title="Likes">
-                                <Heart className="h-3.5 w-3.5" />
-                                <span>{formatNumber(model.likes)}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <a
-                              href={`https://huggingface.co/${model.modelId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1.5 hover:bg-(--card-hover) rounded transition-colors inline-block text-(--link) hover:text-(--link-hover)"
-                              title="View on Hugging Face"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {isLocal ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-(--success)">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Ready
-                              </span>
-                            ) : activeDownload ? (
-                              <div className="flex items-center justify-end gap-2">
-                                {activeDownload.status === "downloading" && (
-                                  <button
-                                    onClick={() => onPauseDownload(activeDownload.id)}
-                                    className="p-1.5 rounded-lg border border-(--border) hover:bg-(--card-hover)"
-                                    title="Pause download"
-                                  >
-                                    <Pause className="h-4 w-4" />
-                                  </button>
-                                )}
-                                {(activeDownload.status === "paused" || activeDownload.status === "failed") && (
-                                  <button
-                                    onClick={() => onResumeDownload(activeDownload.id)}
-                                    className="p-1.5 rounded-lg border border-(--border) hover:bg-(--card-hover)"
-                                    title="Resume download"
-                                  >
-                                    <Play className="h-4 w-4" />
-                                  </button>
-                                )}
-                                {activeDownload.status === "completed" && (
-                                  <span className="text-xs text-(--success)">Downloaded</span>
-                                )}
-                                {(activeDownload.status === "downloading" || activeDownload.status === "queued") && (
-                                  <span className="text-xs text-(--muted-foreground)">Downloading…</span>
-                                )}
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => onStartDownload({ model_id: model.modelId })}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-(--accent-purple) text-white text-xs font-medium hover:opacity-90"
-                              >
-                                <DownloadCloud className="h-3.5 w-3.5" />
-                                Download
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Load More */}
-              {hasMore && (
-                <div className="mt-6 text-center">
-                  <button
-                    onClick={onLoadMore}
-                    disabled={loading}
-                    className="px-4 py-2 bg-(--card) border border-(--border) rounded-lg text-sm text-(--foreground) hover:bg-(--card-hover) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <span className="flex items-center gap-2">
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Loading...
-                      </span>
-                    ) : (
-                      "Load More"
-                    )}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+          <DiscoverResults
+            models={models}
+            filteredModels={filteredModels}
+            loading={loading}
+            error={error}
+            providerFilter={providerFilter}
+            copiedId={copiedId}
+            hasMore={hasMore}
+            isModelLocal={isModelLocal}
+            getDownloadForModel={getDownloadForModel}
+            onCopyModelId={onCopyModelId}
+            onRefresh={onRefresh}
+            onLoadMore={onLoadMore}
+            onStartDownload={onStartDownload}
+            onPauseDownload={onPauseDownload}
+            onResumeDownload={onResumeDownload}
+          />
         </div>
       </div>
     </div>

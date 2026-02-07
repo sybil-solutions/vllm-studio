@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import type { AgentState, AgentPlan, ChatSessionDetail } from "@/lib/types";
 import { useAppStore } from "@/store";
 import { normalizePlanSteps } from "../_components/agent/agent-types";

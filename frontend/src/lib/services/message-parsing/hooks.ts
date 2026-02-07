@@ -6,9 +6,10 @@
  * React hooks for consuming the MessageParsingService
  */
 
-import { useContext, useMemo, useCallback } from "react";
+import { useContext, useCallback } from "react";
 import { MessageParsingContext } from "./context";
 import { getMessageParsingService } from "./factory";
+import { DEFAULT_CONFIG } from "./types";
 import type {
   IMessageParsingService,
   ParsedMessage,
@@ -42,14 +43,7 @@ export function useMessageParsingConfig(): MessageParsingConfig {
   const context = useContext(MessageParsingContext);
 
   if (!context) {
-    // Return default config
-    return {
-      enableArtifacts: true,
-      enableThinkingExtraction: true,
-      enableMcpXmlStripping: true,
-      enableBoxTagStripping: true,
-      cacheSize: 100,
-    };
+    return DEFAULT_CONFIG;
   }
 
   return context.config;
@@ -155,49 +149,4 @@ export function useMessageParsing() {
   };
 }
 
-/**
- * Hook for parsing a single message with memoization
- * Useful when you need the full parsed result for a specific message
- */
-export function useParsedMessage(content: string, options?: ParseOptions): ParsedMessage {
-  const service = useMessageParsingService();
-
-  return useMemo(() => {
-    return service.parse(content, options);
-  }, [service, content, options]);
-}
-
-/**
- * Hook for parsing only thinking content
- * Lightweight alternative when you only need thinking extraction
- */
-export function useThinkingContent(content: string): ThinkingResult {
-  const service = useMessageParsingService();
-
-  return useMemo(() => {
-    return service.parseThinking(content);
-  }, [service, content]);
-}
-
-/**
- * Hook for parsing only artifacts
- * Lightweight alternative when you only need artifact extraction
- */
-export function useArtifacts(content: string): ArtifactsResult {
-  const service = useMessageParsingService();
-
-  return useMemo(() => {
-    return service.parseArtifacts(content);
-  }, [service, content]);
-}
-
-/**
- * Hook for markdown segments
- */
-export function useMarkdownSegments(content: string): MarkdownSegment[] {
-  const service = useMessageParsingService();
-
-  return useMemo(() => {
-    return service.getSegments(content);
-  }, [service, content]);
-}
+// Intentionally keep only the main `useMessageParsing()` hook to reduce API surface.

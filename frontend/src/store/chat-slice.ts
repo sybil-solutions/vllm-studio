@@ -1,263 +1,34 @@
 // CRITICAL
 import type { StateCreator } from "zustand";
 
-import type {
-  ChatSession,
-  ToolCall,
-  ToolResult,
-  MCPServer,
-  MCPTool,
-  DeepResearchConfig,
-  SessionUsage,
-  AgentFileEntry,
-  AgentFileVersion,
-} from "@/lib/types";
-import type { ModelOption, Attachment } from "@/app/chat/types";
-import type { AgentPlan } from "@/app/chat/_components/agent/agent-types";
+import type { AgentFileVersion } from "@/lib/types";
+import type { ChatSlice } from "./chat-slice-types";
+import { DEFAULT_ARTIFACT_VIEWER_ENTRY, DEFAULT_CODE_BLOCK_ENTRY, DEFAULT_DEEP_RESEARCH } from "./chat-slice-defaults";
 
-export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  images?: string[];
-  isStreaming?: boolean;
-  toolCalls?: ToolCall[];
-  toolResults?: ToolResult[];
-  model?: string;
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-  request_prompt_tokens?: number | null;
-  request_tools_tokens?: number | null;
-  request_total_input_tokens?: number | null;
-  request_completion_tokens?: number | null;
-  estimated_cost_usd?: number | null;
+export type { ChatSlice } from "./chat-slice-types";
+
+function areArtifactViewerEntriesEqual(
+  a: typeof DEFAULT_ARTIFACT_VIEWER_ENTRY,
+  b: typeof DEFAULT_ARTIFACT_VIEWER_ENTRY,
+) {
+  if (a === b) return true;
+  return (
+    a.isFullscreen === b.isFullscreen &&
+    a.showCode === b.showCode &&
+    a.copied === b.copied &&
+    a.scale === b.scale &&
+    a.position.x === b.position.x &&
+    a.position.y === b.position.y &&
+    a.isDragging === b.isDragging &&
+    a.isRunning === b.isRunning &&
+    (a.error ?? null) === (b.error ?? null)
+  );
 }
 
-export interface ChatState {
-  // Sessions
-  sessions: ChatSession[];
-  currentSessionId: string | null;
-  currentSessionTitle: string;
-  sessionsLoading: boolean;
-
-  // Messages & input
-  input: string;
-  error: string | null;
-
-  // Streaming
-  streamingStartTime: number | null;
-  elapsedSeconds: number;
-  queuedContext: string;
-
-  // Model
-  selectedModel: string;
-  availableModels: ModelOption[];
-
-  // Layout
-  isMobile: boolean;
-  userScrolledUp: boolean;
-
-  // MCP & tools
-  mcpEnabled: boolean;
-  artifactsEnabled: boolean;
-  mcpServers: MCPServer[];
-  mcpSettingsOpen: boolean;
-  mcpTools: MCPTool[];
-  executingTools: Set<string>;
-  toolResultsMap: Map<string, ToolResult>;
-
-  // Settings
-  systemPrompt: string;
-  chatSettingsOpen: boolean;
-  deepResearch: DeepResearchConfig;
-
-  // Usage & export
-  sessionUsage: SessionUsage | null;
-  usageDetailsOpen: boolean;
-  exportOpen: boolean;
-
-  // Attachments & recording
-  attachments: Attachment[];
-  isRecording: boolean;
-  isTranscribing: boolean;
-  transcriptionError: string | null;
-  recordingDuration: number;
-  isTTSEnabled: boolean;
-
-  // MCP action state
-  mcpPendingServer: string | null;
-  mcpActionError: string | null;
-
-  // Message UI state
-  copiedMessageId: string | null;
-  messageInlineThinkingExpanded: Record<string, boolean>;
-  messageInlineToolsExpanded: Record<string, boolean>;
-  toolCallGroupsExpanded: Record<string, boolean>;
-
-  // Artifacts
-  activeArtifactId: string | null;
-  artifactViewerState: Record<
-    string,
-    {
-      isFullscreen: boolean;
-      showCode: boolean;
-      copied: boolean;
-      scale: number;
-      position: { x: number; y: number };
-      isDragging: boolean;
-      isRunning: boolean;
-      error: string | null;
-    }
-  >;
-
-  // Code blocks & sandboxes
-  codeBlockState: Record<string, { copied: boolean; isExpanded: boolean }>;
-  mermaidState: Record<string, { svg: string; error: string | null }>;
-
-  // Splash
-  splashIsMobile: boolean;
-
-  // Agent mode
-  agentMode: boolean;
-  agentPlan: AgentPlan | null;
-  agentFiles: AgentFileEntry[];
-  agentFilesLoading: boolean;
-  selectedAgentFilePath: string | null;
-  selectedAgentFileContent: string | null;
-  selectedAgentFileLoading: boolean;
-  agentFileVersions: Record<string, AgentFileVersion[]>;
-  sidebarWidth: number;
+function areCodeBlockEntriesEqual(a: typeof DEFAULT_CODE_BLOCK_ENTRY, b: typeof DEFAULT_CODE_BLOCK_ENTRY) {
+  if (a === b) return true;
+  return a.copied === b.copied && a.isExpanded === b.isExpanded;
 }
-
-export interface ChatActions {
-  // Sessions
-  setSessions: (sessions: ChatSession[]) => void;
-  updateSessions: (updater: (sessions: ChatSession[]) => ChatSession[]) => void;
-  setCurrentSessionId: (currentSessionId: string | null) => void;
-  setCurrentSessionTitle: (currentSessionTitle: string) => void;
-  setSessionsLoading: (sessionsLoading: boolean) => void;
-
-  // Input
-  setInput: (input: string) => void;
-  setError: (error: string | null) => void;
-
-  // Streaming
-  setStreamingStartTime: (streamingStartTime: number | null) => void;
-  setElapsedSeconds: (elapsedSeconds: number) => void;
-  setQueuedContext: (queuedContext: string) => void;
-
-  // Model
-  setSelectedModel: (selectedModel: string) => void;
-  setAvailableModels: (availableModels: ModelOption[]) => void;
-
-  // Layout
-  setIsMobile: (isMobile: boolean) => void;
-  setUserScrolledUp: (userScrolledUp: boolean) => void;
-
-  // MCP & tools
-  setMcpEnabled: (mcpEnabled: boolean) => void;
-  setArtifactsEnabled: (artifactsEnabled: boolean) => void;
-  setActiveArtifactId: (artifactId: string | null) => void;
-  setMcpServers: (mcpServers: MCPServer[]) => void;
-  setMcpSettingsOpen: (mcpSettingsOpen: boolean) => void;
-  setMcpTools: (mcpTools: MCPTool[]) => void;
-  setExecutingTools: (executingTools: Set<string>) => void;
-  updateExecutingTools: (updater: (executingTools: Set<string>) => Set<string>) => void;
-  setToolResultsMap: (toolResultsMap: Map<string, ToolResult>) => void;
-  updateToolResultsMap: (
-    updater: (toolResultsMap: Map<string, ToolResult>) => Map<string, ToolResult>,
-  ) => void;
-
-  // Settings
-  setSystemPrompt: (systemPrompt: string) => void;
-  setChatSettingsOpen: (chatSettingsOpen: boolean) => void;
-  setDeepResearch: (deepResearch: DeepResearchConfig) => void;
-
-  // Usage & export
-  setSessionUsage: (sessionUsage: SessionUsage | null) => void;
-  setUsageDetailsOpen: (usageDetailsOpen: boolean) => void;
-  setExportOpen: (exportOpen: boolean) => void;
-
-  // Attachments & recording
-  setAttachments: (attachments: Attachment[]) => void;
-  updateAttachments: (updater: (attachments: Attachment[]) => Attachment[]) => void;
-  setIsRecording: (isRecording: boolean) => void;
-  setIsTranscribing: (isTranscribing: boolean) => void;
-  setTranscriptionError: (transcriptionError: string | null) => void;
-  setRecordingDuration: (recordingDuration: number) => void;
-  setIsTTSEnabled: (isTTSEnabled: boolean) => void;
-
-  // MCP action state
-  setMcpPendingServer: (mcpPendingServer: string | null) => void;
-  setMcpActionError: (mcpActionError: string | null) => void;
-
-  // Message UI state
-  setCopiedMessageId: (copiedMessageId: string | null) => void;
-  setMessageInlineThinkingExpanded: (messageId: string, expanded: boolean) => void;
-  setMessageInlineToolsExpanded: (messageId: string, expanded: boolean) => void;
-  setToolCallGroupExpanded: (groupId: string, expanded: boolean) => void;
-
-  // Artifacts
-  updateArtifactViewerState: (
-    artifactId: string,
-    updater: (prev: {
-      isFullscreen: boolean;
-      showCode: boolean;
-      copied: boolean;
-      scale: number;
-      position: { x: number; y: number };
-      isDragging: boolean;
-      isRunning: boolean;
-      error: string | null;
-    }) => {
-      isFullscreen: boolean;
-      showCode: boolean;
-      copied: boolean;
-      scale: number;
-      position: { x: number; y: number };
-      isDragging: boolean;
-      isRunning: boolean;
-      error: string | null;
-    },
-  ) => void;
-
-  // Code blocks & sandboxes
-  updateCodeBlockState: (
-    blockId: string,
-    updater: (prev: { copied: boolean; isExpanded: boolean }) => {
-      copied: boolean;
-      isExpanded: boolean;
-    },
-  ) => void;
-  setMermaidState: (id: string, svg: string, error: string | null) => void;
-
-  // Splash
-  setSplashIsMobile: (splashIsMobile: boolean) => void;
-
-  // Agent mode
-  setAgentMode: (enabled: boolean) => void;
-  setAgentPlan: (plan: AgentPlan | null) => void;
-  setAgentFiles: (files: AgentFileEntry[]) => void;
-  setAgentFilesLoading: (loading: boolean) => void;
-  setSelectedAgentFilePath: (path: string | null) => void;
-  setSelectedAgentFileContent: (content: string | null) => void;
-  setSelectedAgentFileLoading: (loading: boolean) => void;
-  addAgentFileVersion: (path: string, content: string) => void;
-  moveAgentFileVersions: (from: string, to: string) => void;
-  clearAgentFileVersions: () => void;
-  setSidebarWidth: (width: number) => void;
-}
-
-export type ChatSlice = ChatState & ChatActions;
-
-const DEFAULT_DEEP_RESEARCH: DeepResearchConfig = {
-  enabled: false,
-  maxSources: 10,
-  searchDepth: "medium",
-  autoSummarize: true,
-  includeCitations: true,
-};
 
 export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set) => ({
   // Sessions
@@ -273,6 +44,8 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   // Streaming
   streamingStartTime: null,
   elapsedSeconds: 0,
+  lastRunDurationSeconds: null,
+  runDurationsByRunId: {},
   queuedContext: "",
 
   // Model
@@ -341,6 +114,9 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   selectedAgentFileLoading: false,
   agentFileVersions: {},
   sidebarWidth: 400,
+  resultsLastTab: null,
+  mobilePlanChipHidden: false,
+  toasts: [],
 
   // --- Actions ---
 
@@ -358,6 +134,29 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   // Streaming
   setStreamingStartTime: (streamingStartTime) => set({ streamingStartTime }),
   setElapsedSeconds: (elapsedSeconds) => set({ elapsedSeconds }),
+  setLastRunDurationSeconds: (seconds) => set({ lastRunDurationSeconds: seconds }),
+  setRunDurationForRunId: (runId, seconds) =>
+    set((state) => {
+      if (!runId) return state;
+      const prev = state.runDurationsByRunId[runId];
+      if (prev === seconds) return state;
+
+      // Prevent unbounded growth.
+      const keys = Object.keys(state.runDurationsByRunId);
+      let next = state.runDurationsByRunId;
+      if (keys.length > 80 && !(runId in next)) {
+        // Drop oldest-ish by insertion order (object order) best-effort.
+        const keep = new Set(keys.slice(-60));
+        keep.add(runId);
+        const trimmed: Record<string, number> = {};
+        for (const k of keys) {
+          if (keep.has(k)) trimmed[k] = next[k]!;
+        }
+        next = trimmed;
+      }
+
+      return { runDurationsByRunId: { ...next, [runId]: seconds } };
+    }),
   setQueuedContext: (queuedContext) => set({ queuedContext }),
 
   // Model
@@ -375,12 +174,32 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   setMcpServers: (mcpServers) => set({ mcpServers }),
   setMcpSettingsOpen: (mcpSettingsOpen) => set({ mcpSettingsOpen }),
   setMcpTools: (mcpTools) => set({ mcpTools }),
-  setExecutingTools: (executingTools) => set({ executingTools }),
+  setExecutingTools: (executingTools) =>
+    set((state) => {
+      if (state.executingTools === executingTools) return state;
+      if (state.executingTools.size === 0 && executingTools.size === 0) return state;
+      return { executingTools };
+    }),
   updateExecutingTools: (updater) =>
-    set((state) => ({ executingTools: updater(state.executingTools) })),
-  setToolResultsMap: (toolResultsMap) => set({ toolResultsMap }),
+    set((state) => {
+      const next = updater(state.executingTools);
+      if (next === state.executingTools) return state;
+      if (state.executingTools.size === 0 && next.size === 0) return state;
+      return { executingTools: next };
+    }),
+  setToolResultsMap: (toolResultsMap) =>
+    set((state) => {
+      if (state.toolResultsMap === toolResultsMap) return state;
+      if (state.toolResultsMap.size === 0 && toolResultsMap.size === 0) return state;
+      return { toolResultsMap };
+    }),
   updateToolResultsMap: (updater) =>
-    set((state) => ({ toolResultsMap: updater(state.toolResultsMap) })),
+    set((state) => {
+      const next = updater(state.toolResultsMap);
+      if (next === state.toolResultsMap) return state;
+      if (state.toolResultsMap.size === 0 && next.size === 0) return state;
+      return { toolResultsMap: next };
+    }),
 
   // Settings
   setSystemPrompt: (systemPrompt) => set({ systemPrompt }),
@@ -407,46 +226,53 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   setMcpActionError: (mcpActionError) => set({ mcpActionError }),
 
   // Message UI state
-  setCopiedMessageId: (copiedMessageId) => set({ copiedMessageId }),
+  setCopiedMessageId: (copiedMessageId) =>
+    set((state) => (state.copiedMessageId === copiedMessageId ? state : { copiedMessageId })),
   setMessageInlineThinkingExpanded: (messageId, expanded) =>
-    set((state) => ({
-      messageInlineThinkingExpanded: {
-        ...state.messageInlineThinkingExpanded,
-        [messageId]: expanded,
-      },
-    })),
+    set((state) => {
+      const prev = state.messageInlineThinkingExpanded[messageId] ?? false;
+      if (prev === expanded) return state;
+      return {
+        messageInlineThinkingExpanded: {
+          ...state.messageInlineThinkingExpanded,
+          [messageId]: expanded,
+        },
+      };
+    }),
   setMessageInlineToolsExpanded: (messageId, expanded) =>
-    set((state) => ({
-      messageInlineToolsExpanded: {
-        ...state.messageInlineToolsExpanded,
-        [messageId]: expanded,
-      },
-    })),
+    set((state) => {
+      const prev = state.messageInlineToolsExpanded[messageId] ?? false;
+      if (prev === expanded) return state;
+      return {
+        messageInlineToolsExpanded: {
+          ...state.messageInlineToolsExpanded,
+          [messageId]: expanded,
+        },
+      };
+    }),
   setToolCallGroupExpanded: (groupId, expanded) =>
-    set((state) => ({
-      toolCallGroupsExpanded: {
-        ...state.toolCallGroupsExpanded,
-        [groupId]: expanded,
-      },
-    })),
+    set((state) => {
+      const prev = state.toolCallGroupsExpanded[groupId] ?? false;
+      if (prev === expanded) return state;
+      return {
+        toolCallGroupsExpanded: {
+          ...state.toolCallGroupsExpanded,
+          [groupId]: expanded,
+        },
+      };
+    }),
 
   // Artifacts
   updateArtifactViewerState: (artifactId, updater) =>
     set((state) => {
-      const prev = state.artifactViewerState[artifactId] ?? {
-        isFullscreen: false,
-        showCode: false,
-        copied: false,
-        scale: 1,
-        position: { x: 0, y: 0 },
-        isDragging: false,
-        isRunning: true,
-        error: null,
-      };
+      const prev = state.artifactViewerState[artifactId] ?? DEFAULT_ARTIFACT_VIEWER_ENTRY;
+      const next = updater(prev);
+      if (next === prev) return state;
+      if (areArtifactViewerEntriesEqual(prev, next as typeof DEFAULT_ARTIFACT_VIEWER_ENTRY)) return state;
       return {
         artifactViewerState: {
           ...state.artifactViewerState,
-          [artifactId]: updater(prev),
+          [artifactId]: next,
         },
       };
     }),
@@ -454,27 +280,46 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   // Code blocks & sandboxes
   updateCodeBlockState: (blockId, updater) =>
     set((state) => {
-      const prev = state.codeBlockState[blockId] ?? {
-        copied: false,
-        isExpanded: false,
-      };
+      const prev = state.codeBlockState[blockId] ?? DEFAULT_CODE_BLOCK_ENTRY;
+      const next = updater(prev);
+      if (next === prev) return state;
+      if (areCodeBlockEntriesEqual(prev, next as typeof DEFAULT_CODE_BLOCK_ENTRY)) return state;
       return {
         codeBlockState: {
           ...state.codeBlockState,
-          [blockId]: updater(prev),
+          [blockId]: next,
         },
       };
     }),
+  deleteCodeBlockState: (blockId) =>
+    set((state) => {
+      if (!(blockId in state.codeBlockState)) return state;
+      const next = { ...state.codeBlockState };
+      delete next[blockId];
+      return { codeBlockState: next };
+    }),
   setMermaidState: (id, svg, error) =>
-    set((state) => ({
-      mermaidState: {
-        ...state.mermaidState,
-        [id]: { svg, error },
-      },
-    })),
+    set((state) => {
+      const prev = state.mermaidState[id];
+      if (prev && prev.svg === svg && prev.error === error) return state;
+      return {
+        mermaidState: {
+          ...state.mermaidState,
+          [id]: { svg, error },
+        },
+      };
+    }),
+  deleteMermaidState: (id) =>
+    set((state) => {
+      if (!(id in state.mermaidState)) return state;
+      const next = { ...state.mermaidState };
+      delete next[id];
+      return { mermaidState: next };
+    }),
 
   // Splash
-  setSplashIsMobile: (splashIsMobile) => set({ splashIsMobile }),
+  setSplashIsMobile: (splashIsMobile) =>
+    set((state) => (state.splashIsMobile === splashIsMobile ? state : { splashIsMobile })),
 
   // Agent mode
   setAgentMode: (enabled) => set({ agentMode: enabled }),
@@ -502,6 +347,29 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
         },
       };
     }),
+  hydrateAgentFileVersions: (path, versions) =>
+    set((state) => {
+      if (!path) return state;
+      const incoming = Array.isArray(versions) ? versions : [];
+      const existing = state.agentFileVersions[path] ?? [];
+      if (incoming.length === 0) return state;
+      const lastIncoming = incoming[incoming.length - 1];
+      const lastExisting = existing[existing.length - 1];
+      if (
+        existing.length === incoming.length &&
+        lastExisting?.version === lastIncoming?.version &&
+        lastExisting?.timestamp === lastIncoming?.timestamp &&
+        lastExisting?.content === lastIncoming?.content
+      ) {
+        return state;
+      }
+      return {
+        agentFileVersions: {
+          ...state.agentFileVersions,
+          [path]: incoming,
+        },
+      };
+    }),
   moveAgentFileVersions: (from, to) =>
     set((state) => {
       if (from === to) return state;
@@ -514,4 +382,40 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
     }),
   clearAgentFileVersions: () => set({ agentFileVersions: {} }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
+  setResultsLastTab: (tab) => set({ resultsLastTab: tab }),
+  setMobilePlanChipHidden: (hidden) => set({ mobilePlanChipHidden: hidden }),
+
+  pushToast: (toast) =>
+    set((state) => {
+      const dedupeKey = toast.dedupeKey?.trim();
+      if (dedupeKey) {
+        const existing = state.toasts.find((t) => t.dedupeKey === dedupeKey);
+        if (existing) return state;
+      }
+
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      return {
+        toasts: [
+          {
+            id,
+            kind: toast.kind,
+            title: toast.title,
+            message: toast.message,
+            detail: toast.detail,
+            createdAt: Date.now(),
+            expanded: false,
+            dedupeKey: dedupeKey || undefined,
+          },
+          ...state.toasts,
+        ].slice(0, 8),
+      };
+    }),
+  closeToast: (id) =>
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id),
+    })),
+  toggleToastExpanded: (id) =>
+    set((state) => ({
+      toasts: state.toasts.map((t) => (t.id === id ? { ...t, expanded: !t.expanded } : t)),
+    })),
 });

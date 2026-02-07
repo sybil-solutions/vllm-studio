@@ -9,6 +9,7 @@ import { setTimeout as delayTimeout } from "node:timers/promises";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "../config/env";
 import { delay } from "../core/async";
+import { cleanupLogFiles, getLogCleanupDefaultsFromEnvironment, primaryLogPathFor } from "../core/log-files";
 import type { Logger } from "../core/logger";
 import type { LaunchResult, ProcessInfo, Recipe } from "../types/models";
 import type { EventManager } from "./event-manager";
@@ -219,7 +220,12 @@ export const createProcessManager = (
                   ? buildLlamacppCommand(updatedRecipe, config)
                   : buildVllmCommand(updatedRecipe);
 
-        const logFile = resolve("/tmp", `vllm_${updatedRecipe.id}.log`);
+        const logFile = primaryLogPathFor(config.data_dir, updatedRecipe.id);
+        // Best-effort retention to prevent unbounded growth over long-running installs.
+        cleanupLogFiles(config.data_dir, {
+            ...getLogCleanupDefaultsFromEnvironment(),
+            excludePaths: new Set([logFile]),
+        });
         const env = buildEnvironment(updatedRecipe);
 
         try {

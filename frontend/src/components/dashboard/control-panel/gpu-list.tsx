@@ -1,7 +1,6 @@
 // CRITICAL
 "use client";
 
-import { useRealtimeStatus } from "@/hooks/use-realtime-status";
 import { toGB, toGBFromMB } from "@/lib/formatters";
 import type { GPU } from "@/lib/types";
 
@@ -10,8 +9,7 @@ interface GpuListProps {
 }
 
 export function GpuList({ gpus: staticGpus }: GpuListProps) {
-  const { gpus: realtimeGpus } = useRealtimeStatus();
-  const gpus = realtimeGpus.length > 0 ? realtimeGpus : staticGpus;
+  const gpus = staticGpus;
 
   if (gpus.length === 0) {
     return (

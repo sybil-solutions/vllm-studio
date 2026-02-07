@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Square } from "lucide-react";
 
 interface RecordingIndicatorProps {
@@ -8,7 +9,7 @@ interface RecordingIndicatorProps {
   formatDuration: (seconds: number) => string;
 }
 
-export function RecordingIndicator({
+export const RecordingIndicator = memo(function RecordingIndicator({
   duration,
   onStop,
   formatDuration,
@@ -27,4 +28,4 @@ export function RecordingIndicator({
       </button>
     </div>
   );
-}
+});

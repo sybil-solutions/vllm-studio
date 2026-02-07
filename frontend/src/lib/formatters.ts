@@ -56,10 +56,4 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function formatHour(hour: number): string {
-  const period = hour >= 12 ? "PM" : "AM";
-  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${displayHour}${period}`;
-}
-
-export { toGB, toGBFromMB, formatNumber, formatDuration, formatDate, formatHour };
+export { toGB, toGBFromMB, formatNumber, formatDuration, formatDate };

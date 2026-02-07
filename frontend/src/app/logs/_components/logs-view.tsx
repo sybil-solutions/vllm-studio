@@ -14,7 +14,7 @@ interface LogsViewProps {
   sessions: LogSession[];
   filteredSessions: LogSession[];
   selectedSession: string | null;
-  logContent: string;
+  hasLogContent: boolean;
   filter: string;
   contentFilter: string;
   loading: boolean;
@@ -40,7 +40,7 @@ export function LogsView({
   sessions,
   filteredSessions,
   selectedSession,
-  logContent,
+  hasLogContent,
   filter,
   contentFilter,
   loading,
@@ -142,11 +142,16 @@ export function LogsView({
                     )}
                   </div>
                   <button
+                    disabled={session.id === "controller"}
                     onClick={(event) => {
                       event.stopPropagation();
                       onDeleteSession(session.id);
                     }}
-                    className="p-1 text-[#9a9088] opacity-0 group-hover:opacity-100 hover:text-[#c97a6b] transition-all"
+                    className={`p-1 text-[#9a9088] opacity-0 group-hover:opacity-100 transition-all ${
+                      session.id === "controller"
+                        ? "cursor-not-allowed opacity-20"
+                        : "hover:text-[#c97a6b]"
+                    }`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -229,11 +234,16 @@ export function LogsView({
                     )}
                   </div>
                   <button
+                    disabled={session.id === "controller"}
                     onClick={(event) => {
                       event.stopPropagation();
                       onDeleteSession(session.id);
                     }}
-                    className="p-1 text-[#9a9088] opacity-0 group-hover:opacity-100 hover:text-[#c97a6b] transition-all"
+                    className={`p-1 text-[#9a9088] opacity-0 group-hover:opacity-100 transition-all ${
+                      session.id === "controller"
+                        ? "cursor-not-allowed opacity-20"
+                        : "hover:text-[#c97a6b]"
+                    }`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -323,7 +333,7 @@ export function LogsView({
                     <span>Loading...</span>
                   </div>
                 </div>
-              ) : logContent ? (
+              ) : hasLogContent ? (
                 onRenderLogs()
               ) : (
                 <div className="text-center text-[#9a9088]">No log content</div>

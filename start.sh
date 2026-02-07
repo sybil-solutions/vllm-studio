@@ -1,4 +1,5 @@
 #!/bin/bash
+# CRITICAL
 # vLLM Studio - Start Script
 set -e
 
@@ -49,6 +50,13 @@ if [ ! -x "$BUN" ]; then
 fi
 
 # Start
+# In direct mode we typically don't have Docker-managed LiteLLM/Temporal/etc.
+# Default to mock inference so the app remains usable out of the box.
+if [ "$USE_DOCKER" = false ] && [ -z "${VLLM_STUDIO_MOCK_INFERENCE:-}" ]; then
+    export VLLM_STUDIO_MOCK_INFERENCE=1
+    echo -e "${GREEN}Direct mode: enabling mock inference (set VLLM_STUDIO_MOCK_INFERENCE=0 to disable).${NC}"
+fi
+
 if [ "$DEV_MODE" = true ]; then
     echo -e "${GREEN}Starting in dev mode...${NC}"
     if [ "$USE_DOCKER" = true ]; then

@@ -1,3 +1,4 @@
+<!-- CRITICAL -->
 # Quick Start: Dependency & Code Quality Tools
 
 This repository now has **comprehensive dependency and code quality detection**.

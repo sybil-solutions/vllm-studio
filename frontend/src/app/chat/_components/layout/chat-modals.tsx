@@ -1,6 +1,7 @@
 // CRITICAL
 "use client";
 
+import { memo } from "react";
 import type { DeepResearchConfig, SessionUsage, MCPServer, ChatMessage } from "@/lib/types";
 import type { ModelOption } from "../../types";
 import { ChatSettingsModal } from "../modals/chat-settings-modal";
@@ -35,7 +36,7 @@ interface ChatModalsProps {
   onExportMarkdown: () => void;
 }
 
-export function ChatModals({
+function ChatModalsBase({
   settingsOpen,
   onCloseSettings,
   mcpSettingsOpen,
@@ -102,3 +103,53 @@ export function ChatModals({
     </>
   );
 }
+
+function areChatModalsPropsEqual(prev: ChatModalsProps, next: ChatModalsProps): boolean {
+  const prevAnyOpen = prev.settingsOpen || prev.mcpSettingsOpen || prev.usageOpen || prev.exportOpen;
+  const nextAnyOpen = next.settingsOpen || next.mcpSettingsOpen || next.usageOpen || next.exportOpen;
+
+  // When everything is closed, none of the props matter since all modal components render `null`.
+  if (!prevAnyOpen && !nextAnyOpen) return true;
+
+  if (prev.settingsOpen !== next.settingsOpen) return false;
+  if (prev.mcpSettingsOpen !== next.mcpSettingsOpen) return false;
+  if (prev.usageOpen !== next.usageOpen) return false;
+  if (prev.exportOpen !== next.exportOpen) return false;
+
+  if (next.settingsOpen) {
+    if (prev.systemPrompt !== next.systemPrompt) return false;
+    if (prev.onSystemPromptChange !== next.onSystemPromptChange) return false;
+    if (prev.selectedModel !== next.selectedModel) return false;
+    if (prev.onSelectedModelChange !== next.onSelectedModelChange) return false;
+    if (prev.availableModels !== next.availableModels) return false;
+    if (prev.deepResearch !== next.deepResearch) return false;
+    if (prev.onDeepResearchChange !== next.onDeepResearchChange) return false;
+    if (prev.onCloseSettings !== next.onCloseSettings) return false;
+  }
+
+  if (next.mcpSettingsOpen) {
+    if (prev.mcpServers !== next.mcpServers) return false;
+    if (prev.onAddServer !== next.onAddServer) return false;
+    if (prev.onUpdateServer !== next.onUpdateServer) return false;
+    if (prev.onRemoveServer !== next.onRemoveServer) return false;
+    if (prev.onRefreshServers !== next.onRefreshServers) return false;
+    if (prev.onCloseMcpSettings !== next.onCloseMcpSettings) return false;
+  }
+
+  if (next.usageOpen) {
+    if (prev.sessionUsage !== next.sessionUsage) return false;
+    if (prev.messages !== next.messages) return false;
+    if (prev.selectedModel !== next.selectedModel) return false;
+    if (prev.onCloseUsage !== next.onCloseUsage) return false;
+  }
+
+  if (next.exportOpen) {
+    if (prev.onExportJson !== next.onExportJson) return false;
+    if (prev.onExportMarkdown !== next.onExportMarkdown) return false;
+    if (prev.onCloseExport !== next.onCloseExport) return false;
+  }
+
+  return true;
+}
+
+export const ChatModals = memo(ChatModalsBase, areChatModalsPropsEqual);

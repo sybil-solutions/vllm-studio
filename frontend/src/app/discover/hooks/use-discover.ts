@@ -3,12 +3,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
-import type { HuggingFaceModel, ModelInfo } from "@/lib/types";
-import { extractProvider, normalizeModelId } from "../_components/utils";
+import type { HuggingFaceModel, ModelInfo, ModelRecommendation } from "@/lib/types";
+import { extractProvider, extractQuantizations, normalizeModelId } from "../_components/utils";
 
 export function useDiscover() {
   const [models, setModels] = useState<HuggingFaceModel[]>([]);
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
+  const [recommendations, setRecommendations] = useState<ModelRecommendation[]>([]);
+  const [maxVramGb, setMaxVramGb] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -20,8 +22,20 @@ export function useDiscover() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [providerFilter, setProviderFilter] = useState("");
+  const [excludedQuantizations, setExcludedQuantizations] = useState<string[]>([]);
 
   const PAGE_SIZE = 50;
+
+  const loadRecommendations = useCallback(async () => {
+    try {
+      const data = await api.getModelRecommendations();
+      setRecommendations(data.recommendations ?? []);
+      setMaxVramGb(typeof data.max_vram_gb === "number" ? data.max_vram_gb : 0);
+    } catch {
+      setRecommendations([]);
+      setMaxVramGb(0);
+    }
+  }, []);
 
   const loadLocalModels = useCallback(async () => {
     try {
@@ -36,11 +50,12 @@ export function useDiscover() {
     let mounted = true;
     if (mounted) {
       loadLocalModels();
+      loadRecommendations();
     }
     return () => {
       mounted = false;
     };
-  }, [loadLocalModels]);
+  }, [loadLocalModels, loadRecommendations]);
 
   const localModelMap = useMemo(() => {
     const map = new Map<string, boolean>();
@@ -139,15 +154,26 @@ export function useDiscover() {
   }, [models]);
 
   const filteredModels = useMemo(() => {
-    if (!providerFilter) return models;
-    return models.filter((model) => extractProvider(model.modelId) === providerFilter);
-  }, [models, providerFilter]);
+    let out = models;
+    if (providerFilter) {
+      out = out.filter((model) => extractProvider(model.modelId) === providerFilter);
+    }
+    if (excludedQuantizations.length > 0) {
+      out = out.filter((model) => {
+        const quants = extractQuantizations(model.tags ?? []);
+        return !quants.some((q) => excludedQuantizations.includes(q));
+      });
+    }
+    return out;
+  }, [models, providerFilter, excludedQuantizations]);
 
   const refreshModels = useCallback(() => fetchModels(false), [fetchModels]);
 
   return {
     models,
     filteredModels,
+    recommendations,
+    maxVramGb,
     loading,
     error,
     search,
@@ -159,12 +185,14 @@ export function useDiscover() {
     hasMore,
     providerFilter,
     providers,
+    excludedQuantizations,
     setSearch,
     setTask,
     setSort,
     setLibrary,
     setShowFilters,
     setProviderFilter,
+    setExcludedQuantizations,
     copyModelId,
     loadMore,
     refreshModels,

@@ -1,3 +1,4 @@
+<!-- CRITICAL -->
 # AGENTS.md
 
 ## CRITICAL SWIFT BUILD REQUIREMENTS
@@ -18,7 +19,7 @@
 2. **VERIFY BUILD COMPILES (TERMINAL)**
    ```bash
    cd swift-client
-   xcodebuild -project vllm-studio.xcodeproj -scheme vllm-studio -destination 'platform=iOS Simulator,name=iPhone 15' clean build
+   xcodebuild -project vllm-studio.xcodeproj -scheme vllm-studio -destination 'platform=iOS Simulator,name=iPhone 15,OS=18.1' clean build
    echo $?  # MUST be 0 (success)
    ```
    - **DO NOT COMMIT CHANGES THAT DO NOT BUILD**
@@ -117,12 +118,12 @@
 cd swift-client
 ./setup.sh
 
-# 2. Build in Xcode (opens automatically) or CLI:
-xcodebuild -project vllm-studio.xcodeproj -scheme vllm-studio \
-  -destination 'platform=iOS Simulator,name=iPhone 15' clean build
+ # 2. Build in Xcode (opens automatically) or CLI:
+ xcodebuild -project vllm-studio.xcodeproj -scheme vllm-studio \
+  -destination 'platform=iOS Simulator,name=iPhone 15,OS=18.1' clean build
 
-# 3. Check exit code
-echo $?  # MUST be 0 (success)
+ # 3. Check exit code
+ echo $?  # MUST be 0 (success)
 
 # 4. If errors, READ THE ERROR MESSAGES and fix them
 # Common patterns:
@@ -183,7 +184,16 @@ bun test           # Run test suite
 
 ## Repository Conventions
 
-- **60 LOC limit**: Files >60 lines MUST have `// CRITICAL`, `# CRITICAL`, or `<!-- CRITICAL -->`
+- **60 LOC limit**: Files >60 lines MUST start with a CRITICAL marker appropriate for the file type:
+  - `// CRITICAL` (Swift, TypeScript/JavaScript, etc.)
+  - `# CRITICAL` (shell, YAML, `.gitignore`, `.env`, TOML, etc.)
+  - `<!-- CRITICAL -->` (Markdown/HTML/XML)
+  - `/* CRITICAL */` (CSS)
+- **60 LOC exemptions**: Do not add CRITICAL markers to machine-generated or schema-constrained files where comments would break parsing. Common examples:
+  - `**/package-lock.json`, `**/bun.lock`
+  - `**/*.pbxproj`
+  - `LICENSE`
+- **Shebang files**: For executable scripts that require a shebang on line 1 (e.g. `#!/usr/bin/env bun`, `#!/bin/bash`), keep the shebang as the first line and put the CRITICAL marker on line 2.
 - **20 files per directory**: Create subdirectories when exceeded
 - **kebab-case naming**: ALL files/directories use kebab-case
 - **No camelCase/PascalCase in filenames**: `my-component.tsx` NOT `MyComponent.tsx`
@@ -195,7 +205,7 @@ bun test           # Run test suite
 - [ ] All Swift files compile without errors
 - [ ] Xcode project regenerated with `./setup.sh`
 - [ ] Test build succeeds: `xcodebuild ... clean build`
-- [ ] No files exceed 60 LOC without `// CRITICAL` marker
+- [ ] No source/docs files exceed 60 LOC without a CRITICAL marker (see conventions above)
 - [ ] No directories exceed 20 files
 - [ ] All filenames use kebab-case
 - [ ] Required imports added (UIKit, AVFoundation, etc.)

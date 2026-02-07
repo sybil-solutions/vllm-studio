@@ -1,11 +1,12 @@
 // CRITICAL
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { safeJsonStringify } from "@/lib/safe-json";
 import type { ActivityGroup, ActivityItem } from "../../types";
-import type { CompactionEvent, ContextStats } from "@/lib/services/context-management";
+export { ContextPanel } from "./chat-side-panel-context";
+export type { ContextPanelProps } from "./chat-side-panel-context";
 
 type ToolCategory = "file" | "search" | "plan" | "web" | "code" | "other";
 
@@ -135,7 +136,9 @@ export function ActivityPanel({ activityGroups, agentPlan, isLoading }: Activity
         <div className="space-y-1 pb-4">
           {activityGroups.map((group) => (
             <TurnGroup
-              key={group.id}
+              // Remount when a group transitions to/from the latest turn so internal collapsed
+              // state re-initializes without an effect-driven setState.
+              key={`${group.id}:${group.isLatest ? "latest" : "past"}`}
               group={group}
               hasActiveThinking={group.isLatest && !!hasActiveThinking}
             />
@@ -154,24 +157,18 @@ function TurnGroup({
   hasActiveThinking: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(!group.isLatest);
-  const prevIsLatestRef = useRef(group.isLatest);
-
-  useEffect(() => {
-    if (group.isLatest && !prevIsLatestRef.current) {
-      setCollapsed(false);
-    }
-    if (!group.isLatest && prevIsLatestRef.current) {
-      setCollapsed(true);
-    }
-    prevIsLatestRef.current = group.isLatest;
-  }, [group.isLatest]);
 
   const summary = useMemo(() => getTurnSummary(group.items), [group.items]);
+  const isCollapsed = group.isLatest ? false : collapsed;
+  const toggleCollapsed = useCallback(() => {
+    if (group.isLatest) return;
+    setCollapsed((prev) => !prev);
+  }, [group.isLatest]);
 
   return (
     <div>
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={toggleCollapsed}
         className="flex items-center gap-2 py-2 pl-1 pr-2 w-full text-left group"
       >
         <div className="w-5 h-5 rounded-full bg-[#0b0c0f] border border-white/[0.12] flex items-center justify-center z-10">
@@ -198,12 +195,12 @@ function TurnGroup({
         )}
         {!group.isLatest && (
           <span className="ml-auto text-[9px] text-[#444] group-hover:text-[#666] transition-colors">
-            {collapsed ? "+" : "−"}
+            {isCollapsed ? "+" : "−"}
           </span>
         )}
       </button>
 
-      {!collapsed && (
+      {!isCollapsed && (
         <div className="space-y-1">
           {group.items.map((item) =>
             item.type === "thinking" ? (
@@ -218,9 +215,16 @@ function TurnGroup({
   );
 }
 
-function ThinkingItem({ content, isActive }: { content?: string; isActive?: boolean }) {
-  const [expanded, setExpanded] = useState(true);
+const ThinkingItem = memo(function ThinkingItem({
+  content,
+  isActive,
+}: {
+  content?: string;
+  isActive?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
 
   useEffect(() => {
     if (isActive && expanded && contentRef.current) {
@@ -235,7 +239,7 @@ function ThinkingItem({ content, isActive }: { content?: string; isActive?: bool
       </div>
 
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={toggleExpanded}
         className="flex items-center gap-2 w-full text-left group"
       >
         {isActive ? (
@@ -263,7 +267,10 @@ function ThinkingItem({ content, isActive }: { content?: string; isActive?: bool
       )}
     </div>
   );
-}
+},
+function areThinkingItemPropsEqual(prev, next) {
+  return prev.content === next.content && prev.isActive === next.isActive;
+});
 
 function BrainIcon({ className }: { className?: string }) {
   return (
@@ -282,178 +289,56 @@ function BrainIcon({ className }: { className?: string }) {
   );
 }
 
-export interface ContextPanelProps {
-  stats?: Omit<
-    ContextStats,
-    "compactionHistory" | "lastCompaction" | "totalCompactions" | "totalTokensCompacted"
-  > | null;
-  breakdown?: {
-    messages: number;
-    userMessages: number;
-    assistantMessages: number;
-    toolCalls: number;
-    userTokens: number;
-    assistantTokens: number;
-    thinkingTokens: number;
-  } | null;
-  compactionHistory: CompactionEvent[];
-  compacting: boolean;
-  compactionError: string | null;
-  formatTokenCount?: (tokens: number) => string;
-  onCompact?: () => void;
-  canCompact?: boolean;
-}
-
-export function ContextPanel({
-  stats,
-  breakdown,
-  compactionHistory,
-  compacting,
-  compactionError,
-  formatTokenCount,
-  onCompact,
-  canCompact = false,
-}: ContextPanelProps) {
-  if (!stats || !breakdown) {
-    return <div className="py-8 text-center text-sm text-[#555]">Context stats unavailable</div>;
-  }
-
-  const fmt = formatTokenCount ?? ((value: number) => value.toString());
-  const utilizationPct = Math.round(stats.utilization * 100);
-  const eightyPercentMax = Math.floor(stats.maxContext * 0.8);
-  const isOverEighty = stats.currentTokens > eightyPercentMax;
-  const headroom = Math.max(0, stats.maxContext - stats.currentTokens);
-  const recentCompactions = compactionHistory.slice(-3).reverse();
-  const lastCompaction = compactionHistory[compactionHistory.length - 1];
-
-  return (
-    <div className="space-y-4 text-xs text-[#888]">
-      <div className="rounded-lg border border-[#1c1b1a] bg-[#0d0d0d]/90 p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[#aaa]">Context Usage</span>
-          <span className={`${isOverEighty ? "text-[#755]" : "text-[#666]"}`}>
-            {utilizationPct}%
-          </span>
-        </div>
-        <div className="mt-2 text-[11px] text-[#555]">
-          {fmt(stats.currentTokens)} / {fmt(stats.maxContext)} tokens • headroom {fmt(headroom)}
-        </div>
-        <div className="mt-2 h-1.5 w-full rounded-full bg-[#252321] relative">
-          <div className="absolute top-0 bottom-0 w-px bg-[#444] z-10" style={{ left: "80%" }} />
-          <div
-            className={`h-full rounded-full ${isOverEighty ? "bg-[#633]" : "bg-[#555]"}`}
-            style={{ width: `${Math.min(100, utilizationPct)}%` }}
-          />
-        </div>
-        <div className="mt-1 text-[9px] text-[#444] flex justify-between">
-          <span>0</span>
-          <span className="text-[#555]">80% limit: {fmt(eightyPercentMax)}</span>
-          <span>{fmt(stats.maxContext)}</span>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-[#1c1b1a] bg-[#0d0d0d]/90 p-3 space-y-2">
-        <div className="text-[#aaa]">Breakdown</div>
-        <div className="grid grid-cols-2 gap-2 text-[11px] text-[#555]">
-          <div>Messages: {breakdown.messages}</div>
-          <div>Tool calls: {breakdown.toolCalls}</div>
-          <div>User tokens: {fmt(breakdown.userTokens)}</div>
-          <div>Assistant tokens: {fmt(breakdown.assistantTokens)}</div>
-          <div>Thinking tokens: {fmt(breakdown.thinkingTokens)}</div>
-          <div>System+tools: {fmt(stats.systemPromptTokens + stats.toolsTokens)}</div>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-[#1c1b1a] bg-[#0d0d0d]/90 p-3 space-y-2">
-        <div className="flex items-center justify-between text-[#aaa]">
-          <span>Compaction</span>
-          <div className="flex items-center gap-2">
-            {compacting && <span className="text-[#555]">Running…</span>}
-            {onCompact && (
-              <button
-                onClick={onCompact}
-                disabled={!canCompact || compacting}
-                className="px-2 py-1 rounded border border-white/10 text-[10px] uppercase tracking-[0.2em] text-[#c8c4bd] hover:text-white hover:border-white/30 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Compact Now
-              </button>
-            )}
-          </div>
-        </div>
-        {compactionError && <div className="text-[11px] text-[#633]">{compactionError}</div>}
-        {lastCompaction && (
-          <div className="text-[11px] text-[#555] flex items-center justify-between">
-            <span>Last</span>
-            <span>
-              {fmt(lastCompaction.beforeTokens)} → {fmt(lastCompaction.afterTokens)} • saved{" "}
-              {fmt(Math.max(0, lastCompaction.beforeTokens - lastCompaction.afterTokens))}
-            </span>
-          </div>
-        )}
-        {recentCompactions.length === 0 ? (
-          <div className="text-[11px] text-[#444]">No compactions yet</div>
-        ) : (
-          <div className="space-y-2 text-[11px] text-[#555]">
-            {recentCompactions.map((event) => (
-              <div key={event.id} className="flex items-center justify-between">
-                <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
-                <span>
-                  {fmt(event.beforeTokens)} → {fmt(event.afterTokens)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 interface ToolItemProps {
   item: ActivityItem;
 }
 
-function ToolItem({ item }: ToolItemProps) {
+function getToolDisplayName(name?: string) {
+  if (!name) return "Tool";
+  const cleanName = name.includes("__") ? name.split("__").slice(1).join("__") : name;
+  return cleanName
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function getMainArg(input?: unknown): string | undefined {
+  if (input == null) return undefined;
+  if (typeof input === "string") return input;
+  if (typeof input === "object") {
+    const record = input as Record<string, unknown>;
+    const candidate =
+      record.query ?? record.url ?? record.text ?? record.input ?? record.path ?? record.command;
+    return candidate != null ? String(candidate) : undefined;
+  }
+  return undefined;
+}
+
+function formatToolOutput(output?: unknown): string {
+  if (!output) return "";
+  if (typeof output === "string") return output;
+  return safeJsonStringify(output, "");
+}
+
+const ToolItem = memo(function ToolItem({ item }: ToolItemProps) {
   const [expanded, setExpanded] = useState(false);
   const isExecuting = item.state === "running";
   const isComplete = item.state === "complete";
   const hasResult = item.output != null;
   const isError = item.state === "error";
-  const category = categorize(item.toolName);
+  const category = useMemo(() => categorize(item.toolName), [item.toolName]);
   const meta = CATEGORY_META[category];
 
-  const getToolDisplayName = (name?: string) => {
-    if (!name) return "Tool";
-    const cleanName = name.includes("__") ? name.split("__").slice(1).join("__") : name;
-    return cleanName
-      .replace(/_/g, " ")
-      .replace(/([a-z])([A-Z])/g, "$1 $2")
-      .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(" ");
-  };
+  const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
 
-  const getMainArg = (input?: unknown): string | undefined => {
-    if (input == null) return undefined;
-    if (typeof input === "string") return input;
-    if (typeof input === "object") {
-      const record = input as Record<string, unknown>;
-      const candidate =
-        record.query ?? record.url ?? record.text ?? record.input ?? record.path ?? record.command;
-      return candidate != null ? String(candidate) : undefined;
-    }
-    return undefined;
-  };
-
-  const formatOutput = (output?: unknown): string => {
-    if (!output) return "";
-    if (typeof output === "string") return output;
-    return safeJsonStringify(output, "");
-  };
-
-  const mainArg = getMainArg(item.input);
-  const outputText = formatOutput(item.output);
-  const toolName = getToolDisplayName(item.toolName);
+  const mainArg = useMemo(() => getMainArg(item.input), [item.input]);
+  const toolName = useMemo(() => getToolDisplayName(item.toolName), [item.toolName]);
+  const outputText = useMemo(() => {
+    if (!expanded) return "";
+    return formatToolOutput(item.output);
+  }, [expanded, item.output]);
 
   return (
     <div className="relative pl-7 pr-2 py-2 bg-white/1 rounded hover:bg-white/2 transition-colors">
@@ -470,7 +355,7 @@ function ToolItem({ item }: ToolItemProps) {
       </div>
 
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={toggleExpanded}
         className="flex items-center gap-2 w-full text-left group"
       >
         {isExecuting ? (
@@ -522,7 +407,21 @@ function ToolItem({ item }: ToolItemProps) {
       )}
     </div>
   );
-}
+},
+function areToolItemPropsEqual(prev, next) {
+  const a = prev.item;
+  const b = next.item;
+  return (
+    a.id === b.id &&
+    a.type === b.type &&
+    a.toolName === b.toolName &&
+    a.state === b.state &&
+    a.isActive === b.isActive &&
+    a.content === b.content &&
+    a.input === b.input &&
+    a.output === b.output
+  );
+});
 
 function CategoryIcon({ category, className }: { category: ToolCategory; className?: string }) {
   const color = CATEGORY_META[category].iconColor;

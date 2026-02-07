@@ -2,19 +2,34 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import { useAppStore } from "@/store";
+import { useShallow } from "zustand/react/shallow";
 
 export function useChatSessions() {
-  const sessions = useAppStore((state) => state.sessions);
-  const currentSessionId = useAppStore((state) => state.currentSessionId);
-  const currentSessionTitle = useAppStore((state) => state.currentSessionTitle);
-  const sessionsLoading = useAppStore((state) => state.sessionsLoading);
-  const setSessions = useAppStore((state) => state.setSessions);
-  const updateSessions = useAppStore((state) => state.updateSessions);
-  const setCurrentSessionId = useAppStore((state) => state.setCurrentSessionId);
-  const setCurrentSessionTitle = useAppStore((state) => state.setCurrentSessionTitle);
-  const setSessionsLoading = useAppStore((state) => state.setSessionsLoading);
+  const {
+    sessions,
+    currentSessionId,
+    currentSessionTitle,
+    sessionsLoading,
+    setSessions,
+    updateSessions,
+    setCurrentSessionId,
+    setCurrentSessionTitle,
+    setSessionsLoading,
+  } = useAppStore(
+    useShallow((state) => ({
+      sessions: state.sessions,
+      currentSessionId: state.currentSessionId,
+      currentSessionTitle: state.currentSessionTitle,
+      sessionsLoading: state.sessionsLoading,
+      setSessions: state.setSessions,
+      updateSessions: state.updateSessions,
+      setCurrentSessionId: state.setCurrentSessionId,
+      setCurrentSessionTitle: state.setCurrentSessionTitle,
+      setSessionsLoading: state.setSessionsLoading,
+    })),
+  );
   const activeSessionRef = useRef<string | null>(null);
 
   const loadSessions = useCallback(async () => {

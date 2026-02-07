@@ -5,33 +5,15 @@ import {
   useRef,
   useEffect,
   useCallback,
-  type ReactNode,
-  type RefObject,
+  useMemo,
+  useState,
   type MouseEvent as ReactMouseEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import {
-  Code,
-  Eye,
-  EyeOff,
-  FileCode,
-  Palette,
-  Maximize2,
-  X,
-  Download,
-  Copy,
-  Check,
-  ZoomIn,
-  ZoomOut,
-  Move,
-  RotateCcw,
-  Play,
-  Square,
-  RefreshCw,
-  ExternalLink,
-} from "lucide-react";
+import { Code, FileCode, Palette } from "lucide-react";
 import type { Artifact } from "@/lib/types";
 import { useAppStore } from "@/store";
+import { DEFAULT_ARTIFACT_VIEWER_ENTRY } from "@/store/chat-slice-defaults";
 import {
   buildSvgDocument,
   buildReactDocument,
@@ -39,260 +21,41 @@ import {
   buildHtmlDocument,
   buildTextDocument,
 } from "./artifact-templates";
+import { ArtifactViewerContent } from "./artifact-viewer-content";
 
 interface ArtifactViewerProps {
   artifact: Artifact;
   isActive?: boolean;
 }
 
-interface ArtifactViewerContentProps {
-  artifact: Artifact;
-  icon: ReactNode;
-  isRunning: boolean;
-  showCode: boolean;
-  copied: boolean;
-  error: string | null;
-  inModal?: boolean;
-  onClose?: () => void;
-  onRun: () => void;
-  onStop: () => void;
-  onRefresh: () => void;
-  onToggleCode: () => void;
-  onCopy: () => void;
-  onDownload: () => void;
-  onOpenExternal: () => void;
-  onEnterFullscreen?: () => void;
-  zoomIn: () => void;
-  zoomOut: () => void;
-  resetView: () => void;
-  scale: number;
-  isDragging: boolean;
-  position: { x: number; y: number };
-  onMouseDown?: (e: ReactMouseEvent) => void;
-  onWheel?: (e: ReactWheelEvent) => void;
-  iframeRef: RefObject<HTMLIFrameElement | null>;
-  containerRef: RefObject<HTMLDivElement | null>;
-}
-
-function ArtifactViewerContent({
-  artifact,
-  icon,
-  isRunning,
-  showCode,
-  copied,
-  error,
-  inModal = false,
-  onClose,
-  onRun,
-  onStop,
-  onRefresh,
-  onToggleCode,
-  onCopy,
-  onDownload,
-  onOpenExternal,
-  onEnterFullscreen,
-  zoomIn,
-  zoomOut,
-  resetView,
-  scale,
-  isDragging,
-  position,
-  onMouseDown,
-  onWheel,
-  iframeRef,
-  containerRef,
-}: ArtifactViewerContentProps) {
-  return (
-    <div className={`flex flex-col ${inModal ? "h-full" : ""}`}>
-      <div className="flex items-center justify-between px-3 py-2 bg-(--accent) border-b border-(--border) shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          {icon}
-          <span className="text-xs font-medium truncate">
-            {artifact.title || artifact.type.toUpperCase()}
-          </span>
-        </div>
-        <div className="flex items-center gap-0.5">
-          {isRunning ? (
-            <button
-              onClick={onStop}
-              className="p-1.5 rounded hover:bg-background text-(--error)"
-              title="Stop"
-            >
-              <Square className="h-3.5 w-3.5" />
-            </button>
-          ) : (
-            <button
-              onClick={onRun}
-              className="p-1.5 rounded hover:bg-background text-(--success)"
-              title="Run"
-            >
-              <Play className="h-3.5 w-3.5" />
-            </button>
-          )}
-          <button
-            onClick={onRefresh}
-            className="p-1.5 rounded hover:bg-background"
-            title="Refresh"
-          >
-            <RefreshCw className="h-3.5 w-3.5 text-[#9a9590]" />
-          </button>
-          <button
-            onClick={onToggleCode}
-            className="p-1.5 rounded hover:bg-background"
-            title={showCode ? "Hide code" : "Show code"}
-          >
-            {showCode ? (
-              <EyeOff className="h-3.5 w-3.5 text-[#9a9590]" />
-            ) : (
-              <Eye className="h-3.5 w-3.5 text-[#9a9590]" />
-            )}
-          </button>
-          <button onClick={onCopy} className="p-1.5 rounded hover:bg-background" title="Copy">
-            {copied ? (
-              <Check className="h-3.5 w-3.5 text-(--success)" />
-            ) : (
-              <Copy className="h-3.5 w-3.5 text-[#9a9590]" />
-            )}
-          </button>
-          <button
-            onClick={onDownload}
-            className="p-1.5 rounded hover:bg-background"
-            title="Download"
-          >
-            <Download className="h-3.5 w-3.5 text-[#9a9590]" />
-          </button>
-          <button
-            onClick={onOpenExternal}
-            className="p-1.5 rounded hover:bg-background"
-            title="Open in new tab"
-          >
-            <ExternalLink className="h-3.5 w-3.5 text-[#9a9590]" />
-          </button>
-          {!inModal && onEnterFullscreen && (
-            <button
-              onClick={onEnterFullscreen}
-              className="p-1.5 rounded hover:bg-background"
-              title="Fullscreen"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {inModal && onClose && (
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded hover:bg-background"
-              title="Close"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {inModal && (
-        <div className="flex items-center justify-center gap-2 px-3 py-1.5 bg-background border-b border-(--border) shrink-0">
-          <button onClick={zoomOut} className="p-1 rounded hover:bg-(--accent)" title="Zoom out">
-            <ZoomOut className="h-3.5 w-3.5 text-[#9a9590]" />
-          </button>
-          <span className="text-xs text-[#9a9590] tabular-nums w-12 text-center">
-            {Math.round(scale * 100)}%
-          </span>
-          <button onClick={zoomIn} className="p-1 rounded hover:bg-(--accent)" title="Zoom in">
-            <ZoomIn className="h-3.5 w-3.5 text-[#9a9590]" />
-          </button>
-          <div className="w-px h-4 bg-(--border) mx-1" />
-          <button
-            onClick={resetView}
-            className="p-1 rounded hover:bg-(--accent)"
-            title="Reset view"
-          >
-            <RotateCcw className="h-3.5 w-3.5 text-[#9a9590]" />
-          </button>
-          <button
-            className={`p-1 rounded ${isDragging ? "bg-(--accent)" : "hover:bg-(--accent)"}`}
-            title="Pan (drag)"
-          >
-            <Move className="h-3.5 w-3.5 text-[#9a9590]" />
-          </button>
-        </div>
-      )}
-
-      {showCode && (
-        <pre className="p-3 text-xs bg-[#1e1d1c] overflow-auto border-b border-(--border) shrink-0 max-h-40">
-          <code className="text-[#e8e4dd]">{artifact.code}</code>
-        </pre>
-      )}
-
-      {error && (
-        <div className="px-3 py-2 bg-(--error)/10 text-(--error) text-xs border-b border-(--border) shrink-0">
-          {error}
-        </div>
-      )}
-
-      <div
-        ref={containerRef}
-        className={`relative overflow-hidden bg-[#0f0f10] ${
-          inModal ? "flex-1 min-h-0" : "h-100"
-        }`}
-        style={inModal && scale !== 1 ? { cursor: isDragging ? "grabbing" : "grab" } : undefined}
-        onMouseDown={inModal ? onMouseDown : undefined}
-        onWheel={inModal ? onWheel : undefined}
-      >
-        <div
-          className="w-full h-full"
-          style={
-            inModal
-              ? {
-                  transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-                  transformOrigin: "center center",
-                  transition: isDragging ? "none" : "transform 0.15s ease",
-                }
-              : undefined
-          }
-        >
-          <iframe
-            ref={iframeRef}
-            className="block w-full h-full border-0"
-            sandbox="allow-scripts allow-modals allow-same-origin allow-forms allow-popups"
-            title={artifact.title || "Artifact Preview"}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProps) {
+  type ViewerEntry = typeof DEFAULT_ARTIFACT_VIEWER_ENTRY;
+
   const viewerState = useAppStore(
     (state) =>
-      state.artifactViewerState[artifact.id] ?? {
-        isFullscreen: false,
-        showCode: false,
-        copied: false,
-        scale: 1,
-        position: { x: 0, y: 0 },
-        isDragging: false,
-        isRunning: true,
-        error: null,
-      },
+      state.artifactViewerState[artifact.id] ?? DEFAULT_ARTIFACT_VIEWER_ENTRY,
   );
   const updateArtifactViewerState = useAppStore((state) => state.updateArtifactViewerState);
-  const { isFullscreen, showCode, copied, scale, position, isDragging, isRunning, error } =
-    viewerState;
-  const updateState = (partial: Partial<typeof viewerState>) => {
-    updateArtifactViewerState(artifact.id, (prev) => ({ ...prev, ...partial }));
-  };
+  const { isFullscreen, showCode, copied, scale, position, isRunning, error } = viewerState;
+  const patchState = useCallback(
+    (partial: Partial<ViewerEntry>) => {
+      updateArtifactViewerState(artifact.id, (prev) => ({ ...prev, ...partial }));
+    },
+    [artifact.id, updateArtifactViewerState],
+  );
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
 
-  const getSrcDoc = useCallback(() => {
+  const srcDoc = useMemo(() => {
     switch (artifact.type) {
       case "svg": {
         const svgMarkup = artifact.code.includes("<svg")
           ? artifact.code
           : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${artifact.code}</svg>`;
-        return buildSvgDocument(svgMarkup, scale);
+        // Scaling is handled by the outer transform in the viewer; keep the iframe content stable.
+        return buildSvgDocument(svgMarkup);
       }
       case "react":
         return buildReactDocument(artifact.code);
@@ -303,21 +66,21 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
       default:
         return buildTextDocument(artifact.code);
     }
-  }, [artifact, scale]);
+  }, [artifact.code, artifact.type]);
 
   const runArtifact = useCallback(() => {
-    updateState({ isRunning: true, error: null });
+    patchState({ isRunning: true, error: null });
     if (iframeRef.current) {
-      iframeRef.current.srcdoc = getSrcDoc();
+      iframeRef.current.srcdoc = srcDoc;
     }
-  }, [getSrcDoc, updateState]);
+  }, [patchState, srcDoc]);
 
   const stopArtifact = useCallback(() => {
-    updateState({ isRunning: false });
+    patchState({ isRunning: false });
     if (iframeRef.current) {
       iframeRef.current.srcdoc = "";
     }
-  }, [updateState]);
+  }, [patchState]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -330,47 +93,101 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "error") {
-        updateState({ error: event.data.message });
+        patchState({ error: event.data.message });
       }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [updateState]);
+  }, [patchState]);
 
-  const zoomIn = () => {
-    updateState({ scale: Math.min(scale + 0.25, 3) });
-  };
-  const zoomOut = () => {
-    updateState({ scale: Math.max(scale - 0.25, 0.25) });
-  };
-  const resetView = () => {
-    updateState({ scale: 1, position: { x: 0, y: 0 } });
-  };
+  const zoomIn = useCallback(() => {
+    updateArtifactViewerState(artifact.id, (prev) => ({
+      ...prev,
+      scale: Math.min(prev.scale + 0.25, 3),
+    }));
+  }, [artifact.id, updateArtifactViewerState]);
 
-  const handleMouseDown = (e: ReactMouseEvent) => {
+  const zoomOut = useCallback(() => {
+    updateArtifactViewerState(artifact.id, (prev) => ({
+      ...prev,
+      scale: Math.max(prev.scale - 0.25, 0.25),
+    }));
+  }, [artifact.id, updateArtifactViewerState]);
+
+  const resetView = useCallback(() => {
+    updateArtifactViewerState(artifact.id, (prev) => ({
+      ...prev,
+      scale: 1,
+      position: { x: 0, y: 0 },
+    }));
+  }, [artifact.id, updateArtifactViewerState]);
+
+  const [isDraggingLocal, setIsDraggingLocal] = useState(false);
+  const draggingRef = useRef(false);
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const dragPositionRef = useRef<{ x: number; y: number }>(position);
+  const dragRafRef = useRef<number | null>(null);
+  const pendingPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (dragRafRef.current != null) {
+        window.cancelAnimationFrame(dragRafRef.current);
+        dragRafRef.current = null;
+      }
+    };
+  }, []);
+
+  const scheduleDragPositionUpdate = useCallback((next: { x: number; y: number }) => {
+    pendingPosRef.current = next;
+    if (dragRafRef.current != null) return;
+    dragRafRef.current = window.requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const pending = pendingPosRef.current;
+      if (!pending) return;
+      setDragPosition(pending);
+    });
+  }, []);
+
+  const handleMouseDown = useCallback((e: ReactMouseEvent) => {
     if (e.button !== 0) return;
-    updateState({ isDragging: true });
+    draggingRef.current = true;
+    setIsDraggingLocal(true);
+    dragPositionRef.current = position;
+    setDragPosition(position);
     dragStartRef.current = { x: e.clientX, y: e.clientY, posX: position.x, posY: position.y };
-  };
+  }, [position]);
 
   const handleMouseMove = useCallback(
     (e: globalThis.MouseEvent) => {
-      if (!isDragging) return;
+      if (!draggingRef.current) return;
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
-      updateState({
-        position: { x: dragStartRef.current.posX + dx, y: dragStartRef.current.posY + dy },
-      });
+      const next = { x: dragStartRef.current.posX + dx, y: dragStartRef.current.posY + dy };
+      dragPositionRef.current = next;
+      scheduleDragPositionUpdate(next);
     },
-    [isDragging, updateState],
+    [scheduleDragPositionUpdate],
   );
 
   const handleMouseUp = useCallback(() => {
-    updateState({ isDragging: false });
-  }, [updateState]);
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    setIsDraggingLocal(false);
+    setDragPosition(null);
+    if (dragRafRef.current != null) {
+      window.cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
+    pendingPosRef.current = null;
+    updateArtifactViewerState(artifact.id, (prev) => ({
+      ...prev,
+      position: dragPositionRef.current,
+    }));
+  }, [artifact.id, updateArtifactViewerState]);
 
   useEffect(() => {
-    if (isDragging) {
+    if (isDraggingLocal) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
       return () => {
@@ -378,23 +195,26 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
         window.removeEventListener("mouseup", handleMouseUp);
       };
     }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [handleMouseMove, handleMouseUp, isDraggingLocal]);
 
-  const handleWheel = (e: ReactWheelEvent) => {
+  const handleWheel = useCallback((e: ReactWheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      updateState({ scale: Math.max(0.25, Math.min(3, scale + delta)) });
+      updateArtifactViewerState(artifact.id, (prev) => ({
+        ...prev,
+        scale: Math.max(0.25, Math.min(3, prev.scale + delta)),
+      }));
     }
-  };
+  }, [artifact.id, updateArtifactViewerState]);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(artifact.code);
-    updateState({ copied: true });
-    setTimeout(() => updateState({ copied: false }), 2000);
-  };
+    patchState({ copied: true });
+    setTimeout(() => patchState({ copied: false }), 2000);
+  }, [artifact.code, patchState]);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     const ext =
       artifact.type === "html"
         ? ".html"
@@ -412,22 +232,37 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [artifact.code, artifact.id, artifact.title, artifact.type]);
 
-  const handleOpenExternal = () => {
-    const blob = new Blob([getSrcDoc()], { type: "text/html" });
+  const handleOpenExternal = useCallback(() => {
+    const blob = new Blob([srcDoc], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
-  };
+  }, [srcDoc]);
 
-  const icon =
-    artifact.type === "svg" ? (
-      <Palette className="h-3.5 w-3.5" />
-    ) : artifact.type === "html" ? (
-      <FileCode className="h-3.5 w-3.5" />
-    ) : (
-      <Code className="h-3.5 w-3.5" />
-    );
+  const icon = useMemo(() => {
+    if (artifact.type === "svg") {
+      return <Palette className="h-3.5 w-3.5" />;
+    }
+    if (artifact.type === "html") {
+      return <FileCode className="h-3.5 w-3.5" />;
+    }
+    return <Code className="h-3.5 w-3.5" />;
+  }, [artifact.type]);
+
+  const viewerPosition = dragPosition ?? position;
+
+  const onToggleCode = useCallback(() => {
+    patchState({ showCode: !showCode });
+  }, [patchState, showCode]);
+
+  const onEnterFullscreen = useCallback(() => {
+    patchState({ isFullscreen: true });
+  }, [patchState]);
+
+  const onExitFullscreen = useCallback(() => {
+    patchState({ isFullscreen: false });
+  }, [patchState]);
 
   const viewerContentProps = {
     artifact,
@@ -439,17 +274,17 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
     onRun: runArtifact,
     onStop: stopArtifact,
     onRefresh: runArtifact,
-    onToggleCode: () => updateState({ showCode: !showCode }),
+    onToggleCode,
     onCopy: handleCopy,
     onDownload: handleDownload,
     onOpenExternal: handleOpenExternal,
-    onEnterFullscreen: () => updateState({ isFullscreen: true }),
+    onEnterFullscreen,
     zoomIn,
     zoomOut,
     resetView,
     scale,
-    isDragging,
-    position,
+    isDragging: isDraggingLocal,
+    position: viewerPosition,
     onMouseDown: handleMouseDown,
     onWheel: handleWheel,
     iframeRef,
@@ -466,13 +301,13 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
         <>
           <div
             className="fixed inset-0 z-100 bg-black/80"
-            onClick={() => updateState({ isFullscreen: false })}
+            onClick={onExitFullscreen}
           />
           <div className="fixed inset-3 md:inset-6 z-101 bg-(--card) rounded-xl border border-(--border) overflow-hidden flex flex-col">
             <ArtifactViewerContent
               {...viewerContentProps}
               inModal
-              onClose={() => updateState({ isFullscreen: false })}
+              onClose={onExitFullscreen}
             />
           </div>
         </>

@@ -1,6 +1,7 @@
 // CRITICAL
 "use client";
 
+import { memo } from "react";
 import { PanelRightOpen, Gauge, Sliders, Plug, PieChart, Share2 } from "lucide-react";
 
 interface ChatActionButtonsProps {
@@ -13,7 +14,7 @@ interface ChatActionButtonsProps {
   onOpenExport: () => void;
 }
 
-export function ChatActionButtons({
+function ChatActionButtonsBase({
   activityCount,
   onOpenActivity,
   onOpenContext,
@@ -74,3 +75,20 @@ export function ChatActionButtons({
     </div>
   );
 }
+
+function areChatActionButtonsPropsEqual(
+  prev: ChatActionButtonsProps,
+  next: ChatActionButtonsProps,
+): boolean {
+  return (
+    prev.activityCount === next.activityCount &&
+    prev.onOpenActivity === next.onOpenActivity &&
+    prev.onOpenContext === next.onOpenContext &&
+    prev.onOpenSettings === next.onOpenSettings &&
+    prev.onOpenMcpSettings === next.onOpenMcpSettings &&
+    prev.onOpenUsage === next.onOpenUsage &&
+    prev.onOpenExport === next.onOpenExport
+  );
+}
+
+export const ChatActionButtons = memo(ChatActionButtonsBase, areChatActionButtonsPropsEqual);

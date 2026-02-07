@@ -1,6 +1,6 @@
 {
   "threshold": 10,
-  "reporters": ["console", "console-full"],
+  "reporters": ["console"],
   "ignore": [
     "**/*.test.ts",
     "**/node_modules/**",

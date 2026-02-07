@@ -3,12 +3,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
+import { getApiKey } from "@/lib/api-key";
 import type { LogSession } from "@/lib/types";
+
+const MAX_RENDERED_LINES = 20_000;
 
 export function useLogs() {
   const [sessions, setSessions] = useState<LogSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
-  const [logContent, setLogContent] = useState<string>("");
+  const [logLines, setLogLines] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
   const [contentFilter, setContentFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -17,7 +20,7 @@ export function useLogs() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -34,11 +37,12 @@ export function useLogs() {
   const loadLogContent = useCallback(async (sessionId: string, silent = false) => {
     if (!silent) setLoadingContent(true);
     try {
-      const data = await api.getLogContent(sessionId, 2000);
-      setLogContent(data.content || "");
+      const data = await api.getLogs(sessionId, 2000);
+      const lines = Array.isArray(data.logs) ? data.logs : [];
+      setLogLines(lines);
     } catch (e) {
       console.error("Failed to load log content:", e);
-      setLogContent("Failed to load log content");
+      setLogLines(["Failed to load log content"]);
     } finally {
       if (!silent) setLoadingContent(false);
     }
@@ -53,14 +57,55 @@ export function useLogs() {
   }, [loadLogContent, selectedSession]);
 
   useEffect(() => {
-    if (autoRefresh && selectedSession) {
-      intervalRef.current = setInterval(() => loadLogContent(selectedSession, true), 2000);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    if (!autoRefresh || !selectedSession) {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      return;
     }
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    // Use SSE for low-latency log updates (better than polling).
+    const apiKey = getApiKey();
+    const base = `/api/proxy/logs/${encodeURIComponent(selectedSession)}/stream`;
+    const url = apiKey
+      ? `${base}?tail=0&api_key=${encodeURIComponent(apiKey)}`
+      : `${base}?tail=0`;
+
+    const es = new EventSource(url);
+    eventSourceRef.current = es;
+
+    const onLog = (event: MessageEvent) => {
+      try {
+        const payload = JSON.parse(event.data) as { data?: { session_id?: unknown; line?: unknown } };
+        const sessionId = typeof payload.data?.session_id === "string" ? payload.data.session_id : null;
+        const line = typeof payload.data?.line === "string" ? payload.data.line : null;
+        if (!line) return;
+        if (sessionId && sessionId !== selectedSession) return;
+        setLogLines((prev) => {
+          const next = prev.length ? [...prev, line] : [line];
+          return next.length > MAX_RENDERED_LINES ? next.slice(-MAX_RENDERED_LINES) : next;
+        });
+      } catch {
+        // Ignore malformed events.
+      }
+    };
+
+    es.addEventListener("log", onLog as unknown as EventListener);
+    es.onerror = () => {
+      // EventSource will auto-reconnect; avoid noisy console output.
+    };
+
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      es.close();
+      if (eventSourceRef.current === es) {
+        eventSourceRef.current = null;
+      }
     };
   }, [autoRefresh, loadLogContent, selectedSession]);
 
@@ -68,16 +113,20 @@ export function useLogs() {
     if (autoScroll && logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
-  }, [logContent, autoScroll]);
+  }, [logLines.length, autoScroll]);
 
   const deleteSession = useCallback(
     async (sessionId: string) => {
+      if (sessionId === "controller") {
+        alert("Controller logs cannot be deleted.");
+        return;
+      }
       if (!confirm("Delete this log session?")) return;
       try {
         await api.deleteLogSession(sessionId);
         if (selectedSession === sessionId) {
           setSelectedSession(null);
-          setLogContent("");
+          setLogLines([]);
         }
         await loadSessions();
       } catch (e) {
@@ -88,15 +137,15 @@ export function useLogs() {
   );
 
   const downloadLog = useCallback(() => {
-    if (!selectedSession || !logContent) return;
-    const blob = new Blob([logContent], { type: "text/plain" });
+    if (!selectedSession || logLines.length === 0) return;
+    const blob = new Blob([logLines.join("\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${selectedSession}.log`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [logContent, selectedSession]);
+  }, [logLines, selectedSession]);
 
   const filteredSessions = filter
     ? sessions.filter(
@@ -124,15 +173,14 @@ export function useLogs() {
   };
 
   const renderLogs = useCallback(() => {
-    const lines = logContent.split("\n");
     const query = contentFilter.trim().toLowerCase();
-    const visible = query ? lines.filter((line) => line.toLowerCase().includes(query)) : lines;
+    const visible = query ? logLines.filter((line) => line.toLowerCase().includes(query)) : logLines;
     return visible.map((line, index) => (
       <div key={index} className={`${getLogLineClass(line)} hover:bg-[#2a2826] px-2 py-0.5`}>
         {line || "\u00A0"}
       </div>
     ));
-  }, [contentFilter, logContent]);
+  }, [contentFilter, logLines]);
 
   const handleSelectSession = useCallback((sessionId: string) => {
     setSelectedSession(sessionId);
@@ -143,7 +191,7 @@ export function useLogs() {
     sessions,
     filteredSessions,
     selectedSession,
-    logContent,
+    hasLogContent: logLines.length > 0,
     filter,
     contentFilter,
     loading,

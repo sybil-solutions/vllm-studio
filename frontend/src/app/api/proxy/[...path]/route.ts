@@ -65,12 +65,20 @@ async function handleRequest(request: NextRequest, method: string, path: string[
   try {
     // Get dynamic settings
     const settings = await getApiSettings();
-    const overrideUrl = normalizeBackendUrl(request.headers.get("x-backend-url"));
+    const overrideHeaderUrl = normalizeBackendUrl(request.headers.get("x-backend-url"));
+    const overrideCookieUrl = normalizeBackendUrl(
+      request.cookies.get("vllmstudio_backend_url")?.value ?? null,
+    );
+    const overrideUrl = overrideHeaderUrl ?? overrideCookieUrl;
     const BACKEND_URL = overrideUrl ?? settings.backendUrl;
     const API_KEY = settings.apiKey;
 
     const url = new URL(request.url);
-    const searchParams = url.searchParams.toString();
+    const forwardedParams = new URLSearchParams(url.searchParams);
+    const apiKeyQuery = forwardedParams.get("api_key");
+    // Never forward credentials to the controller as query params.
+    if (apiKeyQuery) forwardedParams.delete("api_key");
+    const searchParams = forwardedParams.toString();
     const targetUrl = `${BACKEND_URL}/${path.join("/")}${searchParams ? `?${searchParams}` : ""}`;
     const hasAuth = Boolean(request.headers.get("authorization"));
 
@@ -89,6 +97,8 @@ async function handleRequest(request: NextRequest, method: string, path: string[
     const incomingAuth = request.headers.get("authorization");
     if (incomingAuth) {
       headers["Authorization"] = incomingAuth;
+    } else if (apiKeyQuery) {
+      headers["Authorization"] = `Bearer ${apiKeyQuery}`;
     } else if (API_KEY) {
       headers["Authorization"] = `Bearer ${API_KEY}`;
     }

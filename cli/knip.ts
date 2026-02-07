@@ -9,9 +9,6 @@ export default {
     '.husky/**',
   ],
   ignoreDependencies: [
-    '@types/*',
-    // Used for lint-staged hooks
-    'lint-staged',
     // Bun types used in tsconfig
     'bun-types',
   ],

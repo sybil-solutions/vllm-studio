@@ -1,13 +1,20 @@
 // CRITICAL
 "use client";
 
-import { memo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { useAppStore } from "@/store";
 import * as Icons from "../icons";
 import { MessageRenderer, thinkingParser } from "./message-renderer";
 import { MiniArtifactCard } from "../artifacts/mini-artifact-card";
 import { PerfProfiler } from "../perf/perf-profiler";
 import type { Artifact, ChatMessage, ChatMessageMetadata } from "@/lib/types";
+
+const TOOL_PENDING_STATES = new Set([
+  "input-streaming",
+  "input-available",
+  "approval-requested",
+  "approval-responded",
+]);
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -16,8 +23,6 @@ interface ChatMessageItemProps {
   artifacts?: Artifact[];
   selectedModel?: string;
   contextUsageLabel?: string | null;
-  copied: boolean;
-  onCopy: (text: string, messageId: string) => void;
   onOpenContext?: () => void;
   onFork?: (messageId: string) => void;
   onReprompt?: (messageId: string) => void;
@@ -75,143 +80,30 @@ function InlineThinking({
   );
 }
 
-// Desktop: single-line tool summary
-function ToolCallSummary({
-  toolParts,
-  isStreaming,
-}: {
-  toolParts: Array<{
-    type: string;
-    toolCallId: string;
-    state?: string;
-    toolName?: string;
-  }>;
-  isStreaming?: boolean;
-}) {
-  const hasError = toolParts.some(
-    (t) => t.state === "output-error" || t.state === "error" || t.state === "output-denied",
-  );
-  const pendingStates = new Set([
-    "input-streaming",
-    "input-available",
-    "approval-requested",
-    "approval-responded",
-  ]);
-  // Only "running" if this message is still streaming AND has pending calls
-  const hasPendingCalls = toolParts.some((t) => t.state && pendingStates.has(t.state));
-  const isRunning = Boolean(isStreaming) && hasPendingCalls;
-  const total = toolParts.length;
-
-  // Last tool name (strip server__ prefix)
-  const lastTool = toolParts[toolParts.length - 1];
-  const lastToolRaw = lastTool?.toolName ?? lastTool?.type.replace(/^tool-/, "") ?? "";
-  const lastToolName = lastToolRaw.includes("__")
-    ? lastToolRaw.split("__").slice(1).join("__")
-    : lastToolRaw;
-
-  const label = hasError ? "error" : isRunning ? "running" : "done";
-
-  return (
-    <div className="hidden md:flex items-center gap-2 mt-3 pt-3 border-t border-(--border) text-xs text-[#6a6560]">
-      {isRunning ? (
-        <Icons.Loader2 className="h-3 w-3 text-[#6a6560] animate-spin shrink-0" />
-      ) : hasError ? (
-        <span className="w-3 h-3 flex items-center justify-center shrink-0 text-red-400 text-[10px]">
-          ✕
-        </span>
-      ) : (
-        <Icons.Check className="h-3 w-3 text-emerald-500/70 shrink-0" />
-      )}
-      <span className={hasError ? "text-red-400/70" : ""}>{label}</span>
-      <span className="text-[#3a3735]">·</span>
-      <span>
-        {total} tool call{total !== 1 ? "s" : ""}
-      </span>
-      {lastToolName && (
-        <>
-          <span className="text-[#3a3735]">·</span>
-          <span className="font-mono truncate max-w-[160px]">{lastToolName}</span>
-        </>
-      )}
-    </div>
-  );
-}
-
 // Inline tool calls component for mobile - minimal style
-function InlineToolCalls({
-  messageId,
+function InlineToolIndicator({
   toolParts,
 }: {
-  messageId: string;
   toolParts: Array<{
     type: string;
     toolCallId: string;
     state?: string;
     toolName?: string;
-    input?: unknown;
-    output?: unknown;
   }>;
 }) {
-  const expanded = useAppStore((state) => state.messageInlineToolsExpanded[messageId] ?? false);
-  const setExpanded = useAppStore((state) => state.setMessageInlineToolsExpanded);
-
   if (toolParts.length === 0) return null;
 
-  const pendingStates = new Set([
-    "input-streaming",
-    "input-available",
-    "approval-requested",
-    "approval-responded",
-  ]);
-  const completeStates = new Set(["output-available", "output-error", "output-denied", "result"]);
-
-  const activeTools = toolParts.filter((t) => t.state && pendingStates.has(t.state));
-  const hasActiveTools = activeTools.length > 0;
+  const activeTools = toolParts.filter((t) => t.state && TOOL_PENDING_STATES.has(t.state));
+  if (activeTools.length === 0) return null;
 
   return (
     <div className="md:hidden mb-2">
-      <button
-        onClick={() => setExpanded(messageId, !expanded)}
-        className="flex items-center gap-2 text-left"
-      >
-        {hasActiveTools ? (
-          <Icons.Loader2 className="h-3 w-3 text-amber-400 animate-spin" />
-        ) : (
-          <Icons.Wrench className="h-3 w-3 text-[#6a6560]" />
-        )}
-        <span className="text-xs text-[#6a6560]">
-          {hasActiveTools
-            ? `Running ${activeTools.length} tool${activeTools.length > 1 ? "s" : ""}...`
-            : `${toolParts.length} tool${toolParts.length > 1 ? "s" : ""}`}
+      <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-white/10 bg-white/5">
+        <Icons.Loader2 className="h-3 w-3 text-amber-400 animate-spin" />
+        <span className="text-xs text-[#b6b1aa]">
+          {activeTools.length} tool{activeTools.length > 1 ? "s" : ""} running
         </span>
-        {expanded ? (
-          <Icons.ChevronUp className="h-3 w-3 text-[#6a6560]" />
-        ) : (
-          <Icons.ChevronDown className="h-3 w-3 text-[#6a6560]" />
-        )}
-      </button>
-      {expanded && (
-        <div className="mt-1 space-y-1 pl-5">
-          {toolParts.map((tool) => {
-            const toolName = tool.toolName ?? tool.type.replace(/^tool-/, "");
-            const isRunning = tool.state ? pendingStates.has(tool.state) : false;
-            const isComplete = tool.state ? completeStates.has(tool.state) : false;
-
-            return (
-              <div key={tool.toolCallId} className="flex items-center gap-2 text-xs text-[#6a6560]">
-                {isRunning ? (
-                  <Icons.Loader2 className="h-2.5 w-2.5 text-amber-400 animate-spin" />
-                ) : isComplete ? (
-                  <Icons.Check className="h-2.5 w-2.5 text-green-500" />
-                ) : (
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#6a6560]/50" />
-                )}
-                <span className="font-mono">{toolName}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -223,78 +115,144 @@ function ChatMessageItemBase({
   artifacts,
   selectedModel,
   contextUsageLabel,
-  copied,
-  onCopy,
   onFork,
   onReprompt,
   onExport,
   onOpenContext,
 }: ChatMessageItemProps) {
-  const isUser = message.role === "user";
+  const messageId = message.id;
+  const messageRole = message.role;
+  const messageParts = message.parts;
+  const messageMetadata = message.metadata as MessageMetadata | undefined;
+  const isUser = messageRole === "user";
+  const runId = (messageMetadata as { runId?: string } | undefined)?.runId ?? null;
+  const runDurationSeconds = useAppStore((state) => (runId ? state.runDurationsByRunId[runId] : undefined));
+  const copied = useAppStore((state) => state.copiedMessageId === messageId);
+  const setCopiedMessageId = useAppStore((state) => state.setCopiedMessageId);
   const setActiveArtifactId = useAppStore((state) => state.setActiveArtifactId);
 
-  // Extract text content from parts
-  const rawTextContent = message.parts
-    .filter((part): part is { type: "text"; text: string } => part.type === "text")
-    .map((part) => part.text)
-    .join("");
+  const { textContent, thinkingContent, toolParts } = useMemo(() => {
+    let rawTextContent = "";
+    let reasoningFromParts = "";
+    const toolParts: Array<{
+      type: string;
+      toolCallId: string;
+      state?: string;
+      input?: unknown;
+      output?: unknown;
+      toolName?: string;
+    }> = [];
 
-  // Extract reasoning parts (type: "reasoning")
-  const reasoningFromParts = message.parts
-    .filter(
-      (part): part is { type: "reasoning"; text: string } =>
-        part.type === "reasoning" && "text" in part,
-    )
-    .map((part) => part.text)
-    .join("");
-
-  // For assistant messages, parse thinking content and get mainContent without <think> tags
-  const parsedThinking = !isUser ? thinkingParser.parse(rawTextContent) : null;
-  const textContent = isUser ? rawTextContent : parsedThinking?.mainContent || "";
-
-  // Combine parsed <think> tags with reasoning parts
-  const thinkingContent = reasoningFromParts || parsedThinking?.thinkingContent || "";
-  const isThinkingActive = isStreaming && !textContent && !!thinkingContent;
-
-  // Extract tool parts (static + dynamic tools)
-  const toolParts = message.parts
-    .filter(
-      (
-        part,
-      ): part is typeof part & {
-        toolCallId: string;
-        state?: string;
-        input?: unknown;
-        output?: unknown;
-        toolName?: string;
-      } => {
-        if (part.type === "dynamic-tool") return "toolCallId" in part;
-        return (
-          typeof part.type === "string" && part.type.startsWith("tool-") && "toolCallId" in part
-        );
-      },
-    )
-    .map((part) => {
-      if (part.type === "dynamic-tool") {
-        return { ...part, toolName: "toolName" in part ? String(part.toolName) : "tool" };
+    for (const part of messageParts) {
+      if (part.type === "text") {
+        const text = (part as { text?: unknown }).text;
+        if (typeof text === "string" && text) rawTextContent += text;
+        continue;
       }
-      const rawName = part.type.replace(/^tool-/, "");
-      const toolName = rawName.includes("__") ? rawName.split("__").slice(1).join("__") : rawName;
-      return { ...part, toolName };
-    });
+      if (part.type === "reasoning") {
+        const text = (part as { text?: unknown }).text;
+        if (typeof text === "string" && text) reasoningFromParts += (reasoningFromParts ? "\n" : "") + text;
+        continue;
+      }
+      const type = (part as { type?: unknown }).type;
+      const isDynamicTool = type === "dynamic-tool";
+      const isStaticTool = typeof type === "string" && type.startsWith("tool-");
+      if (!isDynamicTool && !isStaticTool) continue;
+      if (!("toolCallId" in (part as object))) continue;
 
-  const metadata = message.metadata as MessageMetadata | undefined;
-  const usage = metadata?.usage;
-  const totalTokens =
-    usage?.totalTokens ??
-    (usage?.inputTokens != null || usage?.outputTokens != null
-      ? (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0)
-      : undefined);
+      if (isDynamicTool) {
+        toolParts.push({
+          ...(part as {
+            type: string;
+            toolCallId: string;
+            state?: string;
+            input?: unknown;
+            output?: unknown;
+            toolName?: string;
+          }),
+          toolName: "toolName" in (part as object) ? String((part as { toolName?: unknown }).toolName) : "tool",
+        });
+      } else {
+        const rawName = String(type).replace(/^tool-/, "");
+        const toolName = rawName.includes("__") ? rawName.split("__").slice(1).join("__") : rawName;
+        toolParts.push({
+          ...(part as {
+            type: string;
+            toolCallId: string;
+            state?: string;
+            input?: unknown;
+            output?: unknown;
+          }),
+          toolName,
+        });
+      }
+    }
 
-  const modelLabel = metadata?.model ?? selectedModel ?? "Assistant";
-  const displayModel = modelLabel.split("/").pop() || modelLabel;
+    if (isUser) {
+      return { textContent: rawTextContent, thinkingContent: reasoningFromParts, toolParts };
+    }
+
+    const lower = rawTextContent.toLowerCase();
+    const hasThinkTags =
+      lower.includes("<think") ||
+      lower.includes("</think") ||
+      lower.includes("<thinking") ||
+      lower.includes("</thinking");
+    const parsedThinking = hasThinkTags ? thinkingParser.parse(rawTextContent) : null;
+    const textContent = hasThinkTags ? parsedThinking?.mainContent || "" : rawTextContent;
+    const thinkingFromTags = hasThinkTags ? parsedThinking?.thinkingContent || "" : "";
+    const thinkingContent = reasoningFromParts || thinkingFromTags;
+
+    return { textContent, thinkingContent, toolParts };
+  }, [isUser, messageParts]);
+
+  const { displayModel, totalTokens } = useMemo(() => {
+    const usage = messageMetadata?.usage;
+    const totalTokens =
+      usage?.totalTokens ??
+      (usage?.inputTokens != null || usage?.outputTokens != null
+        ? (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0)
+        : undefined);
+
+    const modelLabel = messageMetadata?.model ?? selectedModel ?? "Assistant";
+    const displayModel = modelLabel.split("/").pop() || modelLabel;
+    return { displayModel, totalTokens };
+  }, [messageMetadata, selectedModel]);
+
+  const fullModelId = useMemo(() => {
+    return (messageMetadata?.model ?? selectedModel ?? "Assistant").trim();
+  }, [messageMetadata?.model, selectedModel]);
+
+  const isThinkingActive = isStreaming && !textContent && !!thinkingContent;
+  const activeToolCount = useMemo(() => {
+    if (toolParts.length === 0) return 0;
+    return toolParts.filter((t) => t.state && TOOL_PENDING_STATES.has(t.state)).length;
+  }, [toolParts]);
+
+  const durationLabel = useMemo(() => {
+    if (typeof runDurationSeconds !== "number" || runDurationSeconds <= 0) return null;
+    const mins = Math.floor(runDurationSeconds / 60);
+    const secs = runDurationSeconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }, [runDurationSeconds]);
 
   const canActOnContent = textContent.trim().length > 0;
+
+  const handleCopy = useCallback(async () => {
+    if (!canActOnContent) return;
+    try {
+      await navigator.clipboard.writeText(textContent);
+      setCopiedMessageId(messageId);
+      window.setTimeout(() => {
+        const current = useAppStore.getState().copiedMessageId;
+        if (current === messageId) {
+          setCopiedMessageId(null);
+        }
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy message:", err);
+    }
+  }, [canActOnContent, messageId, setCopiedMessageId, textContent]);
 
   const handleExport = () => {
     if (!canActOnContent) return;
@@ -313,12 +271,9 @@ function ChatMessageItemBase({
   // User message rendering - simple on mobile, card on desktop
   if (isUser) {
     return (
-      <div id={`message-${message.id}`} className="group">
+    <div id={`message-${message.id}`} className="group">
         {/* Mobile: simple right-aligned text */}
         <div className="md:hidden">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] uppercase tracking-wider text-[#6a6560]">You</span>
-          </div>
           <div className="text-[15px] leading-relaxed text-[#e8e4dd] whitespace-pre-wrap break-words">
             {textContent}
           </div>
@@ -331,7 +286,7 @@ function ChatMessageItemBase({
               <div className="text-[10px] uppercase tracking-[0.2em] text-[#9a9590]">You</div>
               <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => onCopy(textContent, message.id)}
+                  onClick={handleCopy}
                   disabled={!canActOnContent}
                   className={actionButtonClassName}
                   title="Copy"
@@ -367,9 +322,26 @@ function ChatMessageItemBase({
       <div className="max-w-full">
         {/* Header with model name and actions */}
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#6a6560] md:tracking-[0.2em] md:text-[#9a9590] truncate max-w-[180px]">
+          <span
+            className="md:hidden text-[10px] font-mono text-[#8a93a5] truncate max-w-[70vw]"
+            title={fullModelId}
+          >
+            {fullModelId}
+          </span>
+          <span className="hidden md:inline text-[10px] uppercase tracking-wider text-[#6a6560] md:tracking-[0.2em] md:text-[#9a9590] truncate max-w-[180px]">
             {displayModel || "Assistant"}
           </span>
+          {durationLabel && (
+            <span className="text-[10px] text-[#6a6560] font-mono" title="Turn runtime">
+              {durationLabel}
+            </span>
+          )}
+          {activeToolCount > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-[#6a6560]">
+              <Icons.Loader2 className="h-3 w-3 text-amber-400 animate-spin" />
+              <span className="hidden md:inline">tools</span>
+            </span>
+          )}
           {totalTokens != null && totalTokens > 0 && (
             <span className="hidden md:inline text-[10px] text-[#6a6560] font-mono">
               {totalTokens.toLocaleString()} tok
@@ -385,27 +357,27 @@ function ChatMessageItemBase({
           )}
           {/* Desktop actions */}
           <div className="hidden md:flex ml-auto items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onReprompt && (
-              <button
-                onClick={() => onReprompt(message.id)}
-                disabled={isStreaming}
-                className={actionButtonClassName}
-                title="Reprompt"
-              >
-                <Icons.RotateCcw className="h-3.5 w-3.5 text-[#9a9590]" />
-              </button>
-            )}
-            {onFork && (
-              <button
-                onClick={() => onFork(message.id)}
-                className={actionButtonClassName}
-                title="Fork"
-              >
-                <Icons.GitBranch className="h-3.5 w-3.5 text-[#9a9590]" />
-              </button>
+                  {onReprompt && (
+                    <button
+                      onClick={() => onReprompt(messageId)}
+                      disabled={isStreaming}
+                      className={actionButtonClassName}
+                      title="Reprompt"
+                    >
+                      <Icons.RotateCcw className="h-3.5 w-3.5 text-[#9a9590]" />
+                    </button>
+                  )}
+                  {onFork && (
+                    <button
+                      onClick={() => onFork(messageId)}
+                      className={actionButtonClassName}
+                      title="Fork"
+                    >
+                      <Icons.GitBranch className="h-3.5 w-3.5 text-[#9a9590]" />
+                    </button>
             )}
             <button
-              onClick={() => onCopy(textContent, message.id)}
+              onClick={handleCopy}
               disabled={!canActOnContent}
               className={actionButtonClassName}
               title="Copy"
@@ -429,13 +401,13 @@ function ChatMessageItemBase({
 
         {/* Mobile inline thinking */}
         <InlineThinking
-          messageId={message.id}
+          messageId={messageId}
           content={thinkingContent}
           isActive={isThinkingActive}
         />
 
-        {/* Mobile inline tool calls */}
-        <InlineToolCalls messageId={message.id} toolParts={toolParts} />
+        {/* Mobile tool indicator (details live in Activity panel) */}
+        <InlineToolIndicator toolParts={toolParts} />
 
         {/* Text content with MessageRenderer */}
         {textContent ? (
@@ -461,10 +433,7 @@ function ChatMessageItemBase({
           </div>
         )}
 
-        {/* Desktop tool summary — single line */}
-        {toolParts.length > 0 && (
-          <ToolCallSummary toolParts={toolParts} isStreaming={isStreaming} />
-        )}
+        {/* Tool telemetry stays in the Activity panel on desktop to keep the transcript clean. */}
       </div>
     </div>
   );

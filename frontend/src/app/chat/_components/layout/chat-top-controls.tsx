@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Menu, Settings } from "lucide-react";
 
 interface ChatTopControlsProps {
@@ -7,7 +8,7 @@ interface ChatTopControlsProps {
   onOpenSettings: () => void;
 }
 
-export function ChatTopControls({ onOpenSidebar, onOpenSettings }: ChatTopControlsProps) {
+function ChatTopControlsBase({ onOpenSidebar, onOpenSettings }: ChatTopControlsProps) {
   return (
     <>
       <div className="fixed left-4 top-[calc(env(safe-area-inset-top,0)+16px)] z-20 md:hidden">
@@ -31,3 +32,9 @@ export function ChatTopControls({ onOpenSidebar, onOpenSettings }: ChatTopContro
     </>
   );
 }
+
+function areChatTopControlsPropsEqual(prev: ChatTopControlsProps, next: ChatTopControlsProps): boolean {
+  return prev.onOpenSidebar === next.onOpenSidebar && prev.onOpenSettings === next.onOpenSettings;
+}
+
+export const ChatTopControls = memo(ChatTopControlsBase, areChatTopControlsPropsEqual);

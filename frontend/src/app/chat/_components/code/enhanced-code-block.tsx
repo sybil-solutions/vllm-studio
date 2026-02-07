@@ -1,10 +1,11 @@
 // CRITICAL
 "use client";
 
-import { useId } from "react";
+import { useCallback, useEffect, useId } from "react";
 import * as Icons from "../icons";
 import { CodePreview } from "./code-preview";
 import { useAppStore } from "@/store";
+import { DEFAULT_CODE_BLOCK_ENTRY } from "@/store/chat-slice-defaults";
 
 interface EnhancedCodeBlockProps {
   children: string;
@@ -22,24 +23,39 @@ export function EnhancedCodeBlock({
   const blockId = useId();
   const blockState = useAppStore(
     (state) =>
-      state.codeBlockState[blockId] ?? {
-        copied: false,
-        isExpanded: false,
-      },
+      state.codeBlockState[blockId] ?? DEFAULT_CODE_BLOCK_ENTRY,
   );
   const updateCodeBlockState = useAppStore((state) => state.updateCodeBlockState);
+  const deleteCodeBlockState = useAppStore((state) => state.deleteCodeBlockState);
   const { copied, isExpanded } = blockState;
-  const updateState = (partial: Partial<typeof blockState>) => {
-    updateCodeBlockState(blockId, (prev) => ({ ...prev, ...partial }));
-  };
+
+  // Prevent `codeBlockState` from growing unbounded as Virtuoso mounts/unmounts blocks.
+  useEffect(() => {
+    return () => deleteCodeBlockState(blockId);
+  }, [blockId, deleteCodeBlockState]);
+
   const lang = language || className?.replace("language-", "") || "text";
   const code = String(children).replace(/\n$/, "");
 
-  const copyCode = () => {
+  const setCopied = useCallback(
+    (value: boolean) => {
+      updateCodeBlockState(blockId, (prev) => ({ ...prev, copied: value }));
+    },
+    [blockId, updateCodeBlockState],
+  );
+
+  const setExpanded = useCallback(
+    (value: boolean) => {
+      updateCodeBlockState(blockId, (prev) => ({ ...prev, isExpanded: value }));
+    },
+    [blockId, updateCodeBlockState],
+  );
+
+  const copyCode = useCallback(() => {
     navigator.clipboard.writeText(code);
-    updateState({ copied: true });
-    setTimeout(() => updateState({ copied: false }), 2000);
-  };
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [code, setCopied]);
 
   if (isStreaming) {
     return (
@@ -101,7 +117,7 @@ export function EnhancedCodeBlock({
         <div className="flex items-center gap-1">
           {isLongCode && (
             <button
-              onClick={() => updateState({ isExpanded: !isExpanded })}
+              onClick={() => setExpanded(!isExpanded)}
               className="p-1.5 rounded-lg hover:bg-(--card-hover) transition-all duration-200 text-[#9a9590] hover:text-(--foreground)"
               title={isExpanded ? "Collapse" : "Expand"}
             >
@@ -134,7 +150,7 @@ export function EnhancedCodeBlock({
         {shouldCollapse && (
           <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-(--card) to-transparent flex items-end justify-center pb-3">
             <button
-              onClick={() => updateState({ isExpanded: true })}
+              onClick={() => setExpanded(true)}
               className="text-xs text-[#b0a8a0] hover:text-(--foreground) transition-colors flex items-center gap-1"
             >
               Expand full code

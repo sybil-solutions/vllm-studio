@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Loader2, X } from "lucide-react";
 
 interface TranscriptionStatusProps {
@@ -8,7 +9,7 @@ interface TranscriptionStatusProps {
   onDismissError: () => void;
 }
 
-export function TranscriptionStatus({
+export const TranscriptionStatus = memo(function TranscriptionStatus({
   isTranscribing,
   error,
   onDismissError,
@@ -35,4 +36,4 @@ export function TranscriptionStatus({
       )}
     </>
   );
-}
+});
