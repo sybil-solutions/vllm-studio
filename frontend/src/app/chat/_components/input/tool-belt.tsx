@@ -50,9 +50,6 @@ interface ToolBeltProps {
   placeholder?: string;
   onStop?: () => void;
   onOpenResults?: () => void;
-  planSummary?: string | null;
-  planChipHidden?: boolean;
-  onTogglePlanChipHidden?: () => void;
   selectedModel?: string;
   availableModels?: ModelOption[];
   onModelChange?: (modelId: string) => void;
@@ -89,9 +86,6 @@ export function ToolBelt({
   placeholder = "Message...",
   onStop,
   onOpenResults,
-  planSummary,
-  planChipHidden,
-  onTogglePlanChipHidden,
   selectedModel,
   availableModels = [],
   onModelChange,
@@ -421,16 +415,6 @@ export function ToolBelt({
           }}
         >
           <div className="hidden md:block">{planDrawer}</div>
-          {planSummary && onOpenResults && (
-            <button
-              onClick={onOpenResults}
-              className="md:hidden absolute -top-3 left-3 flex items-center gap-1 px-2.5 py-1 rounded-full border border-white/10 bg-[#121212]/90 backdrop-blur text-[11px] text-[#d8d3ca] shadow-sm hover:bg-[#151515]/95 transition-colors"
-              title="Open plan"
-            >
-              <span className="inline-flex h-1.5 w-1.5 rounded-full bg-violet-300" />
-              <span className="truncate max-w-[70vw]">{planSummary}</span>
-            </button>
-          )}
           <textarea
             ref={textareaRef}
             value={isLoading ? queuedContext : value}
@@ -479,10 +463,7 @@ export function ToolBelt({
           artifactsEnabled={artifactsEnabled}
           deepResearchEnabled={deepResearchEnabled}
           isTTSEnabled={isTTSEnabled}
-          planSummary={planSummary}
           onOpenResults={onOpenResults}
-          planChipHidden={planChipHidden}
-          onTogglePlanChipHidden={onTogglePlanChipHidden}
           availableModels={availableModels}
           selectedModel={selectedModel}
           onModelChange={onModelChange}

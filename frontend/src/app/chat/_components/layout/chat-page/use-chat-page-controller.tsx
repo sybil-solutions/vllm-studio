@@ -121,9 +121,6 @@ export function useChatPageController(): ChatPageViewProps {
     })),
   );
 
-  const mobilePlanChipHidden = useAppStore((state) => state.mobilePlanChipHidden);
-  const setMobilePlanChipHidden = useAppStore((state) => state.setMobilePlanChipHidden);
-
   // Ensure agent mode is enabled (agent-first UX).
   useEffect(() => {
     if (!agentMode) setAgentMode(true);
@@ -727,14 +724,6 @@ export function useChatPageController(): ChatPageViewProps {
     setSettingsOpen(true);
   }, [setSettingsOpen]);
 
-  const planSummary = useMemo(() => {
-    if (!agentPlan?.steps?.length) return null;
-    const total = agentPlan.steps.length;
-    const done = agentPlan.steps.filter((s) => s.status === "done").length;
-    if (done >= total) return "Plan Done";
-    return `Plan ${done}/${total}`;
-  }, [agentPlan]);
-
   const handleSetSidebarTab = useCallback(
     (tab: SidebarTab) => {
       setSidebarTab(tab);
@@ -758,9 +747,6 @@ export function useChatPageController(): ChatPageViewProps {
         thinkingSnippet={thinkingSnippet}
         placeholder={selectedModel ? "Message..." : "Select a model"}
         onOpenResults={handleOpenResults}
-        planSummary={mobilePlanChipHidden ? null : planSummary}
-        planChipHidden={mobilePlanChipHidden}
-        onTogglePlanChipHidden={() => setMobilePlanChipHidden(!mobilePlanChipHidden)}
         selectedModel={selectedModel}
         availableModels={availableModels}
         onModelChange={handleModelChange}
@@ -793,10 +779,7 @@ export function useChatPageController(): ChatPageViewProps {
     handleStop,
     isLoading,
     mcpEnabled,
-    mobilePlanChipHidden,
-    planSummary,
     selectedModel,
-    setMobilePlanChipHidden,
     systemPrompt,
     thinkingSnippet,
   ]);

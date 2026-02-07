@@ -21,7 +21,6 @@ import {
   VolumeX,
   Plus,
   PanelRightOpen,
-  ListChecks,
 } from "lucide-react";
 import { ToolDropdown, DropdownItem } from "./tool-dropdown";
 import type { ModelOption } from "../../types";
@@ -45,10 +44,7 @@ interface ToolBeltToolbarProps {
   artifactsEnabled?: boolean;
   deepResearchEnabled?: boolean;
   isTTSEnabled?: boolean;
-  planSummary?: string | null;
   onOpenResults?: () => void;
-  planChipHidden?: boolean;
-  onTogglePlanChipHidden?: () => void;
   availableModels?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (modelId: string) => void;
@@ -81,10 +77,7 @@ export const ToolBeltToolbar = memo(function ToolBeltToolbar({
   artifactsEnabled,
   deepResearchEnabled,
   isTTSEnabled,
-  planSummary,
   onOpenResults,
-  planChipHidden,
-  onTogglePlanChipHidden,
   availableModels = [],
   selectedModel,
   onModelChange,
@@ -286,26 +279,9 @@ export const ToolBeltToolbar = memo(function ToolBeltToolbar({
             </>
           )}
 
-          {onTogglePlanChipHidden && (
-            <>
-              <DropdownItem
-                icon={ListChecks}
-                label={planChipHidden ? "Show plan chip" : "Hide plan chip"}
-                isActive={!planChipHidden}
-                onClick={onTogglePlanChipHidden}
-                disabled={disabled}
-                closeOnClick
-              />
-              <div className="h-px bg-(--border) my-1" />
-            </>
-          )}
-
           {onOpenResults && (
             <>
               <DropdownItem icon={PanelRightOpen} label="Results" onClick={onOpenResults} disabled={disabled} closeOnClick />
-              {planSummary && (
-                <DropdownItem icon={ListChecks} label={planSummary} onClick={onOpenResults} disabled={disabled} closeOnClick />
-              )}
               <div className="h-px bg-(--border) my-1" />
             </>
           )}
