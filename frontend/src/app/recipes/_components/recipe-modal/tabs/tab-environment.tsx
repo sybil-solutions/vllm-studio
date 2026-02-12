@@ -2,7 +2,7 @@
 "use client";
 
 import { Code, Plus, Terminal, Variable } from "lucide-react";
-import type { Recipe } from "@/lib/types";
+import type { RecipeEditor } from "@/lib/types";
 
 export function RecipeModalTabEnvironment({
   recipe,
@@ -18,8 +18,8 @@ export function RecipeModalTabEnvironment({
   llamaConfigLoading,
   llamaConfigHelp,
 }: {
-  recipe: Recipe;
-  onChange: (next: Recipe) => void;
+  recipe: RecipeEditor;
+  onChange: (next: RecipeEditor) => void;
   isLlamacpp: boolean;
   envVarEntries: Array<{ key: string; value: string }>;
   onAddEnvVar: () => void;
@@ -152,4 +152,3 @@ export function RecipeModalTabEnvironment({
     </div>
   );
 }
-

@@ -2,6 +2,11 @@
 
 ## Daily workflow
 - Run `./setup.sh` after any Swift file change (edit/add/move/rename); it regenerates the Xcode project.
+- **Always restart the app after making changes** to test them:
+  ```bash
+  pkill -f "vllm-studio-mac" 2>/dev/null; sleep 1
+  open ~/Library/Developer/Xcode/DerivedData/vllm-studio-*/Build/Products/Debug/vllm-studio-mac.app
+  ```
 - Verify builds from the terminal:
   ```bash
   cd swift-client

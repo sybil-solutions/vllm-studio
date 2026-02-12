@@ -11,6 +11,8 @@ import {
   normalizeToolCallsInMessage,
   normalizeToolRequest,
 } from "../services/tool-call-core";
+import { buildInferenceUrl, fetchInference } from "../services/inference/inference-client";
+import { pidExists } from "../services/process-utilities";
 
 const switchLock = new AsyncLock();
 
@@ -45,15 +47,6 @@ export const registerOpenAIRoutes = (app: Hono, context: AppContext): void => {
       }
     }
     return false;
-  };
-
-  const pidExists = (pid: number): boolean => {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
   };
 
   const readLogTail = (path: string, limit: number): string => {
@@ -91,12 +84,7 @@ export const registerOpenAIRoutes = (app: Hono, context: AppContext): void => {
           return `Model ${recipe.id} crashed during startup: ${errorTail.slice(-200)}`;
         }
         try {
-          const controller = new AbortController();
-          const timeoutHandle = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch(`http://localhost:${context.config.inference_port}/health`, {
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutHandle);
+          const response = await fetchInference(context, "/health", { timeoutMs: 5000 });
           if (response.status === 200) {
             return null;
           }
@@ -168,7 +156,7 @@ export const registerOpenAIRoutes = (app: Hono, context: AppContext): void => {
         : { Authorization: `Bearer ${masterKey}` }),
     };
     const litellmUrl = "http://localhost:4100/v1/chat/completions";
-    const inferenceUrl = `http://localhost:${context.config.inference_port}/v1/chat/completions`;
+    const inferenceUrl = buildInferenceUrl(context, "/v1/chat/completions");
     const upstreamUrl = useDirectInference ? inferenceUrl : litellmUrl;
     const finalBody = bodyChanged ? new TextEncoder().encode(JSON.stringify(parsed)).buffer : bodyBuffer;
 

@@ -1,3 +1,4 @@
+// CRITICAL
 import SwiftUI
 
 struct ChatToolBeltToolbar: View {
@@ -17,18 +18,17 @@ struct ChatToolBeltToolbar: View {
   let onShowTools: () -> Void
 
   var body: some View {
-    HStack(spacing: 14) {
+    HStack(spacing: 10) {
       Menu {
         Button(action: onAddFile) { Label("Attach File", systemImage: "paperclip") }
         Button(action: onAddImage) { Label("Add Image", systemImage: "photo") }
-        Button(action: onRecord) { Label(isRecording ? "Stop" : "Record", systemImage: isRecording ? "stop.circle" : "mic") }
+        Button(action: onRecord) { Label(isRecording ? "Stop Recording" : "Record Audio", systemImage: isRecording ? "stop.circle" : "mic") }
       } label: {
-        Image(systemName: "paperclip")
+        CircleIcon(systemName: "plus")
       }
-      Menu {
-        if models.isEmpty {
-          Text("No models loaded")
-        } else {
+
+      if !models.isEmpty {
+        Menu {
           ForEach(models) { m in
             Button(action: { onModelChange(m.id) }) {
               HStack {
@@ -37,24 +37,49 @@ struct ChatToolBeltToolbar: View {
               }
             }
           }
-        }
-      } label: {
-        HStack(spacing: 4) {
-          Text(selectedModel ?? "model").lineLimit(1).truncationMode(.middle)
-          Image(systemName: "chevron.down").font(.system(size: 8))
+        } label: {
+          HStack(spacing: 6) {
+            Text(selectedModel ?? "Select model")
+              .lineLimit(1)
+              .truncationMode(.middle)
+            Image(systemName: "chevron.down")
+              .font(.system(size: 10, weight: .semibold))
+              .foregroundColor(AppTheme.muted)
+          }
+          .font(AppTheme.captionFont.weight(.semibold))
+          .foregroundColor(AppTheme.muted)
+          .padding(.horizontal, 10)
+          .frame(height: 28)
+          .background(Color.clear)
+          .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border))
+          .clipShape(RoundedRectangle(cornerRadius: 10))
         }
       }
+
       Menu {
-        Button(action: onMcpToggle) { Label(mcpEnabled ? "MCP On" : "MCP Off", systemImage: mcpEnabled ? "bolt.fill" : "bolt") }
-        Button(action: onDeepResearchToggle) { Label(deepResearchEnabled ? "Deep On" : "Deep Off", systemImage: deepResearchEnabled ? "globe.americas.fill" : "globe") }
-        Button(action: onPlanModeToggle) { Label(planModeEnabled ? "Plan On" : "Plan Off", systemImage: planModeEnabled ? "list.bullet.clipboard.fill" : "list.bullet.clipboard") }
+        Button(action: onMcpToggle) { Label(mcpEnabled ? "Web search & tools: On" : "Web search & tools: Off", systemImage: "globe") }
+        Button(action: onDeepResearchToggle) { Label(deepResearchEnabled ? "Deep Research: On" : "Deep Research: Off", systemImage: "brain") }
+        Button(action: onPlanModeToggle) { Label(planModeEnabled ? "Planning: On" : "Planning: Off", systemImage: "list.bullet.clipboard") }
         Button(action: onShowTools) { Label("Tools", systemImage: "wrench") }
       } label: {
-        Image(systemName: "slider.horizontal.3")
+        CircleIcon(systemName: "slider.horizontal.3")
       }
-      Spacer()
+
+      Spacer(minLength: 0)
     }
-    .font(AppTheme.captionFont)
-    .foregroundColor(AppTheme.muted)
+  }
+}
+
+private struct CircleIcon: View {
+  let systemName: String
+
+  var body: some View {
+    Image(systemName: systemName)
+      .font(.system(size: 13, weight: .semibold))
+      .foregroundColor(AppTheme.muted)
+      .frame(width: 28, height: 28)
+      .background(Color.white.opacity(0.04))
+      .overlay(Circle().stroke(AppTheme.border))
+      .clipShape(Circle())
   }
 }

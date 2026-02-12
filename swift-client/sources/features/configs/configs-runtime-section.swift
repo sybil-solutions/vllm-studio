@@ -2,19 +2,27 @@
 import SwiftUI
 
 struct ConfigsRuntimeSection: View {
-  let runtime: SystemRuntimeInfo?
+  let runtime: SystemRuntimeInfo
   let llamaBin: String?
 
   var body: some View {
-    if let runtime {
-      Section("Runtime") {
+    VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 8) {
+        Text("Overview")
+          .font(AppTheme.captionFont.weight(.semibold))
+          .foregroundColor(AppTheme.muted)
         RuntimeRow(label: "CUDA Driver", value: runtime.cuda.driverVersion ?? "Unknown")
         RuntimeRow(label: "CUDA Runtime", value: runtime.cuda.cudaVersion ?? "Unknown")
         RuntimeRow(label: "GPU Count", value: String(runtime.gpus.count))
         RuntimeRow(label: "GPU Types", value: runtime.gpus.types.isEmpty ? "Unknown" : runtime.gpus.types.joined(separator: ", "))
       }
 
-      Section("Backends") {
+      Divider()
+
+      VStack(alignment: .leading, spacing: 10) {
+        Text("Backends")
+          .font(AppTheme.captionFont.weight(.semibold))
+          .foregroundColor(AppTheme.muted)
         BackendRow(
           name: "vLLM",
           info: runtime.backends.vllm,

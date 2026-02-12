@@ -6,26 +6,30 @@ struct UsageTopModelsCard: View {
 
   var body: some View {
     CardView {
-      VStack(alignment: .leading, spacing: 10) {
-        Text("Top Models").font(AppTheme.titleFont)
-        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+      VStack(alignment: .leading, spacing: 16) {
+        Text("Top Models")
+          .font(AppTheme.sectionFont)
+          .foregroundColor(AppTheme.foreground)
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
           GridRow {
             header("Model")
             header("Req")
             header("Tokens")
             header("Success")
           }
-          Divider().gridCellUnsizedAxes(.horizontal)
+          Divider()
+            .background(AppTheme.border)
+            .gridCellUnsizedAxes(.horizontal)
           ForEach(Array(rows.prefix(8))) { row in
             GridRow {
               Text(row.model)
-                .font(AppTheme.bodyFont.weight(.semibold))
+                .font(AppTheme.bodyFont.weight(.medium))
                 .foregroundColor(AppTheme.foreground)
                 .lineLimit(1)
-              Text("\(row.requests)")
+              Text(formatCount(row.requests))
                 .font(AppTheme.monoFont)
                 .foregroundColor(AppTheme.foreground)
-              Text("\(row.totalTokens)")
+              Text(formatCount(row.totalTokens))
                 .font(AppTheme.monoFont)
                 .foregroundColor(AppTheme.foreground)
               Text(String(format: "%.0f%%", row.successRate))
@@ -40,9 +44,8 @@ struct UsageTopModelsCard: View {
 
   private func header(_ title: String) -> some View {
     Text(title)
-      .font(AppTheme.captionFont)
+      .font(AppTheme.captionFont.weight(.medium))
       .foregroundColor(AppTheme.muted)
       .lineLimit(1)
   }
 }
-

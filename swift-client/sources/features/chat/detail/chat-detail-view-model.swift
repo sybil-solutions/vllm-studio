@@ -1,7 +1,12 @@
 // CRITICAL
 import Combine
 import Foundation
+
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 @MainActor
 final class ChatDetailViewModel: ObservableObject {
@@ -79,13 +84,23 @@ final class ChatDetailViewModel: ObservableObject {
   }
 
   func copyTranscript() {
+    #if canImport(UIKit)
     UIPasteboard.general.string = buildTranscript()
+    #elseif canImport(AppKit)
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(buildTranscript(), forType: .string)
+    #endif
   }
 
   func copyMessage(_ message: StoredMessage) {
     let content = cleanedContent(for: message)
     guard !content.isEmpty else { return }
+    #if canImport(UIKit)
     UIPasteboard.general.string = content
+    #elseif canImport(AppKit)
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(content, forType: .string)
+    #endif
   }
 
   func cleanedContent(for message: StoredMessage) -> String {

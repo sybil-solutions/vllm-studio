@@ -2,7 +2,7 @@
 "use client";
 
 import { Info, Server } from "lucide-react";
-import type { ModelInfo, Recipe } from "@/lib/types";
+import type { ModelInfo, RecipeEditor } from "@/lib/types";
 
 export function RecipeModalTabGeneral({
   recipe,
@@ -10,8 +10,8 @@ export function RecipeModalTabGeneral({
   availableModels,
   modelServedNames,
 }: {
-  recipe: Recipe;
-  onChange: (next: Recipe) => void;
+  recipe: RecipeEditor;
+  onChange: (next: RecipeEditor) => void;
   availableModels: ModelInfo[];
   modelServedNames: Record<string, string>;
 }) {
@@ -121,4 +121,3 @@ export function RecipeModalTabGeneral({
     </div>
   );
 }
-

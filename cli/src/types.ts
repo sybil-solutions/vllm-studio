@@ -1,3 +1,5 @@
+import type { Backend as SharedBackend, RecipePayload } from "../../shared/src/recipe";
+
 export type View = 'dashboard' | 'recipes' | 'status' | 'config';
 
 export interface GPU {
@@ -10,14 +12,12 @@ export interface GPU {
   power_draw: number;
 }
 
-export interface Recipe {
-  id: string;
-  name: string;
-  model_path: string;
-  backend: string;
-  tensor_parallel_size?: number;
-  max_model_len?: number;
-}
+export type Backend = SharedBackend;
+
+export type Recipe = Pick<
+  RecipePayload,
+  "id" | "name" | "model_path" | "backend" | "tensor_parallel_size" | "max_model_len"
+>;
 
 export interface Status {
   running: boolean;

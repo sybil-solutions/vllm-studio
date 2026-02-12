@@ -1,6 +1,8 @@
 // CRITICAL
 import type { Hono } from "hono";
 import type { AppContext } from "../types/context";
+import { fetchInference } from "../services/inference/inference-client";
+import { fetchLocal } from "../http/local-fetch";
 
 /**
  * Register tokenization and title routes.
@@ -20,7 +22,7 @@ export const registerTokenizationRoutes = (app: Hono, context: AppContext): void
       return ctx.json({ error: String(error), num_tokens: 0 });
     }
     try {
-      const response = await fetch(`http://localhost:${context.config.inference_port}/tokenize`, {
+      const response = await fetchInference(context, "/tokenize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -46,7 +48,7 @@ export const registerTokenizationRoutes = (app: Hono, context: AppContext): void
       return ctx.json({ error: String(error), text: "" });
     }
     try {
-      const response = await fetch(`http://localhost:${context.config.inference_port}/detokenize`, {
+      const response = await fetchInference(context, "/detokenize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -74,7 +76,7 @@ export const registerTokenizationRoutes = (app: Hono, context: AppContext): void
     const text = typeof body["text"] === "string" ? body["text"] : "";
     const model = typeof body["model"] === "string" ? body["model"] : (current.served_model_name ?? "default");
     try {
-      const response = await fetch(`http://localhost:${context.config.inference_port}/tokenize`, {
+      const response = await fetchInference(context, "/tokenize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model, prompt: text }),
@@ -115,7 +117,7 @@ export const registerTokenizationRoutes = (app: Hono, context: AppContext): void
       if (tools.length > 0) {
         testRequest["tools"] = tools;
       }
-      const response = await fetch(`http://localhost:${context.config.inference_port}/v1/chat/completions`, {
+      const response = await fetchInference(context, "/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(testRequest),
@@ -152,7 +154,7 @@ export const registerTokenizationRoutes = (app: Hono, context: AppContext): void
         }
       }
 
-      const response = await fetch(`http://localhost:${context.config.inference_port}/tokenize`, {
+      const response = await fetchInference(context, "/tokenize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model, prompt: allText }),
@@ -164,7 +166,7 @@ export const registerTokenizationRoutes = (app: Hono, context: AppContext): void
 
       if (tools.length > 0) {
         const toolsText = JSON.stringify(tools);
-        const toolsResponse = await fetch(`http://localhost:${context.config.inference_port}/tokenize`, {
+        const toolsResponse = await fetchInference(context, "/tokenize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model, prompt: toolsText }),
@@ -213,7 +215,7 @@ Assistant: ${assistantMessage ? assistantMessage.slice(0, 500) : "(response pend
 Title:`;
 
       const litellmKey = process.env["LITELLM_MASTER_KEY"] ?? "sk-master";
-      const response = await fetch("http://localhost:4100/v1/chat/completions", {
+      const response = await fetchLocal(4100, "/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

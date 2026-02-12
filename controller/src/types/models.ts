@@ -1,39 +1,17 @@
 // CRITICAL
 import type { RecipeId } from "./brand";
+import type { Backend as SharedBackend, RecipeBase } from "../../../shared/src/recipe";
 
 /**
  * Supported inference backends.
  */
-export type Backend = "vllm" | "sglang" | "llamacpp" | "transformers" | "tabbyapi";
+export type Backend = SharedBackend;
 
 /**
  * Model launch configuration.
  */
-export interface Recipe {
+export interface Recipe extends Omit<RecipeBase, "id"> {
   id: RecipeId;
-  name: string;
-  model_path: string;
-  backend: Backend;
-  env_vars: Record<string, string> | null;
-  tensor_parallel_size: number;
-  pipeline_parallel_size: number;
-  max_model_len: number;
-  gpu_memory_utilization: number;
-  kv_cache_dtype: string;
-  max_num_seqs: number;
-  trust_remote_code: boolean;
-  tool_call_parser: string | null;
-  reasoning_parser: string | null;
-  enable_auto_tool_choice: boolean;
-  quantization: string | null;
-  dtype: string | null;
-  host: string;
-  port: number;
-  served_model_name: string | null;
-  python_path: string | null;
-  extra_args: Record<string, unknown>;
-  max_thinking_tokens: number | null;
-  thinking_mode: string;
 }
 
 /**

@@ -43,15 +43,10 @@ export { ContextManagementService } from "./service";
 export {
   ContextManagementServiceFactory,
   contextManagementServiceFactory,
-  getContextManagementService,
 } from "./factory";
 
 // Context
 export { ContextManagementContext, ContextManagementProvider } from "./context";
 
 // Hooks
-export {
-  useContextManagementService,
-  useContextManagementConfig,
-  useContextManagement,
-} from "./hooks";
+export { useContextManagement } from "./hooks";

@@ -3,14 +3,16 @@
 
 ## Project Overview
 
-vLLM Studio - Model lifecycle management for vLLM, SGLang, and TabbyAPI inference servers, with LiteLLM as the API gateway. Features a Next.js frontend with real-time SSE updates, MCP tool integration, and comprehensive analytics.
+vLLM Studio - Model lifecycle management for vLLM, SGLang, llama.cpp, and TabbyAPI inference servers, with LiteLLM as the API gateway. Features a Next.js frontend with real-time SSE updates, MCP tool integration, agent runtime, and comprehensive analytics.
 
 ## Architecture
 
+The controller is a **TypeScript application** running on **Bun** with the **Hono** web framework and **SQLite** for persistence. It is NOT Python/FastAPI.
+
 ```
                     ┌─────────────────────────────────────────┐
-                    │              Frontend (3000)            │
-                    │  Next.js + React + TypeScript           │
+                    │              Frontend (3000)             │
+                    │  Next.js + React + TypeScript            │
                     └─────────────────┬───────────────────────┘
                                       │
               ┌───────────────────────┼───────────────────────┐
@@ -18,13 +20,13 @@ vLLM Studio - Model lifecycle management for vLLM, SGLang, and TabbyAPI inferenc
               ▼                       ▼                       ▼
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
 │  Controller (8080)  │  │   LiteLLM (4100)    │  │  Prometheus (9090)  │
-│  Bun + SQLite       │  │   API Gateway       │  │   Metrics Store     │
+│  Bun + Hono + SQLite│  │   API Gateway       │  │  Grafana (3100)     │
 └──────────┬──────────┘  └──────────┬──────────┘  └─────────────────────┘
            │                        │
            │                        ▼
            │             ┌─────────────────────┐
-           │             │  vLLM/SGLang (8000) │
-           │             │  Inference Backend  │
+           │             │ vLLM / SGLang /     │
+           │             │ llama.cpp (8000)    │
            │             └─────────────────────┘
            │
            ├────────────────────────────────────┐
@@ -39,9 +41,6 @@ vLLM Studio - Model lifecycle management for vLLM, SGLang, and TabbyAPI inferenc
 ## Commands
 
 ```bash
-# Install
-pip install -e .
-
 # Run controller (IMPORTANT: use start.sh or native bun, NOT snap bun)
 ./start.sh                                    # Recommended - uses native bun
 ./start.sh --dev                              # Development with auto-reload
@@ -53,7 +52,13 @@ pip install -e .
 # Install native bun if needed:
 curl -fsSL https://bun.sh/install | bash
 
-# Run all services
+# Install controller dependencies
+cd controller && bun install
+
+# Type check controller
+cd controller && npx tsc --noEmit
+
+# Run all services (Postgres, Redis, LiteLLM, Prometheus, Grafana, Temporal)
 docker compose up -d
 
 # Run frontend
@@ -64,53 +69,107 @@ cd frontend && npm run dev
 
 Environment variables (prefix `VLLM_STUDIO_`):
 - `PORT` - Controller port (default: 8080)
-- `INFERENCE_PORT` - vLLM/SGLang port (default: 8000)
+- `INFERENCE_PORT` - vLLM/SGLang/llama.cpp port (default: 8000)
 - `API_KEY` - Optional authentication
 - `DATA_DIR` - Data directory (default: ./data)
 - `DB_PATH` - SQLite database path (default: ./data/controller.db)
 - `MODELS_DIR` - Model weights directory (default: /models)
 - `SGLANG_PYTHON` - Python path for SGLang venv
 - `TABBY_API_DIR` - TabbyAPI installation directory
+- `NVIDIA_SMI_PATH` - Path to nvidia-smi binary (default: nvidia-smi)
 
 ## Project Structure
 
 ```
 lmvllm/
-├── controller/           # Python FastAPI backend
-│   ├── app.py           # Application entry, lifespan, singletons
-│   ├── config.py        # Pydantic settings
-│   ├── models.py        # Data models (Recipe, MCPServer, etc.)
-│   ├── backends.py      # Command builders for vLLM/SGLang
-│   ├── process.py       # Process management (launch/evict)
-│   ├── store.py         # SQLite stores (Recipe, Chat, MCP, Metrics)
-│   ├── events.py        # SSE event manager
-│   ├── thinking_config.py  # Reasoning token allocation
-│   ├── metrics.py       # Prometheus metrics exporter
-│   ├── gpu.py           # GPU detection
-│   ├── browser.py       # Model directory discovery
-│   ├── cli.py           # CLI entry point
-│   └── routes/          # API route handlers
-│       ├── system.py    # /health, /status, /gpus, /config
-│       ├── lifecycle.py # /recipes, /launch, /evict
-│       ├── models.py    # /v1/models, /v1/studio/models
-│       ├── chats.py     # /chats CRUD
-│       ├── logs.py      # /logs, /events (SSE)
-│       ├── monitoring.py # /metrics, /peak-metrics
-│       ├── usage.py     # /usage analytics
-│       ├── proxy.py     # Chat completions proxy
-│       └── mcp.py       # /mcp/servers, /mcp/tools
-├── frontend/            # Next.js frontend
+├── controller/              # TypeScript backend (Bun + Hono)
+│   ├── src/
+│   │   ├── main.ts          # Entry point, server startup, shutdown
+│   │   ├── app-context.ts   # Dependency injection container
+│   │   ├── metrics-collector.ts  # Background metrics collection (5s interval)
+│   │   ├── config/
+│   │   │   ├── env.ts       # Runtime config, .env loading
+│   │   │   └── persisted-config.ts  # Persistent settings
+│   │   ├── core/
+│   │   │   ├── logger.ts    # Logger with disk + SSE output
+│   │   │   ├── errors.ts    # HttpStatus error class
+│   │   │   ├── async.ts     # AsyncLock, AsyncQueue, delay
+│   │   │   └── log-files.ts # Log file rotation/cleanup
+│   │   ├── types/
+│   │   │   ├── models.ts    # Backend, Recipe, ProcessInfo, LaunchResult
+│   │   │   ├── context.ts   # AppContext interface
+│   │   │   └── schemas.ts   # Zod validation schemas
+│   │   ├── http/
+│   │   │   ├── app.ts       # Hono app, CORS, route registration
+│   │   │   └── sse.ts       # SSE streaming utilities
+│   │   ├── routes/
+│   │   │   ├── system.ts    # /health, /status, /gpus, /config
+│   │   │   ├── lifecycle.ts # /recipes, /launch/{id}, /evict
+│   │   │   ├── models.ts    # /v1/models, model discovery
+│   │   │   ├── chats.ts     # /chats CRUD
+│   │   │   ├── openai.ts    # OpenAI-compatible proxy
+│   │   │   ├── logs.ts      # /logs, /events (SSE stream)
+│   │   │   ├── monitoring.ts # /metrics, /peak-metrics, /benchmark
+│   │   │   ├── usage.ts     # /usage analytics
+│   │   │   ├── mcp.ts       # /mcp/servers, /mcp/tools
+│   │   │   ├── downloads.ts # Model download management
+│   │   │   ├── runtime.ts   # Runtime info endpoints
+│   │   │   ├── studio.ts    # Studio-specific endpoints
+│   │   │   └── tokenization.ts  # /tokenize
+│   │   ├── services/
+│   │   │   ├── process-manager.ts  # Process spawn, lifecycle, eviction
+│   │   │   ├── backends.ts  # vLLM/SGLang/llama.cpp command builders
+│   │   │   ├── event-manager.ts    # SSE publish/subscribe
+│   │   │   ├── gpu.ts       # GPU detection via nvidia-smi
+│   │   │   ├── metrics.ts   # Prometheus metrics registry
+│   │   │   ├── model-browser.ts    # Local model discovery
+│   │   │   ├── download-manager.ts # Model downloads
+│   │   │   ├── launch-state.ts     # Launch state tracking
+│   │   │   ├── llamacpp-runtime.ts # llama.cpp runtime handling
+│   │   │   ├── vllm-runtime.ts     # vLLM runtime handling
+│   │   │   └── agent-runtime/      # Agent orchestration (13 files)
+│   │   │       ├── run-manager.ts  # Chat run orchestration
+│   │   │       ├── tool-registry.ts # Tool integration
+│   │   │       └── ...
+│   │   └── stores/
+│   │       ├── recipe-store.ts     # Recipe CRUD
+│   │       ├── chat-store.ts       # Chat sessions/messages
+│   │       ├── mcp-store.ts        # MCP server config
+│   │       ├── metrics-store.ts    # Peak/lifetime metrics
+│   │       └── download-store.ts   # Download tracking
+│   ├── package.json
+│   └── tsconfig.json
+├── frontend/                # Next.js frontend
 │   └── src/
-│       ├── app/         # Pages (chat, recipes, configs, logs, discover, usage)
-│       ├── components/  # React components
-│       ├── hooks/       # Custom hooks (useSSE, useContextManager)
-│       └── lib/         # API client, types, utilities
-├── config/              # Service configurations
-│   ├── litellm.yaml    # LiteLLM routing config
-│   └── prometheus.yml  # Prometheus scrape config
-├── data/               # Runtime data (SQLite DB, logs)
-└── docker-compose.yml  # Service orchestration
+│       ├── app/             # Pages (chat, recipes, configs, logs, discover, usage)
+│       ├── components/      # React components
+│       ├── hooks/           # Custom hooks (useSSE, useContextManager)
+│       └── lib/             # API client, types, utilities
+├── config/                  # Service configurations
+│   ├── litellm.yaml         # LiteLLM routing config
+│   ├── prometheus.yml       # Prometheus scrape config
+│   └── grafana/             # Grafana provisioning + dashboards
+├── docs/                    # Documentation
+│   ├── RECIPE_SYSTEM.md     # Recipe system guide
+│   └── production-topology.md
+├── data/                    # Runtime data (SQLite DBs, logs)
+└── docker-compose.yml       # Service orchestration
 ```
+
+## Controller Architecture
+
+### Dependency Injection
+All services receive an `AppContext` object created in `app-context.ts`. This contains all stores, services, logger, event manager, and configuration as singletons.
+
+### Route Registration
+Routes follow the pattern `registerXXXRoutes(app: Hono, context: AppContext)`, all wired in `http/app.ts`.
+
+### Key Patterns
+- **Hono** web framework with Zod-based validation
+- **SQLite** via Bun's built-in driver (two DBs: `controller.db`, `chats.db`)
+- **SSE** for real-time updates (status, GPU, metrics, launch progress)
+- **prom-client** for Prometheus metrics (prefix: `vllm_studio_`)
+- **Background metrics collector** runs every 5s, scrapes inference backend metrics
 
 ## Database Schema
 
@@ -212,15 +271,36 @@ CREATE TABLE lifetime_metrics (
 - `POST /mcp/tools/{server}/{tool}` - Call tool
 
 ### Monitoring
-- `GET /events` - SSE stream (status, gpu, metrics, logs)
-- `GET /metrics` - Prometheus metrics
+- `GET /events` - SSE stream (status, gpu, metrics, logs, launch_progress)
+- `GET /metrics` - Prometheus metrics (OpenMetrics format)
+- `GET /peak-metrics` - Best observed throughput per model
+- `GET /lifetime-metrics` - Cumulative tokens, energy, uptime
+- `POST /benchmark` - Run throughput benchmark
 - `GET /usage` - Usage analytics
+
+### Downloads
+- `GET /downloads` - List active downloads
+- `POST /downloads` - Start model download
 
 ## Key Files
 
-- `controller/backends.py` - vLLM/SGLang command construction with auto-detection of reasoning/tool parsers
-- `controller/process.py` - Process detection, launch with stability checks, eviction
-- `controller/routes/lifecycle.py` - Launch state machine with preemption, cancellation, progress events
-- `controller/events.py` - SSE event broadcasting to multiple subscribers
-- `controller/store.py` - SQLite stores with migrations and seeding
+- `controller/src/services/backends.ts` - vLLM/SGLang/llama.cpp command construction with auto-detection of reasoning/tool parsers
+- `controller/src/services/process-manager.ts` - Process detection, launch with stability checks, eviction
+- `controller/src/routes/lifecycle.ts` - Launch state machine with preemption, cancellation, PID liveness checks, progress events
+- `controller/src/services/event-manager.ts` - SSE event broadcasting to multiple subscribers
+- `controller/src/stores/recipe-store.ts` - Recipe CRUD with SQLite
+- `controller/src/metrics-collector.ts` - Background metrics collection, vLLM scraping, lifetime tracking
+- `controller/src/core/async.ts` - AsyncLock mutex with timeout + cancellation support
 - `config/litellm.yaml` - Model routing, callbacks, caching configuration
+
+## Monitoring
+
+Prometheus metrics (prefix `vllm_studio_`):
+- `inference_server_up` - Whether inference is running (1/0)
+- `gpu_memory_used_bytes`, `gpu_memory_total_bytes` - Per-GPU memory
+- `gpu_utilization_percent`, `gpu_temperature_celsius` - Per-GPU stats
+- `model_switches_total`, `model_launch_failures_total` - Lifecycle counters
+- `model_switch_duration_seconds` - Switch latency histogram
+- `sse_active_connections`, `sse_events_published_total` - SSE stats
+
+Grafana dashboard at `http://localhost:3100` (default: admin/admin) with GPU, inference, and lifecycle panels.

@@ -7,7 +7,12 @@ import type { AppContext } from "../types/context";
 import type { OpenAIModelInfo, OpenAIModelList, Recipe } from "../types/models";
 import { buildModelInfo, discoverModelDirectories } from "../services/model-browser";
 import { notFound } from "../core/errors";
+import { fetchInference } from "../services/inference/inference-client";
 
+/**
+ * Check if mock inference mode is enabled via environment variable.
+ * @returns True if mock inference is enabled.
+ */
 function isMockInferenceEnabled(): boolean {
   const raw = process.env["VLLM_STUDIO_MOCK_INFERENCE"];
   if (!raw) return false;
@@ -23,16 +28,13 @@ function isMockInferenceEnabled(): boolean {
 export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
   app.get("/v1/models", async (ctx) => {
     const recipes = context.stores.recipeStore.list();
-    const current = await context.processManager.findInferenceProcess(context.config.inference_port);
+    const current = await context.processManager.findInferenceProcess(
+      context.config.inference_port
+    );
     let activeModelData: { data?: Array<{ max_model_len?: number }> } | null = null;
     if (current) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const response = await fetch(`http://localhost:${context.config.inference_port}/v1/models`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
+        const response = await fetchInference(context, "/v1/models", { timeoutMs: 5000 });
         if (response.ok) {
           activeModelData = (await response.json()) as { data?: Array<{ max_model_len?: number }> };
         }
@@ -50,7 +52,10 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
         if (current.served_model_name && recipe.served_model_name === current.served_model_name) {
           isActive = true;
         } else if (current.model_path) {
-          if (recipe.model_path.includes(current.model_path) || current.model_path.includes(recipe.model_path)) {
+          if (
+            recipe.model_path.includes(current.model_path) ||
+            current.model_path.includes(recipe.model_path)
+          ) {
             isActive = true;
           } else if (basename(current.model_path) === basename(recipe.model_path)) {
             isActive = true;
@@ -98,7 +103,10 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
     const recipes = context.stores.recipeStore.list();
     let recipe: Recipe | null = null;
     for (const entry of recipes) {
-      if ((entry.served_model_name && entry.served_model_name === modelId) || entry.id === modelId) {
+      if (
+        (entry.served_model_name && entry.served_model_name === modelId) ||
+        entry.id === modelId
+      ) {
         recipe = entry;
         break;
       }
@@ -107,18 +115,20 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
       throw notFound("Model not found");
     }
 
-    const current = await context.processManager.findInferenceProcess(context.config.inference_port);
+    const current = await context.processManager.findInferenceProcess(
+      context.config.inference_port
+    );
     let isActive = false;
     let maxModelLength = recipe.max_model_len;
-    if (current && current.model_path && recipe.model_path && current.model_path.includes(recipe.model_path)) {
+    if (
+      current &&
+      current.model_path &&
+      recipe.model_path &&
+      current.model_path.includes(recipe.model_path)
+    ) {
       isActive = true;
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const response = await fetch(`http://localhost:${context.config.inference_port}/v1/models`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
+        const response = await fetchInference(context, "/v1/models", { timeoutMs: 5000 });
         if (response.ok) {
           const data = (await response.json()) as { data?: Array<{ max_model_len?: number }> };
           if (data.data?.[0]?.max_model_len) {
@@ -171,7 +181,10 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
       }
     }
 
-    const rootIndex = new Map<string, { path: string; exists: boolean; sources: Set<string>; recipeIds: Set<string> }>();
+    const rootIndex = new Map<
+      string,
+      { path: string; exists: boolean; sources: Set<string>; recipeIds: Set<string> }
+    >();
 
     const addRoot = (pathValue: string, source: string, recipeId?: string): void => {
       const resolvedPath = expandUserPath(pathValue);
@@ -202,7 +215,9 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
       addRoot(parent, "recipe_parent", recipe.id);
     }
 
-    const roots = Array.from(rootIndex.values()).sort((left, right) => left.path.localeCompare(right.path));
+    const roots = Array.from(rootIndex.values()).sort((left, right) =>
+      left.path.localeCompare(right.path)
+    );
     const scanRoots = roots.filter((root) => root.exists).map((root) => root.path);
 
     const modelDirectories = discoverModelDirectories(scanRoots, 2, 1000);
@@ -219,7 +234,9 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
       const info = await buildModelInfo(directory, recipeIds);
       models.push(info);
     }
-    models.sort((left, right) => String(left.name).toLowerCase().localeCompare(String(right.name).toLowerCase()));
+    models.sort((left, right) =>
+      String(left.name).toLowerCase().localeCompare(String(right.name).toLowerCase())
+    );
 
     const rootsPayload = roots.map((root) => ({
       path: root.path,
@@ -260,12 +277,18 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
     try {
       const response = await fetch(url);
       if (!response.ok) {
-        return ctx.json({ detail: `HuggingFace API error: ${response.status}` }, { status: response.status });
+        return ctx.json(
+          { detail: `HuggingFace API error: ${response.status}` },
+          { status: response.status }
+        );
       }
       const data = await response.json();
       return ctx.json(data);
     } catch (error) {
-      return ctx.json({ detail: `Failed to reach HuggingFace API: ${String(error)}` }, { status: 503 });
+      return ctx.json(
+        { detail: `Failed to reach HuggingFace API: ${String(error)}` },
+        { status: 503 }
+      );
     }
   });
 };

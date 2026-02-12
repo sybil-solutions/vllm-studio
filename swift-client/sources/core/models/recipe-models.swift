@@ -1,31 +1,35 @@
 // CRITICAL
 import Foundation
 
+/// Mutable recipe for editing with required core fields
 struct Recipe: Codable, Identifiable {
-  let id: String
-  let name: String
-  let modelPath: String
-  let backend: String?
-  let host: String?
-  let port: Int?
-  let servedModelName: String?
-  let trustRemoteCode: Bool?
-  let dtype: String?
-  let quantization: String?
-  let tensorParallelSize: Int?
-  let pipelineParallelSize: Int?
-  let gpuMemoryUtilization: Double?
-  let maxModelLen: Int?
-  let kvCacheDtype: String?
-  let maxNumSeqs: Int?
-  let toolCallParser: String?
-  let reasoningParser: String?
-  let enableAutoToolChoice: Bool?
-  let extraArgs: [String: AnyCodable]?
-  let maxThinkingTokens: Int?
-  let thinkingMode: String?
+  var id: String
+  var name: String
+  var modelPath: String
+  var backend: String
+  var envVars: [String: String]?
+  var tensorParallelSize: Int
+  var pipelineParallelSize: Int
+  var maxModelLen: Int
+  var gpuMemoryUtilization: Double
+  var kvCacheDtype: String
+  var maxNumSeqs: Int
+  var trustRemoteCode: Bool
+  var toolCallParser: String?
+  var reasoningParser: String?
+  var enableAutoToolChoice: Bool
+  var quantization: String?
+  var dtype: String?
+  var host: String
+  var port: Int
+  var servedModelName: String?
+  var pythonPath: String?
+  var extraArgs: [String: AnyCodable]
+  var maxThinkingTokens: Int?
+  var thinkingMode: String
 }
 
+/// Recipe with runtime status for dashboard display
 struct RecipeWithStatus: Codable, Identifiable {
   let id: String
   let name: String
@@ -35,21 +39,21 @@ struct RecipeWithStatus: Codable, Identifiable {
   let host: String?
   let port: Int?
   let servedModelName: String?
-  let trustRemoteCode: Bool?
-  let dtype: String?
-  let quantization: String?
-  let tensorParallelSize: Int?
-  let pipelineParallelSize: Int?
-  let gpuMemoryUtilization: Double?
-  let maxModelLen: Int?
-  let kvCacheDtype: String?
-  let maxNumSeqs: Int?
-  let toolCallParser: String?
-  let reasoningParser: String?
-  let enableAutoToolChoice: Bool?
-  let extraArgs: [String: AnyCodable]?
-  let maxThinkingTokens: Int?
-  let thinkingMode: String?
+}
+
+/// Default values for new recipes
+enum RecipeDefaults {
+  static func newRecipe() -> Recipe {
+    Recipe(
+      id: "", name: "New Recipe", modelPath: "", backend: "vllm", envVars: [:],
+      tensorParallelSize: 1, pipelineParallelSize: 1, maxModelLen: 4096,
+      gpuMemoryUtilization: 0.9, kvCacheDtype: "auto", maxNumSeqs: 128,
+      trustRemoteCode: false, toolCallParser: nil, reasoningParser: nil,
+      enableAutoToolChoice: true, quantization: nil, dtype: nil,
+      host: "0.0.0.0", port: 8000, servedModelName: nil, pythonPath: nil,
+      extraArgs: [:], maxThinkingTokens: nil, thinkingMode: "auto"
+    )
+  }
 }
 
 struct LaunchResult: Codable {

@@ -3,8 +3,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import api from "@/lib/api";
-
-type LaunchStage = "preempting" | "evicting" | "launching" | "waiting" | "ready" | "cancelled" | "error";
+import type { LaunchStage } from "@/lib/types";
 
 export type SidebarStatusSnapshot = {
   online: boolean;
@@ -181,4 +180,3 @@ export function useSidebarStatus(): SidebarStatusSnapshot {
 
   return snap;
 }
-

@@ -120,15 +120,26 @@ export function useChatSessionBootstrap({
 
     void (async () => {
       const session = await loadSession(targetSessionId);
-      if (session) {
-        if (session.model && session.model !== selectedModel) {
-          setSelectedModel(session.model);
+      if (!session) {
+        // Stale session ID in URL or localStorage: reset to a new chat so navigation doesn't feel "stuck".
+        setLastSessionId("");
+        startNewSession();
+        setMessages([]);
+        clearPlan();
+        clearAgentFiles();
+        if (sessionFromUrl) {
+          router.replace("/chat?new=1");
         }
-        const stored = session.messages ?? [];
-        setMessages(mapStoredMessages(stored));
-        hydrateAgentState(session);
-        void loadAgentFiles({ sessionId: session.id });
+        return;
       }
+
+      if (session.model && session.model !== selectedModel) {
+        setSelectedModel(session.model);
+      }
+      const stored = session.messages ?? [];
+      setMessages(mapStoredMessages(stored));
+      hydrateAgentState(session);
+      void loadAgentFiles({ sessionId: session.id });
     })();
   }, [
     clearAgentFiles,

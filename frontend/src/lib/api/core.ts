@@ -1,12 +1,11 @@
 // CRITICAL
 import { getApiKey } from "../api-key";
 import { getStoredBackendUrl } from "../backend-url";
+import { delay } from "../async";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRIES = 3;
 const DEFAULT_RETRY_DELAY_MS = 1_000;
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const encodePathSegments = (path: string) =>
   path
@@ -104,11 +103,11 @@ export function createApiCore(params: { baseUrl: string; useProxy: boolean }) {
           lastError = new Error(errorMessage);
 
           if (isRetryableError(lastError, response.status) && attempt < retries) {
-            const delay = retryDelay * Math.pow(2, attempt);
+            const backoffMs = retryDelay * Math.pow(2, attempt);
             console.warn(
-              `[API] Retry ${attempt + 1}/${retries} for ${endpoint} after ${delay}ms (status: ${response.status})`,
+              `[API] Retry ${attempt + 1}/${retries} for ${endpoint} after ${backoffMs}ms (status: ${response.status})`,
             );
-            await sleep(delay);
+            await delay(backoffMs);
             continue;
           }
 
@@ -129,11 +128,11 @@ export function createApiCore(params: { baseUrl: string; useProxy: boolean }) {
         }
 
         if (isRetryableError(error, lastStatus) && attempt < retries) {
-          const delay = retryDelay * Math.pow(2, attempt);
+          const backoffMs = retryDelay * Math.pow(2, attempt);
           console.warn(
-            `[API] Retry ${attempt + 1}/${retries} for ${endpoint} after ${delay}ms (${lastError.message})`,
+            `[API] Retry ${attempt + 1}/${retries} for ${endpoint} after ${backoffMs}ms (${lastError.message})`,
           );
-          await sleep(delay);
+          await delay(backoffMs);
           continue;
         }
 
@@ -234,4 +233,3 @@ export function createApiCore(params: { baseUrl: string; useProxy: boolean }) {
     postSseJson,
   };
 }
-

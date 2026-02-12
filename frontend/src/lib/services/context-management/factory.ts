@@ -3,22 +3,15 @@
  */
 
 import { ContextManagementService } from "./service";
+import { DEFAULT_CONTEXT_CONFIG } from "./types";
 import type { IContextManagementService, ContextConfig } from "./types";
-
-const DEFAULT_CONTEXT_MANAGEMENT_CONFIG: ContextConfig = {
-  compactionThreshold: 0.8,
-  targetAfterCompaction: 0.5,
-  preserveRecentMessages: 4,
-  autoCompact: true,
-  checkInterval: 5000,
-};
 
 let defaultInstance: IContextManagementService | null = null;
 
 export class ContextManagementServiceFactory {
   create(config: Partial<ContextConfig>): IContextManagementService {
     const fullConfig: ContextConfig = {
-      ...DEFAULT_CONTEXT_MANAGEMENT_CONFIG,
+      ...DEFAULT_CONTEXT_CONFIG,
       ...config,
     };
     return new ContextManagementService(fullConfig);
@@ -26,18 +19,10 @@ export class ContextManagementServiceFactory {
 
   createDefault(): IContextManagementService {
     if (!defaultInstance) {
-      defaultInstance = new ContextManagementService(DEFAULT_CONTEXT_MANAGEMENT_CONFIG);
+      defaultInstance = new ContextManagementService(DEFAULT_CONTEXT_CONFIG);
     }
     return defaultInstance;
-  }
-
-  resetDefault(): void {
-    defaultInstance = null;
   }
 }
 
 export const contextManagementServiceFactory = new ContextManagementServiceFactory();
-
-export function getContextManagementService(): IContextManagementService {
-  return contextManagementServiceFactory.createDefault();
-}

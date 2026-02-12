@@ -1,6 +1,6 @@
 // CRITICAL
-import type { Recipe } from "@/lib/types";
-import { prepareRecipeForSave } from "./recipe-utils";
+import type { RecipeEditor } from "@/lib/types";
+import { normalizeExtraArgKey, prepareRecipeForSave } from "./recipe-utils";
 
 const appendExtraArgsToCommand = (args: string[], extraArgs: Record<string, unknown>): string[] => {
   const internalKeys = new Set([
@@ -17,7 +17,7 @@ const appendExtraArgsToCommand = (args: string[], extraArgs: Record<string, unkn
   );
 
   for (const [key, value] of Object.entries(extraArgs)) {
-    const normalizedKey = key.replace(/-/g, "_").toLowerCase();
+    const normalizedKey = normalizeExtraArgKey(key);
     if (internalKeys.has(normalizedKey)) continue;
 
     const flag = `--${key.replace(/_/g, "-")}`;
@@ -70,7 +70,7 @@ const appendLlamacppArgsToCommand = (args: string[], extraArgs: Record<string, u
   ]);
 
   for (const [key, value] of Object.entries(extraArgs)) {
-    const normalizedKey = key.replace(/-/g, "_").toLowerCase();
+    const normalizedKey = normalizeExtraArgKey(key);
     if (internalKeys.has(normalizedKey)) continue;
 
     const flag = `--${key.replace(/_/g, "-")}`;
@@ -102,7 +102,7 @@ const appendLlamacppArgsToCommand = (args: string[], extraArgs: Record<string, u
   return args;
 };
 
-export const generateCommand = (recipe: Recipe): string => {
+export const generateCommand = (recipe: RecipeEditor): string => {
   const payload = prepareRecipeForSave(recipe);
   const backend = payload.backend || "vllm";
   const args: string[] = [];
@@ -178,4 +178,3 @@ export const generateCommand = (recipe: Recipe): string => {
 
   return args.join(" \\\n+  ");
 };
-

@@ -57,18 +57,13 @@ export { MessageParsingService } from "./service";
 export {
   MessageParsingServiceFactory,
   messageParsingServiceFactory,
-  getMessageParsingService,
 } from "./factory";
 
 // Context
 export { MessageParsingContext, MessageParsingProvider } from "./context";
 
 // Hooks
-export {
-  useMessageParsingService,
-  useMessageParsingConfig,
-  useMessageParsing,
-} from "./hooks";
+export { useMessageParsing } from "./hooks";
 
 // Individual parsers (for advanced use cases)
 export {

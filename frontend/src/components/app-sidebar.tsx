@@ -4,86 +4,18 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  LayoutDashboard,
-  FileText,
-  Settings2,
-  MessageSquareText,
-  BarChart3,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Sparkles,
-  Compass,
-  Plus,
-  ScrollText,
-} from "lucide-react";
-import { memo, useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAppStore } from "@/store";
-import { useSidebarStatus } from "@/hooks/use-sidebar-status";
-
-const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/chat", label: "Chat", icon: MessageSquareText },
-  { href: "/recipes", label: "Recipes", icon: Sparkles },
-  { href: "/discover", label: "Discover", icon: Compass },
-  { href: "/logs", label: "Logs", icon: ScrollText },
-  { href: "/usage", label: "Usage", icon: BarChart3 },
-  { href: "/configs", label: "Configs", icon: Settings2 },
-];
+import { ChatSessionsSection } from "./app-sidebar/chat-sessions-section";
+import { MobileHeaderStatus } from "./app-sidebar/mobile-header-status";
+import { navItems } from "./app-sidebar/nav-items";
+import { SidebarStatus } from "./app-sidebar/sidebar-status";
 
 interface AppSidebarProps {
   children: React.ReactNode;
 }
-
-type SidebarStatusView = {
-  online: boolean;
-  inferenceOnline: boolean;
-  model: string | null;
-  activityLine: string;
-};
-
-const SidebarStatus = memo(function SidebarStatus(props: { collapsed: boolean; isMobile: boolean }) {
-  const { collapsed, isMobile } = props;
-  const status = useSidebarStatus();
-  return (
-    <div className={`flex items-center gap-2 ${collapsed && !isMobile ? "" : ""}`}>
-      <div
-        className={`relative flex items-center justify-center ${
-          status.inferenceOnline ? "text-emerald-400" : status.online ? "text-amber-400" : "text-red-400"
-        }`}
-      >
-        <div
-          className={`w-2 h-2 rounded-full ${
-            status.inferenceOnline ? "bg-emerald-400" : status.online ? "bg-amber-400" : "bg-red-400"
-          } ${status.inferenceOnline ? "animate-pulse" : ""}`}
-        />
-        {status.inferenceOnline && (
-          <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-30" />
-        )}
-      </div>
-      {(!collapsed || isMobile) && (
-        <span className="text-xs text-[#a0a0a0] truncate font-medium">{status.activityLine}</span>
-      )}
-    </div>
-  );
-});
-
-const MobileHeaderStatus = memo(function MobileHeaderStatus() {
-  const status = useSidebarStatus();
-  const text = status.activityLine;
-  return (
-    <>
-      <div
-        className={`w-1.5 h-1.5 rounded-full ${
-          status.inferenceOnline ? "bg-(--success)" : status.online ? "bg-yellow-500" : "bg-(--error)"
-        }`}
-      />
-      <span className="text-[11px] text-[#9a9590] truncate">{text}</span>
-    </>
-  );
-});
 
 export function AppSidebar({ children }: AppSidebarProps) {
   const pathname = usePathname();
@@ -91,16 +23,20 @@ export function AppSidebar({ children }: AppSidebarProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [chatHistoryOpen, setChatHistoryOpen] = useState(true);
+  const [hydrated, setHydrated] = useState(useAppStore.persist.hasHydrated());
   const loadingSessionsRef = useRef(false);
   const router = useRouter();
   const chatSessions = useAppStore((state) => state.sessions);
   const setSessions = useAppStore((state) => state.setSessions);
 
   useEffect(() => {
-    if (!useAppStore.persist.hasHydrated()) {
-      void useAppStore.persist.rehydrate();
-    }
-  }, []);
+    if (hydrated) return;
+    const unsubscribe = useAppStore.persist.onFinishHydration(() => {
+      setHydrated(true);
+    });
+    void useAppStore.persist.rehydrate();
+    return unsubscribe;
+  }, [hydrated]);
 
   // Detect mobile and restore collapsed state after mount
   useEffect(() => {
@@ -145,10 +81,9 @@ export function AppSidebar({ children }: AppSidebarProps) {
     }
   };
 
-
-
   // Load chat sessions once when on chat page
   useEffect(() => {
+    if (!hydrated) return;
     if (pathname === "/chat" && !loadingSessionsRef.current) {
       loadingSessionsRef.current = true;
       api
@@ -159,7 +94,7 @@ export function AppSidebar({ children }: AppSidebarProps) {
           loadingSessionsRef.current = false;
         });
     }
-  }, [pathname, setSessions]);
+  }, [hydrated, pathname, setSessions]);
 
   const createNewChat = () => {
     setMobileOpen(false);
@@ -239,59 +174,14 @@ export function AppSidebar({ children }: AppSidebarProps) {
 
                 {/* Chat sessions section */}
                 {isChat && pathname === "/chat" && (!collapsed || isMobile) && (
-                  <div className="ml-2 mt-2 mb-2">
-                    <button
-                      onClick={createNewChat}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/15 rounded-lg transition-colors text-sm font-medium mb-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      New Chat
-                    </button>
-
-                    {chatSessions.length > 0 && (
-                      <>
-                        <button
-                          onClick={() => setChatHistoryOpen(!chatHistoryOpen)}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-[#9a9590] hover:text-[#b0a8a0] text-xs font-medium transition-colors"
-                        >
-                          <ChevronDown
-                            className={`h-3.5 w-3.5 transition-transform ${chatHistoryOpen ? "" : "-rotate-90"}`}
-                          />
-                          <span>Your chats</span>
-                        </button>
-
-                        {chatHistoryOpen && (
-                          <div className="space-y-0.5 max-h-96 overflow-y-auto ml-4 pr-1 scrollbar-thin">
-                            {chatSessions.map((session) => {
-                              // Fallback: first 5 words of first user message if no title
-                              let displayTitle = session.title;
-                              if (!displayTitle || displayTitle === "New Chat") {
-                                if (session.first_user_message) {
-                                  const words = session.first_user_message.trim().split(/\s+/).slice(0, 5);
-                                  displayTitle = words.join(" ") + (words.length >= 5 ? "..." : "");
-                                } else {
-                                  displayTitle = "New Chat";
-                                }
-                              }
-                              return (
-                                <Link
-                                  key={session.id}
-                                  href={`/chat?session=${session.id}`}
-                                  onClick={() => {
-                                    if (isMobile) setMobileOpen(false);
-                                  }}
-                                  className="block px-3 py-1.5 text-xs text-[#9a9590] hover:text-[#b0a8a0] hover:bg-(--accent)/10 rounded transition-colors truncate"
-                                  title={displayTitle}
-                                >
-                                  {displayTitle}
-                                </Link>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  <ChatSessionsSection
+                    sessions={chatSessions}
+                    open={chatHistoryOpen}
+                    setOpen={setChatHistoryOpen}
+                    isMobile={isMobile}
+                    onCloseMobile={() => setMobileOpen(false)}
+                    onNewChat={createNewChat}
+                  />
                 )}
               </div>
             );

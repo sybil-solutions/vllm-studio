@@ -3,6 +3,7 @@ import type { AppContext } from "./types/context";
 import { getGpuInfo } from "./services/gpu";
 import { delay } from "./core/async";
 import { checkTemporalStatus } from "./services/temporal-status";
+import { fetchLocal } from "./http/local-fetch";
 
 /**
  * Start background metrics collection.
@@ -22,10 +23,7 @@ export const startMetricsCollector = (context: AppContext): (() => void) => {
    */
   const scrapeVllmMetrics = async (port: number): Promise<Record<string, number>> => {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch(`http://localhost:${port}/metrics`, { signal: controller.signal });
-      clearTimeout(timeout);
+      const response = await fetchLocal(port, "/metrics", { timeoutMs: 5000 });
       if (response.status !== 200) {
         return {};
       }

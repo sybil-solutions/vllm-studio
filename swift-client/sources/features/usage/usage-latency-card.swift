@@ -6,17 +6,21 @@ struct UsageLatencyCard: View {
 
   var body: some View {
     CardView {
-      VStack(alignment: .leading, spacing: 8) {
-        Text(title).font(AppTheme.titleFont)
-        UsageMetricRow(label: "Avg", value: format(latency.avgMs))
-        UsageMetricRow(label: "P50", value: format(latency.p50Ms))
-        UsageMetricRow(label: "P95", value: format(latency.p95Ms))
-        UsageMetricRow(label: "P99", value: format(latency.p99Ms))
+      VStack(alignment: .leading, spacing: 12) {
+        Text(title)
+          .font(AppTheme.sectionFont)
+          .foregroundColor(AppTheme.foreground)
+        VStack(spacing: 8) {
+          UsageMetricRow(label: "Avg", value: format(latency.avgMs))
+          UsageMetricRow(label: "P50", value: format(latency.p50Ms))
+          UsageMetricRow(label: "P95", value: format(latency.p95Ms))
+          UsageMetricRow(label: "P99", value: format(latency.p99Ms))
+        }
       }
     }
   }
 
   private func format(_ value: Double) -> String {
-    String(format: "%.0f ms", value)
+    formatCount(value) + " ms"
   }
 }

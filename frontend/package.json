@@ -17,6 +17,9 @@
     "test:integration": "playwright test",
     "prepare": "cd ../.. && husky frontend/.husky",
     "check": "knip && jscpd src && npm run depcheck",
+    "check:deadcode": "knip",
+    "check:dupes": "jscpd src",
+    "check:cleanup": "npm run check:deadcode && npm run check:dupes && npm run depcheck",
     "check:fix": "knip --fix"
   },
   "dependencies": {

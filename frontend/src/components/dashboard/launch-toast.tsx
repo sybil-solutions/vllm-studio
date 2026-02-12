@@ -1,10 +1,8 @@
+import type { LaunchProgress } from "@/lib/types";
+
 interface LaunchToastProps {
   launching: boolean;
-  launchProgress: {
-    stage: "preempting" | "evicting" | "launching" | "waiting" | "ready" | "cancelled" | "error";
-    message?: string;
-    progress?: number;
-  } | null;
+  launchProgress: LaunchProgress | null;
 }
 
 export function LaunchToast({ launching, launchProgress }: LaunchToastProps) {

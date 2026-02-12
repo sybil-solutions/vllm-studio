@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RecipeSection: View {
   let recipes: [RecipeWithStatus]
+  let isRunning: Bool
   let onLaunch: (String) -> Void
   let onEvict: () -> Void
 
@@ -9,21 +10,36 @@ struct RecipeSection: View {
     CardView {
       VStack(alignment: .leading, spacing: 12) {
         HStack {
-          Text("Recipes").font(AppTheme.titleFont)
+          Text("Recipes")
+            .font(AppTheme.sectionFont)
+            .foregroundColor(AppTheme.foreground)
           Spacer()
-          NavigationLink("Manage", destination: RecipesView())
         }
         if recipes.isEmpty {
-          Text("No recipes yet").foregroundColor(AppTheme.muted)
+          Text("No recipes yet")
+            .font(AppTheme.bodyFont)
+            .foregroundColor(AppTheme.muted)
+            .padding(.vertical, 8)
         } else {
-          ForEach(recipes) { recipe in
-            RecipeRowView(recipe: recipe, onLaunch: onLaunch)
-            if recipe.id != recipes.last?.id { Divider() }
+          VStack(spacing: 8) {
+            ForEach(recipes) { recipe in
+              RecipeRowView(recipe: recipe, onLaunch: onLaunch)
+            }
           }
         }
-        Button("Evict Model", action: onEvict)
-          .buttonStyle(.borderedProminent)
-          .tint(AppTheme.error)
+        if isRunning {
+          Button(action: onEvict) {
+            Text("Evict Model")
+              .font(AppTheme.bodyFont.weight(.medium))
+              .foregroundColor(AppTheme.error)
+              .padding(.horizontal, 16)
+              .padding(.vertical, 8)
+              .background(AppTheme.error.opacity(0.15))
+              .cornerRadius(8)
+          }
+          .buttonStyle(.plain)
+          .padding(.top, 4)
+        }
       }
     }
   }

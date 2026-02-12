@@ -5,21 +5,12 @@
  */
 
 import type { IParser, ICacheableService, IServiceFactory } from "../types";
+import type { Artifact, ArtifactType } from "../../types/chat/artifacts";
+export type { Artifact, ArtifactType };
 
 // ============================================================================
 // Artifact Types
 // ============================================================================
-
-export type ArtifactType = "html" | "react" | "javascript" | "svg" | "python" | "mermaid";
-
-export interface Artifact {
-  id: string;
-  type: ArtifactType;
-  title: string;
-  code: string;
-  groupId?: string;
-  version?: number;
-}
 
 export interface ArtifactsResult {
   text: string;

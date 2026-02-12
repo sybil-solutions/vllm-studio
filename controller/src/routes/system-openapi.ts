@@ -9,6 +9,7 @@ import {
 } from "../types/schemas";
 import { getGpuInfo } from "../services/gpu";
 import { getSystemRuntimeInfo } from "../services/runtime-info";
+import { fetchInference } from "../services/inference/inference-client";
 
 /**
  * Register system routes with OpenAPI.
@@ -38,12 +39,7 @@ export const registerSystemRoutes = (app: OpenAPIHono, context: AppContext): voi
       let inferenceReady = false;
       if (current) {
         try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch(`http://localhost:${context.config.inference_port}/health`, {
-            signal: controller.signal,
-          });
-          clearTimeout(timeout);
+          const response = await fetchInference(context, "/health", { timeoutMs: 5000 });
           inferenceReady = response.status === 200;
         } catch {
           inferenceReady = false;
@@ -163,12 +159,7 @@ export const registerSystemRoutes = (app: OpenAPIHono, context: AppContext): voi
       try {
         const current = await context.processManager.findInferenceProcess(context.config.inference_port);
         if (current) {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 2000);
-          const response = await fetch(`http://localhost:${context.config.inference_port}/health`, {
-            signal: controller.signal,
-          });
-          clearTimeout(timeout);
+          const response = await fetchInference(context, "/health", { timeoutMs: 2000 });
           inferenceStatus = response.status === 200 ? "running" : "error";
         } else {
           inferenceStatus = "stopped";

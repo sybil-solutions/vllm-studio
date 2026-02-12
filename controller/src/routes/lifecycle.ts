@@ -7,6 +7,8 @@ import { badRequest, notFound } from "../core/errors";
 import { primaryLogPathFor, readFileTailBytes, sanitizeLogSessionId } from "../core/log-files";
 import { parseRecipe } from "../stores/recipe-serializer";
 import { Event } from "../services/event-manager";
+import { pidExists } from "../services/process-utilities";
+import { fetchInference } from "../services/inference/inference-client";
 
 const switchLock = new AsyncLock();
 const launchCancelControllers = new Map<string, AbortController>();
@@ -17,20 +19,6 @@ const launchCancelControllers = new Map<string, AbortController>();
  * @param context - App context.
  */
 export const registerLifecycleRoutes = (app: Hono, context: AppContext): void => {
-  /**
-   * Check if a process id exists.
-   * @param pid - Process id.
-   * @returns True if process exists.
-   */
-  const pidExists = (pid: number): boolean => {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
   /**
    * Read last N characters from a log file.
    * @param path - Log file path.
@@ -223,12 +211,7 @@ export const registerLifecycleRoutes = (app: Hono, context: AppContext): void =>
         }
 
         try {
-          const controller = new AbortController();
-          const timeoutHandle = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch(`http://localhost:${context.config.inference_port}/health`, {
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutHandle);
+          const response = await fetchInference(context, "/health", { timeoutMs: 5000 });
           if (response.status === 200) {
             ready = true;
             break;
@@ -326,17 +309,12 @@ export const registerLifecycleRoutes = (app: Hono, context: AppContext): void =>
     const start = Date.now();
     while (Date.now() - start < timeout * 1000) {
       try {
-        const controller = new AbortController();
-        const timeoutHandle = setTimeout(() => controller.abort(), 5000);
-        const response = await fetch(`http://localhost:${context.config.inference_port}/health`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutHandle);
+        const response = await fetchInference(context, "/health", { timeoutMs: 5000 });
         if (response.status === 200) {
           return ctx.json({ ready: true, elapsed: Math.floor((Date.now() - start) / 1000) });
         }
       } catch {
-        await delay(2000);
+        // Ignore fetch errors, retry after delay
       }
       await delay(2000);
     }

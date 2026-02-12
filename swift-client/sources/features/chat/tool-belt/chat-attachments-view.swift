@@ -1,5 +1,8 @@
 import SwiftUI
+
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct ChatAttachmentsView: View {
   let attachments: [ChatAttachment]
@@ -11,11 +14,19 @@ struct ChatAttachmentsView: View {
         HStack(spacing: 8) {
           ForEach(attachments) { attachment in
             HStack(spacing: 6) {
+              #if canImport(UIKit)
               if let image = attachment.image {
                 Image(uiImage: image).resizable().scaledToFill().frame(width: 28, height: 28).clipped().cornerRadius(6)
               } else {
                 Image(systemName: icon(for: attachment.type))
               }
+              #else
+              if let image = attachment.image {
+                Image(nsImage: image).resizable().scaledToFill().frame(width: 28, height: 28).clipped().cornerRadius(6)
+              } else {
+                Image(systemName: icon(for: attachment.type))
+              }
+              #endif
               Text(attachment.name).font(AppTheme.captionFont)
               Button(action: { onRemove(attachment) }) { Image(systemName: "xmark.circle.fill") }
             }

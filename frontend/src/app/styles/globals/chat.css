@@ -1,0 +1,192 @@
+/* CRITICAL */
+/* Message content overflow */
+.message-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  color: #e8e4dd !important;
+}
+
+.message-content p,
+.message-content li,
+.message-content ul,
+.message-content ol,
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6,
+.message-content span:not([class*="hljs"]),
+.message-content strong,
+.message-content em,
+.message-content blockquote,
+.message-content td,
+.message-content th,
+.message-content div:not([class]) {
+  color: #e8e4dd !important;
+}
+
+.message-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.message-content code {
+  word-break: break-all;
+}
+
+.chat-markdown {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #e8e4dd;
+}
+
+.chat-scroll-pad {
+  padding-bottom: 0;
+}
+
+@media (max-width: 768px) {
+  .chat-scroll-pad {
+    padding-bottom: calc(var(--chat-composer-height, 128px) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-markdown {
+    font-size: 15px;
+    line-height: 1.62;
+  }
+
+  .chat-markdown p {
+    margin-bottom: 0.75rem;
+  }
+
+  .chat-markdown ul,
+  .chat-markdown ol {
+    margin-bottom: 0.75rem;
+    padding-left: 0.9rem;
+  }
+
+  .chat-markdown h1 {
+    font-size: 1.15rem;
+    margin: 0.85rem 0 0.5rem;
+  }
+
+  .chat-markdown h2 {
+    font-size: 1.05rem;
+    margin: 0.75rem 0 0.45rem;
+  }
+}
+
+.chat-markdown p {
+  margin-bottom: 0.75rem;
+}
+
+.chat-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+  margin-bottom: 0.75rem;
+  padding-left: 1rem;
+}
+
+.chat-markdown li {
+  margin-bottom: 0.25rem;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3 {
+  font-weight: 600;
+  color: #e8e4dd;
+}
+
+.chat-markdown h1 {
+  font-size: 1.25rem;
+  margin: 1rem 0 0.625rem;
+}
+
+.chat-markdown h2 {
+  font-size: 1.125rem;
+  margin: 0.875rem 0 0.5rem;
+}
+
+.chat-markdown h3 {
+  font-size: 1rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.chat-markdown blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: #c8c4bd;
+  font-style: italic;
+}
+
+.chat-markdown hr {
+  margin: 1rem 0;
+  border-color: var(--border);
+}
+
+.chat-markdown a {
+  color: var(--success);
+  text-decoration: none;
+}
+
+.chat-markdown a:hover {
+  text-decoration: underline;
+}
+
+.chat-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  margin: 0.75rem 0;
+}
+
+.chat-markdown thead {
+  background: var(--card);
+}
+
+.chat-markdown tbody {
+  border-top: 1px solid var(--border);
+}
+
+.chat-markdown th {
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.625rem 1rem;
+  color: #d8d4cd;
+}
+
+.chat-markdown td {
+  padding: 0.625rem 1rem;
+  color: #e8e4dd;
+  vertical-align: top;
+}
+
+.chat-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.chat-markdown code {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  font-family:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.875rem;
+  word-break: break-word;
+}
+

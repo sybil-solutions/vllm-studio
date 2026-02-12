@@ -4,10 +4,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Layers, RefreshCw, Save, X } from "lucide-react";
 import api from "@/lib/api";
-import type { ModelInfo, Recipe, RecipeWithStatus } from "@/lib/types";
+import type { ModelInfo, RecipeEditor, RecipeWithStatus } from "@/lib/types";
 import { formatBackendLabel } from "../../recipe-labels";
 import { generateCommand } from "../../recipe-command";
-import { filterExtraArgsForEditor, mergeExtraArgsFromEditor } from "../../recipe-utils";
+import {
+  filterExtraArgsForEditor,
+  getExtraArgValueForKey,
+  mergeExtraArgsFromEditor,
+  setExtraArgValueForKey,
+} from "../../recipe-utils";
 import { RecipeModalTabBar } from "./recipe-modal-tab-bar";
 import type { RecipeModalTabId } from "./tabs/tab-id";
 import { RecipeModalTabContent } from "./tabs/tab-content";
@@ -21,10 +26,10 @@ export function RecipeModal({
   availableModels,
   recipes,
 }: {
-  recipe: Recipe;
+  recipe: RecipeEditor;
   onClose: () => void;
   onSave: () => void;
-  onChange: (recipe: Recipe) => void;
+  onChange: (recipe: RecipeEditor) => void;
   saving: boolean;
   availableModels: ModelInfo[];
   recipes: RecipeWithStatus[];
@@ -69,33 +74,13 @@ export function RecipeModal({
     };
   }, [isLlamacpp, llamaConfigHelp]);
 
-  const getExtraArgValueForKey = (key: string): unknown => {
-    const extraArgs = recipe.extra_args ?? {};
-    const candidates = new Set<string>();
-    candidates.add(key);
-    candidates.add(key.replace(/-/g, "_"));
-    candidates.add(key.replace(/_/g, "-"));
-    for (const candidate of candidates) {
-      if (Object.prototype.hasOwnProperty.call(extraArgs, candidate)) {
-        return extraArgs[candidate];
-      }
-    }
-    return undefined;
+  const getExtraArgValueForKeyLocal = (key: string): unknown => {
+    return getExtraArgValueForKey(recipe.extra_args ?? {}, key);
   };
 
-  const setExtraArgValueForKey = (key: string, value: unknown) => {
-    const extraArgs = { ...(recipe.extra_args ?? {}) } as Record<string, unknown>;
-    const candidates = new Set<string>();
-    candidates.add(key);
-    candidates.add(key.replace(/-/g, "_"));
-    candidates.add(key.replace(/_/g, "-"));
-    for (const candidate of candidates) {
-      delete extraArgs[candidate];
-    }
-    if (value !== undefined && value !== null && value !== "") {
-      extraArgs[key] = value;
-    }
-    onChange({ ...recipe, extra_args: extraArgs });
+  const setExtraArgValueForKeyLocal = (key: string, value: unknown) => {
+    const nextExtraArgs = setExtraArgValueForKey(recipe.extra_args ?? {}, key, value);
+    onChange({ ...recipe, extra_args: nextExtraArgs });
   };
 
   const modelServedNames = useMemo(() => {
@@ -198,8 +183,8 @@ export function RecipeModal({
             availableModels={availableModels}
             modelServedNames={modelServedNames}
             isLlamacpp={isLlamacpp}
-            getExtraArgValueForKey={getExtraArgValueForKey}
-            setExtraArgValueForKey={setExtraArgValueForKey}
+            getExtraArgValueForKey={getExtraArgValueForKeyLocal}
+            setExtraArgValueForKey={setExtraArgValueForKeyLocal}
             envVarEntries={envVarEntries}
             onAddEnvVar={handleAddEnvVar}
             onChangeEnvVar={handleEnvVarChange}
@@ -251,4 +236,3 @@ export function RecipeModal({
     </div>
   );
 }
-

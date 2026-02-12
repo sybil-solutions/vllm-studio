@@ -2,5 +2,5 @@
   "minLines": 30,
   "minTokens": 200,
   "reporters": ["console"],
-  "ignore": ["src/lib/**", "src/app/logs/**"]
+  "ignore": ["src/app/logs/**"]
 }

@@ -8,7 +8,7 @@ export function useDashboardActions(reload: () => Promise<void>) {
   const onLaunch = async (recipeId: string) => {
     setLaunching(true);
     try {
-      await api.switchModel(recipeId, true);
+      await api.launch(recipeId, true);
     } catch (e) {
       alert("Failed to launch: " + (e as Error).message);
     } finally {
@@ -19,7 +19,7 @@ export function useDashboardActions(reload: () => Promise<void>) {
   const onStop = async () => {
     if (!confirm("Stop the current model?")) return;
     try {
-      await api.evictModel(true);
+      await api.evict(true);
       await reload();
     } catch (e) {
       alert("Failed to stop: " + (e as Error).message);

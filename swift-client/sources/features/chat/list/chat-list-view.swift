@@ -39,7 +39,9 @@ struct ChatListView: View {
     .background(AppTheme.background)
     .overlay(model.loading ? LoadingView() : nil)
     .navigationTitle("Chats")
+    #if canImport(UIKit)
     .navigationBarTitleDisplayMode(.inline)
+    #endif
     .toolbar {
       Button("New") { Task { await createSession() } }
     }
@@ -52,8 +54,8 @@ struct ChatListView: View {
   @MainActor
   private func createSession() async {
     guard let session = await model.createSession() else { return }
+    await model.load()
     selectedSession = ChatSessionSelection(id: session.id)
-    Task { await model.load() }
   }
 }
 

@@ -6,11 +6,15 @@ import { AlertCircle } from "lucide-react";
 import { EnhancedCodeBlock } from "../code/enhanced-code-block";
 import { TypingIndicator, StreamingCursor } from "./typing-indicator";
 import {
-  useMessageParsingService,
   useMessageParsing,
   thinkingParser,
 } from "@/lib/services/message-parsing";
 import type { MarkdownSegment, ThinkingResult } from "@/lib/services/message-parsing";
+import {
+  getMermaid,
+  looksLikeMermaidDiagram,
+  sanitizeMermaidCode,
+} from "@/lib/mermaid";
 import { useAppStore } from "@/store";
 
 // Shared thinking parser exports
@@ -20,76 +24,7 @@ export function splitThinking(content: string): ThinkingResult {
   return thinkingParser.parse(content);
 }
 
-// Mermaid is loaded dynamically to avoid chunk loading errors
-let mermaidInstance: typeof import("mermaid").default | null = null;
-let mermaidInitialized = false;
 const EMPTY_MERMAID_STATE = { svg: "", error: null } as const;
-
-/**
- * Sanitize mermaid code to fix common syntax issues from LLM output.
- */
-function sanitizeMermaidCode(code: string): string {
-  let result = code;
-
-  // Fix <br/> to <br> (mermaid prefers no self-closing)
-  result = result.replace(/<br\s*\/>/gi, "<br>");
-
-  // Process line by line to fix node definitions
-  const lines = result.split("\n");
-  const fixedLines = lines.map((line) => {
-    // Skip lines that are just diagram type declarations or arrows
-    if (/^\s*(graph|flowchart|sequenceDiagram|subgraph|end)\b/i.test(line)) {
-      return line;
-    }
-
-    // Fix unquoted text with parentheses in node labels
-    // Pattern: NodeId[Text with (parens)] or NodeId(Text with (parens))
-    // These need the inner parens escaped or the text quoted
-
-    // Match node definitions like: A[Some Text (with parens)]
-    // and convert problematic parens inside labels to escaped form
-    line = line.replace(/(\w+)\[([^\]]*)\]/g, (match, nodeId, content) => {
-      // If content has unbalanced or problematic parens, quote it
-      if (/\([^)]*\)/.test(content) && !content.startsWith('"')) {
-        // Escape quotes in content and wrap in quotes
-        const escaped = content.replace(/"/g, "'");
-        return `${nodeId}["${escaped}"]`;
-      }
-      return match;
-    });
-
-    // Fix stadium shapes with parens inside: A(Text (thing))
-    // Convert inner parens to brackets or escape
-    line = line.replace(/(\w+)\(([^)]*\([^)]*\)[^)]*)\)/g, (match, nodeId, content) => {
-      // Replace inner parens with brackets
-      const fixed = content.replace(/\(([^)]*)\)/g, "[$1]");
-      return `${nodeId}(${fixed})`;
-    });
-
-    return line;
-  });
-
-  return fixedLines.join("\n");
-}
-
-async function getMermaid() {
-  if (!mermaidInstance) {
-    const mod = await import("mermaid");
-    mermaidInstance = mod.default;
-  }
-  if (!mermaidInitialized && mermaidInstance) {
-    mermaidInstance.initialize({
-      startOnLoad: false,
-      theme: "dark",
-      securityLevel: "loose",
-      fontFamily: "inherit",
-      logLevel: "fatal",
-      suppressErrorRendering: true,
-    });
-    mermaidInitialized = true;
-  }
-  return mermaidInstance;
-}
 
 interface MessageRendererProps {
   content: string;
@@ -111,11 +46,7 @@ const MermaidDiagram = memo(function MermaidDiagram({ code }: { code: string }) 
 
       const seq = ++renderSeqRef.current;
 
-      const looksLikeMermaid =
-        /^(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/.test(
-          code.trim(),
-        );
-      if (!looksLikeMermaid) {
+      if (!looksLikeMermaidDiagram(code)) {
         setMermaidState(
           id,
           "",
@@ -130,7 +61,7 @@ const MermaidDiagram = memo(function MermaidDiagram({ code }: { code: string }) 
           setMermaidState(id, "", "Failed to load mermaid library");
           return;
         }
-        const sanitized = sanitizeMermaidCode(code.trim());
+        const sanitized = sanitizeMermaidCode(code);
         const { svg } = await mermaid.render(`mermaid_${id}_${seq}`, sanitized);
         if (seq !== renderSeqRef.current) return;
         setMermaidState(id, svg, null);
@@ -211,8 +142,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ html }: MarkdownBlockProps) 
 });
 
 function MessageRendererBase({ content, isStreaming }: MessageRendererProps) {
-  const parsingService = useMessageParsingService();
-  const { renderMarkdown } = useMessageParsing();
+  const { service: parsingService, renderMarkdown } = useMessageParsing();
 
   const parsed = useMemo(() => {
     if (isStreaming) return null;

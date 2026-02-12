@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.vllm
   deploymentTarget:
     iOS: "17.0"
+    macOS: "14.0"
   xcodeVersion: "15.0"
   generateEmptyDirectories: false
 
@@ -24,10 +25,33 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.vllm.studio
+      PRODUCT_BUNDLE_IDENTIFIER: com.sero.vllmstudio
       MARKETING_VERSION: "0.1"
       CURRENT_PROJECT_VERSION: 1
       SWIFT_VERSION: "5.9"
-      DEVELOPMENT_TEAM: 2RQ2839U69
+      DEVELOPMENT_TEAM: 953GG2G474
       CODE_SIGN_STYLE: Automatic
       INFOPLIST_FILE: resources/info.plist
+
+  vllm-studio-mac:
+    type: application
+    platform: macOS
+    sources:
+      - path: sources
+        type: group
+    info:
+      path: resources/info-mac.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        LSMinimumSystemVersion: "14.0"
+        NSHighResolutionCapable: true
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.sero.vllmstudio.mac
+      MARKETING_VERSION: "0.1"
+      CURRENT_PROJECT_VERSION: 1
+      SWIFT_VERSION: "5.9"
+      DEVELOPMENT_TEAM: 953GG2G474
+      CODE_SIGN_STYLE: Automatic
+      INFOPLIST_FILE: resources/info-mac.plist
+      CODE_SIGN_ENTITLEMENTS: resources/vllm-studio-mac.entitlements

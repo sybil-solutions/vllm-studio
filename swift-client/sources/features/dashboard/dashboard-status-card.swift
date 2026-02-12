@@ -10,20 +10,25 @@ struct DashboardStatusCard: View {
 
   var body: some View {
     CardView {
-      VStack(alignment: .leading, spacing: 8) {
+      VStack(alignment: .leading, spacing: 12) {
         HStack {
-          Text("Controller").font(AppTheme.titleFont)
+          Text("Controller").font(AppTheme.sectionFont)
           Spacer()
           BadgeView(text: connected ? "Live" : "Offline", color: connected ? AppTheme.success : AppTheme.error)
         }
-        Text(isRunning ? "Model running" : "No model running")
-          .font(AppTheme.bodyFont)
-        if let model = status?.process?.servedModelName ?? status?.process?.modelPath {
-          Text("Model: \(model)").font(AppTheme.captionFont).foregroundColor(AppTheme.muted)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(isRunning ? "Model running" : "No model running")
+            .font(AppTheme.bodyFont)
+            .foregroundColor(AppTheme.foreground)
+          if let model = status?.process?.servedModelName ?? status?.process?.modelPath {
+            Text("Model: \(model)")
+              .font(AppTheme.captionFont)
+              .foregroundColor(AppTheme.muted)
+          }
+          Text("Port: " + formatPort(status?.inferencePort ?? 8000))
+            .font(AppTheme.captionFont)
+            .foregroundColor(AppTheme.muted)
         }
-        Text("Port: \(status?.inferencePort ?? 8000)")
-          .font(AppTheme.captionFont)
-          .foregroundColor(AppTheme.muted)
       }
     }
   }

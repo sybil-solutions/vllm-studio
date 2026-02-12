@@ -10,7 +10,15 @@ final class SettingsStore: ObservableObject {
 
   init() {
     let defaults = UserDefaults.standard
-    backendUrl = defaults.string(forKey: "backend-url") ?? "http://localhost:8080"
+    // Controller defaults to :8080 (VLLM_STUDIO_PORT).
+    let storedBackend = defaults.string(forKey: "backend-url")
+    if storedBackend == nil || storedBackend?.isEmpty == true {
+      let fallback = "http://localhost:8080"
+      backendUrl = fallback
+      defaults.set(fallback, forKey: "backend-url")
+    } else {
+      backendUrl = storedBackend ?? "http://localhost:8080"
+    }
     apiKey = defaults.string(forKey: "api-key") ?? ""
     // Voice endpoint is optional and intentionally has no hard-coded default.
     voiceUrl = defaults.string(forKey: "voice-url") ?? ""

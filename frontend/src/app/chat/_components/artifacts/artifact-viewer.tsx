@@ -7,7 +7,6 @@ import {
   useCallback,
   useMemo,
   useState,
-  type MouseEvent as ReactMouseEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { Code, FileCode, Palette } from "lucide-react";
@@ -22,6 +21,7 @@ import {
   buildTextDocument,
 } from "./artifact-templates";
 import { ArtifactViewerContent } from "./artifact-viewer-content";
+import { useArtifactDrag } from "./artifact-viewer/use-artifact-drag";
 
 interface ArtifactViewerProps {
   artifact: Artifact;
@@ -46,7 +46,6 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
 
   const srcDoc = useMemo(() => {
     switch (artifact.type) {
@@ -122,80 +121,12 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
     }));
   }, [artifact.id, updateArtifactViewerState]);
 
-  const [isDraggingLocal, setIsDraggingLocal] = useState(false);
-  const draggingRef = useRef(false);
-  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
-  const dragPositionRef = useRef<{ x: number; y: number }>(position);
-  const dragRafRef = useRef<number | null>(null);
-  const pendingPosRef = useRef<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (dragRafRef.current != null) {
-        window.cancelAnimationFrame(dragRafRef.current);
-        dragRafRef.current = null;
-      }
-    };
-  }, []);
-
-  const scheduleDragPositionUpdate = useCallback((next: { x: number; y: number }) => {
-    pendingPosRef.current = next;
-    if (dragRafRef.current != null) return;
-    dragRafRef.current = window.requestAnimationFrame(() => {
-      dragRafRef.current = null;
-      const pending = pendingPosRef.current;
-      if (!pending) return;
-      setDragPosition(pending);
-    });
-  }, []);
-
-  const handleMouseDown = useCallback((e: ReactMouseEvent) => {
-    if (e.button !== 0) return;
-    draggingRef.current = true;
-    setIsDraggingLocal(true);
-    dragPositionRef.current = position;
-    setDragPosition(position);
-    dragStartRef.current = { x: e.clientX, y: e.clientY, posX: position.x, posY: position.y };
-  }, [position]);
-
-  const handleMouseMove = useCallback(
-    (e: globalThis.MouseEvent) => {
-      if (!draggingRef.current) return;
-      const dx = e.clientX - dragStartRef.current.x;
-      const dy = e.clientY - dragStartRef.current.y;
-      const next = { x: dragStartRef.current.posX + dx, y: dragStartRef.current.posY + dy };
-      dragPositionRef.current = next;
-      scheduleDragPositionUpdate(next);
+  const { isDragging: isDraggingLocal, dragPosition, onMouseDown: handleMouseDown } = useArtifactDrag({
+    position,
+    onCommitPosition: (next) => {
+      updateArtifactViewerState(artifact.id, (prev) => ({ ...prev, position: next }));
     },
-    [scheduleDragPositionUpdate],
-  );
-
-  const handleMouseUp = useCallback(() => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    setIsDraggingLocal(false);
-    setDragPosition(null);
-    if (dragRafRef.current != null) {
-      window.cancelAnimationFrame(dragRafRef.current);
-      dragRafRef.current = null;
-    }
-    pendingPosRef.current = null;
-    updateArtifactViewerState(artifact.id, (prev) => ({
-      ...prev,
-      position: dragPositionRef.current,
-    }));
-  }, [artifact.id, updateArtifactViewerState]);
-
-  useEffect(() => {
-    if (isDraggingLocal) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-      return () => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-      };
-    }
-  }, [handleMouseMove, handleMouseUp, isDraggingLocal]);
+  });
 
   const handleWheel = useCallback((e: ReactWheelEvent) => {
     if (e.ctrlKey || e.metaKey) {

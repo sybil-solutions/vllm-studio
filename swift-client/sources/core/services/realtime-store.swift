@@ -35,15 +35,16 @@ final class RealtimeStore: ObservableObject {
     while !Task.isCancelled {
       do {
         let request = try api.sseRequest(path: "/events")
-        isConnected = true
-        reconnectAttempts = attempt
+        if !isConnected { isConnected = true }
+        if reconnectAttempts != attempt { reconnectAttempts = attempt }
         for await event in client.stream(request: request) { handle(event) }
-        isConnected = false
+        if isConnected { isConnected = false }
         attempt += 1
         try await Task.sleep(nanoseconds: UInt64(min(30, 2 + attempt * 2)) * 1_000_000_000)
       } catch {
-        isConnected = false
+        if isConnected { isConnected = false }
         attempt += 1
+        try? await Task.sleep(nanoseconds: UInt64(min(30, 2 + attempt * 2)) * 1_000_000_000)
       }
     }
   }

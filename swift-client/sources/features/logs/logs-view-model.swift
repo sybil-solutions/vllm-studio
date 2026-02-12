@@ -18,4 +18,10 @@ final class LogsViewModel: ObservableObject {
     defer { loading = false }
     sessions = (try? await api.getLogSessions().sessions) ?? []
   }
+
+  func delete(id: String) async {
+    guard let api else { return }
+    _ = try? await api.deleteLog(sessionId: id)
+    await load()
+  }
 }

@@ -1,20 +1,20 @@
 // CRITICAL
-import { Database } from "bun:sqlite";
 import type { ModelDownload } from "../types/models";
+import { openSqliteDatabase } from "./sqlite";
+import { parseJsonOrNull } from "../core/json";
 
 /**
  * SQLite-backed download storage.
  */
 export class DownloadStore {
-  private readonly db: Database;
+  private readonly db: ReturnType<typeof openSqliteDatabase>;
 
   /**
    * Create a download store.
    * @param dbPath - SQLite database path.
    */
   public constructor(dbPath: string) {
-    this.db = new Database(dbPath);
-    this.db.run("PRAGMA busy_timeout = 5000");
+    this.db = openSqliteDatabase(dbPath);
     this.migrate();
   }
 
@@ -43,12 +43,11 @@ export class DownloadStore {
     }>;
     const downloads: ModelDownload[] = [];
     for (const row of rows) {
-      try {
-        const parsed = JSON.parse(row.data) as ModelDownload;
-        downloads.push(parsed);
-      } catch {
-        continue;
-      }
+      const parsed = parseJsonOrNull(row.data);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+      const record = parsed as Record<string, unknown>;
+      if (typeof record["id"] !== "string" || typeof record["model_id"] !== "string") continue;
+      downloads.push(record as unknown as ModelDownload);
     }
     return downloads;
   }
@@ -63,11 +62,11 @@ export class DownloadStore {
     if (!row?.data) {
       return null;
     }
-    try {
-      return JSON.parse(row.data) as ModelDownload;
-    } catch {
-      return null;
-    }
+    const parsed = parseJsonOrNull(row.data);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const record = parsed as Record<string, unknown>;
+    if (typeof record["id"] !== "string" || typeof record["model_id"] !== "string") return null;
+    return record as unknown as ModelDownload;
   }
 
   /**

@@ -23,6 +23,7 @@ import type {
   ArtifactType,
   Artifact,
 } from "./types";
+import { createCacheHash, createEmptyParsedMessage } from "./internal/service-helpers";
 
 export class MessageParsingService implements IMessageParsingService {
   readonly name = "message-parsing" as const;
@@ -40,10 +41,10 @@ export class MessageParsingService implements IMessageParsingService {
    */
   parse(content: string, options: ParseOptions = {}): ParsedMessage {
     if (!content) {
-      return this.createEmptyResult("", options.isStreaming ?? false);
+      return createEmptyParsedMessage("", options.isStreaming ?? false);
     }
 
-    const hash = this.createHash(content, options);
+    const hash = createCacheHash(content, options);
 
     // Check cache unless explicitly skipped or streaming
     if (!options.skipCache && !options.isStreaming) {
@@ -225,32 +226,5 @@ export class MessageParsingService implements IMessageParsingService {
    */
   get cacheSize(): number {
     return this.cache.size;
-  }
-
-  /**
-   * Create content hash for caching
-   */
-  private createHash(content: string, options: ParseOptions): string {
-    const optionsKey = [
-      options.extractArtifacts ?? "default",
-      options.extractThinking ?? "default",
-    ].join("-");
-    return hashString(`${content}:${optionsKey}`);
-  }
-
-  /**
-   * Create empty result for empty content
-   */
-  private createEmptyResult(raw: string, isStreaming: boolean): ParsedMessage {
-    return {
-      raw,
-      hash: "",
-      thinking: { thinkingContent: null, mainContent: "", isThinkingComplete: true },
-      artifacts: [],
-      contentWithoutArtifacts: "",
-      segments: [],
-      isStreaming,
-      parsedAt: Date.now(),
-    };
   }
 }

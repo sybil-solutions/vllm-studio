@@ -1,0 +1,196 @@
+/* CRITICAL */
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1.4s ease-in-out infinite;
+}
+
+/* Slide animations for mobile */
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.2s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out;
+}
+
+/* Premium spring animation for messages */
+@keyframes message-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-message-appear {
+  animation: message-appear 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Subtle glow for active elements */
+@keyframes subtle-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(139, 115, 85, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(139, 115, 85, 0.1);
+  }
+}
+
+.animate-subtle-glow {
+  animation: subtle-glow 3s ease-in-out infinite;
+}
+
+@keyframes chat-splash-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes chat-splash-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes chat-splash-pulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.7;
+  }
+}
+
+.chat-splash-orb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    120% 120% at 30% 20%,
+    hsla(270, 70%, 70%, 0.9),
+    hsla(270, 50%, 52%, 0.75) 45%,
+    hsla(30, 6%, 12%, 0.9) 80%
+  );
+  box-shadow:
+    0 16px 32px rgba(88, 74, 112, 0.35),
+    inset 0 0 14px rgba(255, 255, 255, 0.12);
+  animation: chat-splash-float 6s ease-in-out infinite;
+}
+
+.chat-splash-orb::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(167, 139, 250, 0.45),
+    rgba(74, 222, 128, 0.25),
+    rgba(249, 115, 22, 0.15),
+    rgba(167, 139, 250, 0.45)
+  );
+  filter: blur(14px);
+  opacity: 0.45;
+  animation: chat-splash-spin 12s linear infinite;
+}
+
+.chat-splash-orb::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  animation: chat-splash-pulse 4s ease-in-out infinite;
+}
+

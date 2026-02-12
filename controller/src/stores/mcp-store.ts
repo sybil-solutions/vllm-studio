@@ -1,22 +1,48 @@
 // CRITICAL
-import { Database } from "bun:sqlite";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { McpServer } from "../types/models";
+import { parseJsonOrNull } from "../core/json";
+import { openSqliteDatabase } from "./sqlite";
+
+/**
+ * Parse a JSON string into a string array, returning empty array on failure.
+ * @param value - JSON string or unknown value.
+ * @returns Parsed string array.
+ */
+const parseArgumentsField = (value: unknown): string[] => {
+  const parsed = parseJsonOrNull(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map((entry) => String(entry)).filter((entry) => entry.trim().length > 0);
+};
+
+/**
+ * Parse a JSON string into a string record, returning empty object on failure.
+ * @param value - JSON string or unknown value.
+ * @returns Parsed string record.
+ */
+const parseEnvironmentField = (value: unknown): Record<string, string> => {
+  const parsed = parseJsonOrNull(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(parsed as Record<string, unknown>)) {
+    out[String(key)] = String(raw ?? "");
+  }
+  return out;
+};
 
 /**
  * SQLite-backed MCP server store.
  */
 export class McpStore {
-  private readonly db: Database;
+  private readonly db: ReturnType<typeof openSqliteDatabase>;
 
   /**
    * Create an MCP store.
    * @param dbPath - SQLite database path.
    */
   public constructor(dbPath: string) {
-    this.db = new Database(dbPath);
-    this.db.run("PRAGMA busy_timeout = 5000");
+    this.db = openSqliteDatabase(dbPath);
     this.migrate();
   }
 
@@ -44,31 +70,36 @@ export class McpStore {
     const seed = this.resolveExaCommand();
     const exaEnabled = exaApiKey.trim().length > 0 ? 1 : 0;
 
-    this.db.query(`
+    this.db
+      .query(
+        `
       INSERT OR IGNORE INTO mcp_servers (id, name, enabled, command, args, env, description, url)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      "exa",
-      "Exa Search",
-      exaEnabled,
-      seed.command,
-      JSON.stringify(seed.args),
-      JSON.stringify({ EXA_API_KEY: exaApiKey }),
-      "Web search and content retrieval via Exa AI",
-      "https://exa.ai",
-    );
+    `
+      )
+      .run(
+        "exa",
+        "Exa Search",
+        exaEnabled,
+        seed.command,
+        JSON.stringify(seed.args),
+        JSON.stringify({ EXA_API_KEY: exaApiKey }),
+        "Web search and content retrieval via Exa AI",
+        "https://exa.ai"
+      );
 
     if (!exaEnabled) {
       const row = this.db.query("SELECT env, enabled FROM mcp_servers WHERE id = ?").get("exa") as
         | { env?: string; enabled?: number }
         | undefined;
       if (row?.enabled) {
-        try {
-          const env = row.env ? (JSON.parse(row.env) as Record<string, string>) : {};
-          if (!env["EXA_API_KEY"]) {
-            this.db.query("UPDATE mcp_servers SET enabled = 0 WHERE id = ?").run("exa");
-          }
-        } catch {
+        const parsed = row.env ? parseJsonOrNull(row.env) : null;
+        const env =
+          parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : {};
+        const apiKey = typeof env["EXA_API_KEY"] === "string" ? env["EXA_API_KEY"] : "";
+        if (!apiKey) {
           this.db.query("UPDATE mcp_servers SET enabled = 0 WHERE id = ?").run("exa");
         }
       }
@@ -85,7 +116,16 @@ export class McpStore {
       try {
         const versions = readdirSync(nvmRoot);
         for (const version of versions) {
-          const exaPath = join(nvmRoot, version, "lib", "node_modules", "exa-mcp-server", ".smithery", "stdio", "index.cjs");
+          const exaPath = join(
+            nvmRoot,
+            version,
+            "lib",
+            "node_modules",
+            "exa-mcp-server",
+            ".smithery",
+            "stdio",
+            "index.cjs"
+          );
           if (existsSync(exaPath)) {
             const nodePath = this.findOnPath("node");
             if (nodePath) {
@@ -123,8 +163,12 @@ export class McpStore {
    */
   public list(enabledOnly = false): McpServer[] {
     const rows = enabledOnly
-      ? (this.db.query("SELECT * FROM mcp_servers WHERE enabled = 1 ORDER BY name").all() as Array<Record<string, unknown>>)
-      : (this.db.query("SELECT * FROM mcp_servers ORDER BY name").all() as Array<Record<string, unknown>>);
+      ? (this.db.query("SELECT * FROM mcp_servers WHERE enabled = 1 ORDER BY name").all() as Array<
+          Record<string, unknown>
+        >)
+      : (this.db.query("SELECT * FROM mcp_servers ORDER BY name").all() as Array<
+          Record<string, unknown>
+        >);
 
     return rows
       .map((row) => ({
@@ -132,12 +176,17 @@ export class McpStore {
         name: String(row["name"]),
         enabled: Boolean(row["enabled"]),
         command: String(row["command"]),
-        args: JSON.parse(String(row["args"])),
-        env: JSON.parse(String(row["env"])),
+        args: parseArgumentsField(row["args"]),
+        env: parseEnvironmentField(row["env"]),
         description: row["description"] ? String(row["description"]) : null,
         url: row["url"] ? String(row["url"]) : null,
       }))
-      .filter((server) => server.id.trim().length > 0 && server.name.trim().length > 0 && server.command.trim().length > 0);
+      .filter(
+        (server) =>
+          server.id.trim().length > 0 &&
+          server.name.trim().length > 0 &&
+          server.command.trim().length > 0
+      );
   }
 
   /**
@@ -146,7 +195,10 @@ export class McpStore {
    * @returns MCP server or null.
    */
   public get(serverId: string): McpServer | null {
-    const row = this.db.query("SELECT * FROM mcp_servers WHERE id = ?").get(serverId) as Record<string, unknown> | null;
+    const row = this.db.query("SELECT * FROM mcp_servers WHERE id = ?").get(serverId) as Record<
+      string,
+      unknown
+    > | null;
     if (!row) {
       return null;
     }
@@ -155,8 +207,8 @@ export class McpStore {
       name: String(row["name"]),
       enabled: Boolean(row["enabled"]),
       command: String(row["command"]),
-      args: JSON.parse(String(row["args"])),
-      env: JSON.parse(String(row["env"])),
+      args: parseArgumentsField(row["args"]),
+      env: parseEnvironmentField(row["env"]),
       description: row["description"] ? String(row["description"]) : null,
       url: row["url"] ? String(row["url"]) : null,
     };
@@ -168,7 +220,9 @@ export class McpStore {
    * @returns Saved server.
    */
   public save(server: McpServer): McpServer {
-    this.db.query(`
+    this.db
+      .query(
+        `
       INSERT INTO mcp_servers (id, name, enabled, command, args, env, description, url, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
@@ -180,16 +234,18 @@ export class McpStore {
         description = excluded.description,
         url = excluded.url,
         updated_at = CURRENT_TIMESTAMP
-    `).run(
-      server.id,
-      server.name,
-      server.enabled ? 1 : 0,
-      server.command,
-      JSON.stringify(server.args),
-      JSON.stringify(server.env),
-      server.description ?? null,
-      server.url ?? null,
-    );
+    `
+      )
+      .run(
+        server.id,
+        server.name,
+        server.enabled ? 1 : 0,
+        server.command,
+        JSON.stringify(server.args),
+        JSON.stringify(server.env),
+        server.description ?? null,
+        server.url ?? null
+      );
     return server;
   }
 

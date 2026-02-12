@@ -1,7 +1,7 @@
 // CRITICAL
 "use client";
 
-import type { ModelInfo, Recipe } from "@/lib/types";
+import type { ModelInfo, RecipeEditor } from "@/lib/types";
 import type { RecipeModalTabId } from "./tab-id";
 import { RecipeModalTabCommand } from "./tab-command";
 import { RecipeModalTabEnvironment } from "./tab-environment";
@@ -33,8 +33,8 @@ export function RecipeModalTabContent({
   onCommandChange,
 }: {
   activeTab: RecipeModalTabId;
-  recipe: Recipe;
-  onChange: (next: Recipe) => void;
+  recipe: RecipeEditor;
+  onChange: (next: RecipeEditor) => void;
   availableModels: ModelInfo[];
   modelServedNames: Record<string, string>;
   isLlamacpp: boolean;
@@ -123,4 +123,3 @@ export function RecipeModalTabContent({
       return <RecipeModalTabCommand commandText={commandText} onCommandChange={onCommandChange} />;
   }
 }
-

@@ -10,13 +10,7 @@ export function createLogsApi(core: ApiCore) {
       return core.request(`/logs/${sessionId}${query}`);
     },
 
-    getLogContent: (sessionId: string, limit?: number): Promise<{ content: string }> => {
-      const query = limit ? `?limit=${limit}` : "";
-      return core.request(`/logs/${sessionId}${query}`);
-    },
-
     deleteLogSession: (sessionId: string): Promise<void> =>
       core.request(`/logs/${sessionId}`, { method: "DELETE" }),
   };
 }
-

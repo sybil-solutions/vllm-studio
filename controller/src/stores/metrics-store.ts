@@ -1,5 +1,6 @@
 // CRITICAL
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
+import { openSqliteDatabase } from "./sqlite";
 
 /**
  * SQLite-backed storage for peak metrics per model.
@@ -12,8 +13,7 @@ export class PeakMetricsStore {
    * @param dbPath - SQLite database path.
    */
   public constructor(dbPath: string) {
-    this.db = new Database(dbPath);
-    this.db.run("PRAGMA busy_timeout = 5000");
+    this.db = openSqliteDatabase(dbPath);
     this.migrate();
   }
 
@@ -144,7 +144,7 @@ export class LifetimeMetricsStore {
    * @param dbPath - SQLite database path.
    */
   public constructor(dbPath: string) {
-    this.db = new Database(dbPath);
+    this.db = openSqliteDatabase(dbPath);
     this.migrate();
   }
 

@@ -11,7 +11,7 @@ import type {
 } from "@/lib/types";
 import type { Attachment, ModelOption } from "@/app/chat/types";
 import type { AgentPlan } from "@/app/chat/_components/agent/agent-types";
-import type { SidebarTab } from "@/app/chat/_components/layout/unified-sidebar";
+import type { SidebarTab } from "@/app/chat/_components/layout";
 
 export interface ChatState {
   sessions: ChatSession[];

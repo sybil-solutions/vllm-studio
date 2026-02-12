@@ -1,8 +1,14 @@
 // CRITICAL
-import PhotosUI
 import SwiftUI
-import UIKit
 import UniformTypeIdentifiers
+
+#if canImport(UIKit)
+import UIKit
+import PhotosUI
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
 struct ChatToolBelt: View {
   @Binding var text: String
   @Binding var attachments: [ChatAttachment]
@@ -17,7 +23,9 @@ struct ChatToolBelt: View {
 
   @State private var showFilePicker = false
   @State private var showImagePicker = false
+  #if canImport(UIKit)
   @State private var imageItems: [PhotosPickerItem] = []
+  #endif
   @State private var isTranscribing = false
   @StateObject private var recorder = AudioRecorder()
 
@@ -34,6 +42,7 @@ struct ChatToolBelt: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(AppTheme.card)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.border))
         .cornerRadius(12)
       HStack(spacing: 12) {
         ChatToolBeltToolbar(
@@ -55,16 +64,28 @@ struct ChatToolBelt: View {
         Button(action: { onSend(attachments) }) {
           Image(systemName: "arrow.up")
             .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(canSend ? AppTheme.foreground : AppTheme.muted)
-            .frame(width: 30, height: 30)
-            .background(canSend ? (isProcessing ? AppTheme.error : AppTheme.accentStrong) : AppTheme.border)
+            .foregroundColor(canSend ? AppTheme.background : AppTheme.muted)
+            .frame(width: 32, height: 32)
+            .background(
+              canSend
+                ? (isProcessing ? AppTheme.error : AppTheme.foreground)
+                : AppTheme.accent
+            )
             .clipShape(Circle())
+            .overlay(Circle().stroke(AppTheme.border))
         }
-        .disabled(!canSend)
+        .disabled(!canSend || isProcessing)
       }
     }
+    .padding(10)
+    .background(AppTheme.card)
+    .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.border))
+    .cornerRadius(16)
+    #if canImport(UIKit)
     .photosPicker(isPresented: $showImagePicker, selection: $imageItems, matching: .images)
+    #endif
     .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.data], onCompletion: handleFileResult)
+    #if canImport(UIKit)
     .onChange(of: imageItems) { oldItems, newItems in
       Task {
         for item in newItems {
@@ -76,6 +97,7 @@ struct ChatToolBelt: View {
         imageItems = []
       }
     }
+    #endif
   }
 
   var canSend: Bool {

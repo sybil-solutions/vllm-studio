@@ -8,21 +8,12 @@ import { createSystemApi } from "./system";
 
 export function createApiClient(params: { baseUrl: string; useProxy: boolean }) {
   const core = createApiCore(params);
-  const api = {
+  return {
     ...createSystemApi(core),
     ...createRecipesApi(core),
     ...createChatsApi(core),
     ...createMcpApi(core),
     ...createLogsApi(core),
     ...createStudioApi(core),
-  };
-
-  return {
-    ...api,
-    evictModel: (force = false) => api.evict(force),
-    exportRecipes: async (): Promise<{ content: unknown }> => {
-      const { recipes } = await api.getRecipes();
-      return { content: { recipes } };
-    },
   };
 }

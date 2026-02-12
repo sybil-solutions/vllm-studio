@@ -1,5 +1,9 @@
 import AVFoundation
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 @MainActor
 final class AudioRecorder: ObservableObject {
   @Published var isRecording = false
@@ -9,10 +13,12 @@ final class AudioRecorder: ObservableObject {
   private var timer: Timer?
 
   func start() async {
+    #if canImport(UIKit)
     let session = AVAudioSession.sharedInstance()
     session.requestRecordPermission { _ in }
     try? session.setCategory(.record, mode: .default)
     try? session.setActive(true, options: .notifyOthersOnDeactivation)
+    #endif
 
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)

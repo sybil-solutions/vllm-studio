@@ -1,10 +1,10 @@
 // CRITICAL
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, Copy, File, FileCode, Image as ImageIcon, Loader2, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, Copy, File, FileCode, Image as ImageIcon, Loader2, X } from "lucide-react";
 import type { AgentFileVersion } from "@/lib/types";
-import { useMessageParsing, useMessageParsingService } from "@/lib/services/message-parsing";
+import { useMessageParsing } from "@/lib/services/message-parsing";
 import {
   getFileExtension,
   getLanguageFromExt,
@@ -15,95 +15,7 @@ import {
 import { buildPreviewDocumentWithImports } from "./agent-file-previewer";
 import { CodePreview } from "../code";
 import { EnhancedCodeBlock } from "../code/enhanced-code-block";
-
-// Mermaid is loaded dynamically to avoid chunk loading errors.
-let mermaidInstance: typeof import("mermaid").default | null = null;
-let mermaidInitialized = false;
-
-async function getMermaid() {
-  if (!mermaidInstance) {
-    const mod = await import("mermaid");
-    mermaidInstance = mod.default;
-  }
-  if (!mermaidInitialized && mermaidInstance) {
-    mermaidInstance.initialize({
-      startOnLoad: false,
-      theme: "dark",
-      securityLevel: "loose",
-      fontFamily: "inherit",
-      logLevel: "fatal",
-      suppressErrorRendering: true,
-    });
-    mermaidInitialized = true;
-  }
-  return mermaidInstance;
-}
-
-function sanitizeMermaidCode(code: string): string {
-  // Mermaid prefers <br> over <br/>.
-  return code.replace(/<br\s*\/>/gi, "<br>").trim();
-}
-
-function MermaidDiagram({ code }: { code: string }) {
-  const id = useId().replace(/:/g, "_");
-  const [state, setState] = useState<{ svg: string; error: string | null }>({ svg: "", error: null });
-  const renderSeqRef = useRef(0);
-
-  useEffect(() => {
-    const run = async () => {
-      if (!code.trim()) return;
-      const seq = ++renderSeqRef.current;
-      const looksLikeMermaid =
-        /^(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\\b/.test(
-          code.trim(),
-        );
-      if (!looksLikeMermaid) {
-        setState({
-          svg: "",
-          error: "Not a valid Mermaid diagram (missing diagram header like `graph TD` or `sequenceDiagram`).",
-        });
-        return;
-      }
-      try {
-        const mermaid = await getMermaid();
-        if (!mermaid) {
-          setState({ svg: "", error: "Failed to load mermaid library" });
-          return;
-        }
-        const sanitized = sanitizeMermaidCode(code);
-        const { svg } = await mermaid.render(`mermaid_file_${id}_${seq}`, sanitized);
-        if (seq !== renderSeqRef.current) return;
-        setState({ svg, error: null });
-      } catch (e) {
-        if (seq !== renderSeqRef.current) return;
-        setState({ svg: "", error: e instanceof Error ? e.message : "Failed to render diagram" });
-      }
-    };
-
-    const handle = window.setTimeout(run, 250);
-    return () => window.clearTimeout(handle);
-  }, [code, id]);
-
-  if (state.error) {
-    return (
-      <div className="my-3 p-4 rounded-lg border border-red-500/30 bg-red-500/10">
-        <div className="flex items-center gap-2 text-red-400 text-sm mb-2">
-          <AlertCircle className="h-4 w-4" />
-          <span>Diagram Error</span>
-        </div>
-        <div className="text-xs text-red-300 mb-2 break-words">{state.error}</div>
-        <pre className="text-xs text-[#d8d4cd] overflow-x-auto">{code}</pre>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="my-3 p-4 rounded-lg border border-white/10 bg-white/5 overflow-x-auto"
-      dangerouslySetInnerHTML={{ __html: state.svg }}
-    />
-  );
-}
+import { MermaidDiagram } from "./agent-file-content-viewer/mermaid-diagram";
 
 export function AgentFileContentViewer({
   path,
@@ -123,8 +35,7 @@ export function AgentFileContentViewer({
   hasSession: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-  const parsingService = useMessageParsingService();
-  const { renderMarkdown } = useMessageParsing();
+  const { service: parsingService, renderMarkdown } = useMessageParsing();
   const fileName = path.split("/").pop() || path;
   const ext = getFileExtension(fileName);
   const language = getLanguageFromExt(ext);

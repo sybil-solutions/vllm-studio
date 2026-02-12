@@ -8,10 +8,8 @@
 
 import { useContext, useCallback } from "react";
 import { MessageParsingContext } from "./context";
-import { getMessageParsingService } from "./factory";
 import { DEFAULT_CONFIG } from "./types";
 import type {
-  IMessageParsingService,
   ParsedMessage,
   ParseOptions,
   ThinkingResult,
@@ -22,40 +20,16 @@ import type {
 } from "./types";
 
 /**
- * Hook to access the MessageParsingService
- * Falls back to default service if used outside provider
- */
-export function useMessageParsingService(): IMessageParsingService {
-  const context = useContext(MessageParsingContext);
-
-  // Fall back to default service if no provider
-  if (!context) {
-    return getMessageParsingService();
-  }
-
-  return context.service;
-}
-
-/**
- * Hook to access the parsing configuration
- */
-export function useMessageParsingConfig(): MessageParsingConfig {
-  const context = useContext(MessageParsingContext);
-
-  if (!context) {
-    return DEFAULT_CONFIG;
-  }
-
-  return context.config;
-}
-
-/**
  * Main hook for message parsing operations
  * Provides memoized callbacks for all parsing operations
  */
 export function useMessageParsing() {
-  const service = useMessageParsingService();
-  const config = useMessageParsingConfig();
+  const context = useContext(MessageParsingContext);
+  const service = context?.service ?? null;
+  const config: MessageParsingConfig = context?.config ?? DEFAULT_CONFIG;
+  if (!service) {
+    throw new Error("useMessageParsing must be used within a MessageParsingProvider");
+  }
 
   const parse = useCallback(
     (content: string, options?: ParseOptions): ParsedMessage => {

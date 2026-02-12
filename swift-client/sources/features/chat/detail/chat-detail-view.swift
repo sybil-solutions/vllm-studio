@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatDetailView: View {
   let sessionId: String
   let showsBackButton: Bool
+  let onSessionNotFound: (() -> Void)?
   @EnvironmentObject private var container: AppContainer
   @Environment(\.dismiss) private var dismiss
   @StateObject private var model = ChatDetailViewModel()
@@ -14,9 +15,10 @@ struct ChatDetailView: View {
   @State private var showContext = false
   @State private var forkedSessionId: String?
 
-  init(sessionId: String, showsBackButton: Bool = true) {
+  init(sessionId: String, showsBackButton: Bool = true, onSessionNotFound: (() -> Void)? = nil) {
     self.sessionId = sessionId
     self.showsBackButton = showsBackButton
+    self.onSessionNotFound = onSessionNotFound
   }
 
   var body: some View {
@@ -90,7 +92,7 @@ struct ChatDetailView: View {
               .equatable()
               .id(message.id)
             }
-            
+
             // Streaming response appears as the last message
             if model.openAIService.isStreaming {
               ChatStreamingMessageView(
@@ -101,7 +103,7 @@ struct ChatDetailView: View {
                 }
               )
             }
-            
+
             if !model.visibleMessages.isEmpty {
               ChatUsageBar(usage: model.chatUsage)
                 .padding(.top, 8)
@@ -155,25 +157,15 @@ struct ChatDetailView: View {
     }
     .background(AppTheme.background)
     .navigationTitle(model.title.isEmpty ? "Chat" : model.title)
+    #if canImport(UIKit)
     .navigationBarTitleDisplayMode(.inline)
-    .navigationBarBackButtonHidden(true)
-    .toolbar {
-      if showsBackButton {
-        ToolbarItem(placement: .navigationBarLeading) {
-          Button(action: { dismiss() }) {
-            Image(systemName: "chevron.left")
-              .font(.system(size: 17, weight: .medium))
-              .foregroundColor(AppTheme.foreground)
-          }
-          .buttonStyle(.plain)
-        }
-      }
-      ToolbarItem(placement: .navigationBarTrailing) {
-        Button(action: { showFiles = true }) {
-          Image(systemName: "folder")
-        }
-      }
-    }
+    #endif
+    .navigationBarBackButtonHidden(!showsBackButton)
+    .modifier(ChatDetailToolbarModifier(
+      showsBackButton: showsBackButton,
+      onBack: { dismiss() },
+      onShowFiles: { showFiles = true }
+    ))
     .sheet(isPresented: $showTools) { ChatToolsSheet(tools: model.tools) }
     .sheet(isPresented: $showFiles) { AgentFilesSheet(sessionId: sessionId) }
     .sheet(isPresented: $showContext) {
@@ -197,6 +189,61 @@ struct ChatDetailView: View {
       if let forkedSessionId { ChatDetailView(sessionId: forkedSessionId) }
     }
     .onAppear { model.connect(api: container.api, settings: container.settings, sessionId: sessionId) }
+    .onChange(of: sessionId) { oldValue, newValue in
+      guard !newValue.isEmpty, newValue != oldValue else { return }
+      model.connect(api: container.api, settings: container.settings, sessionId: newValue)
+    }
+    .onChange(of: model.error) { oldValue, newValue in
+      if let error = newValue, error.contains("404") || error.localizedCaseInsensitiveContains("not found") {
+        onSessionNotFound?()
+      }
+    }
+  }
+}
+
+private struct ChatDetailToolbarModifier: ViewModifier {
+  let showsBackButton: Bool
+  let onBack: () -> Void
+  let onShowFiles: () -> Void
+
+  func body(content: Content) -> some View {
+    #if canImport(UIKit)
+    content.toolbar {
+      if showsBackButton {
+        ToolbarItem(placement: .navigationBarLeading) {
+          Button(action: onBack) {
+            Image(systemName: "chevron.left")
+              .font(.system(size: 17, weight: .medium))
+              .foregroundColor(AppTheme.foreground)
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      ToolbarItem(placement: .navigationBarTrailing) {
+        Button(action: onShowFiles) {
+          Image(systemName: "folder")
+        }
+      }
+    }
+    #else
+    content.toolbar {
+      if showsBackButton {
+        ToolbarItem(placement: .cancellationAction) {
+          Button(action: onBack) {
+            Image(systemName: "chevron.left")
+              .font(.system(size: 17, weight: .medium))
+              .foregroundColor(AppTheme.foreground)
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      ToolbarItem(placement: .primaryAction) {
+        Button(action: onShowFiles) {
+          Image(systemName: "folder")
+        }
+      }
+    }
+    #endif
   }
 }
 

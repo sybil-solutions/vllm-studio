@@ -10,6 +10,8 @@ import { badRequest, notFound } from "../core/errors";
 import { estimateWeightsSizeBytes } from "../services/model-browser";
 import { getGpuInfo } from "../services/gpu";
 import { getSystemRuntimeInfo } from "../services/runtime-info";
+import { fetchInference } from "../services/inference/inference-client";
+import { fetchLocal } from "../http/local-fetch";
 
 /**
  * Register system routes.
@@ -48,12 +50,7 @@ export const registerSystemRoutes = (app: Hono, context: AppContext): void => {
     let inferenceReady = false;
     if (current) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const response = await fetch(`http://localhost:${context.config.inference_port}/health`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
+        const response = await fetchInference(context, "/health", { timeoutMs: 5000 });
         inferenceReady = response.status === 200;
       } catch {
         inferenceReady = false;
@@ -224,12 +221,7 @@ export const registerSystemRoutes = (app: Hono, context: AppContext): void => {
     try {
       const current = await context.processManager.findInferenceProcess(context.config.inference_port);
       if (current) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2000);
-        const response = await fetch(`http://localhost:${context.config.inference_port}/health`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
+        const response = await fetchInference(context, "/health", { timeoutMs: 2000 });
         inferenceStatus = response.status === 200 ? "running" : "error";
       } else {
         inferenceStatus = "stopped";
@@ -249,14 +241,11 @@ export const registerSystemRoutes = (app: Hono, context: AppContext): void => {
 
     let litellmStatus = "unknown";
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10_000);
       const masterKey = process.env["LITELLM_MASTER_KEY"] ?? "sk-master";
-      const response = await fetch("http://localhost:4100/health", {
+      const response = await fetchLocal(4100, "/health", {
         headers: { Authorization: `Bearer ${masterKey}` },
-        signal: controller.signal,
+        timeoutMs: 10_000,
       });
-      clearTimeout(timeout);
       if (response.status === 200) {
         const data = (await response.json()) as { healthy_count?: number };
         litellmStatus = (data.healthy_count ?? 0) > 0 ? "running" : "degraded";
@@ -298,10 +287,7 @@ export const registerSystemRoutes = (app: Hono, context: AppContext): void => {
 
     let prometheusStatus = "unknown";
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      const response = await fetch("http://localhost:9090/-/healthy", { signal: controller.signal });
-      clearTimeout(timeout);
+      const response = await fetchLocal(9090, "/-/healthy", { timeoutMs: 2000 });
       prometheusStatus = response.status === 200 ? "running" : "error";
     } catch {
       prometheusStatus = "stopped";

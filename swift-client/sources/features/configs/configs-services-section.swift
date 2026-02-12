@@ -1,21 +1,22 @@
 import SwiftUI
 
 struct ConfigsServicesSection: View {
-  let services: [ServiceInfo]?
+  let services: [ServiceInfo]
 
   var body: some View {
-    if let services {
-      Section("Services") {
-        ForEach(services, id: \.name) { service in
-          HStack {
-            VStack(alignment: .leading) {
-              Text(service.name)
-              Text("Port \(service.port)").font(.caption).foregroundColor(AppTheme.muted)
-            }
-            Spacer()
-            BadgeView(text: service.status, color: badge(for: service.status))
+    VStack(spacing: 10) {
+      ForEach(services, id: \.name) { service in
+        HStack(alignment: .firstTextBaseline) {
+          VStack(alignment: .leading, spacing: 2) {
+            Text(service.name).font(AppTheme.bodyFont.weight(.semibold))
+            Text("Port " + formatPort(service.port))
+              .font(AppTheme.captionFont)
+              .foregroundColor(AppTheme.muted)
           }
+          Spacer()
+          BadgeView(text: service.status, color: badge(for: service.status))
         }
+        if service.name != services.last?.name { Divider() }
       }
     }
   }

@@ -2,7 +2,7 @@
 "use client";
 
 import { Brain, MessageSquare, Wrench } from "lucide-react";
-import type { Recipe } from "@/lib/types";
+import type { RecipeEditor } from "@/lib/types";
 import { LlamacppOptionsSection } from "../llamacpp-options-section";
 
 export function RecipeModalTabFeatures({
@@ -12,8 +12,8 @@ export function RecipeModalTabFeatures({
   getExtraArgValueForKey,
   setExtraArgValueForKey,
 }: {
-  recipe: Recipe;
-  onChange: (next: Recipe) => void;
+  recipe: RecipeEditor;
+  onChange: (next: RecipeEditor) => void;
   isLlamacpp: boolean;
   getExtraArgValueForKey: (key: string) => unknown;
   setExtraArgValueForKey: (key: string, value: unknown) => void;
@@ -230,4 +230,3 @@ export function RecipeModalTabFeatures({
     </div>
   );
 }
-

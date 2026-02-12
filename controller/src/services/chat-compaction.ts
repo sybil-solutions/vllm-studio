@@ -2,6 +2,7 @@
 import { randomUUID } from "node:crypto";
 import type { AppContext } from "../types/context";
 import { badRequest, notFound, serviceUnavailable } from "../core/errors";
+import { fetchInference } from "./inference/inference-client";
 
 const COMPACTION_SYSTEM_PROMPT = [
   "You are a context-compaction assistant.",
@@ -114,7 +115,7 @@ const requestSummary = async (
   systemPrompt: string,
   messages: Array<{ role: string; content: string }>,
 ): Promise<string> => {
-  const response = await fetch(`http://localhost:${context.config.inference_port}/v1/chat/completions`, {
+  const response = await fetchInference(context, "/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

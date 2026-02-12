@@ -4,32 +4,15 @@
 import { useCallback, useEffect, useRef } from "react";
 import { getApiKey } from "@/lib/api-key";
 import api from "@/lib/api";
-import type { AgentPlan } from "@/app/chat/_components/agent/agent-types";
-import { normalizePlanSteps } from "@/app/chat/_components/agent/agent-types";
 import type { AgentState, ChatSession, StoredMessage } from "@/lib/types";
 import { useAppStore } from "@/store";
+import { CONTROLLER_EVENT_TYPES } from "./use-controller-events/event-types";
+import { dispatchCustomEvent, normalizePlan } from "./use-controller-events/helpers";
 
 interface SSEPayload<T = unknown> {
   data: T;
   timestamp: string;
 }
-
-const normalizePlan = (value: unknown): AgentPlan | null => {
-  if (!value || typeof value !== "object") return null;
-  const plan = value as Partial<AgentPlan> & { tasks?: unknown };
-  const steps = normalizePlanSteps(plan.steps ?? plan.tasks);
-  if (steps.length === 0) return null;
-  return {
-    steps,
-    createdAt: typeof plan.createdAt === "number" ? plan.createdAt : Date.now(),
-    updatedAt: typeof plan.updatedAt === "number" ? plan.updatedAt : Date.now(),
-  };
-};
-
-const dispatchCustomEvent = (name: string, detail: Record<string, unknown>) => {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(name, { detail }));
-};
 
 export function useControllerEvents(
   apiBaseUrl: string =
@@ -243,41 +226,7 @@ export function useControllerEvents(
     const es = new EventSource(sseUrl);
     eventSourceRef.current = es;
 
-    const eventTypes = [
-      "status",
-      "gpu",
-      "metrics",
-      "launch_progress",
-      "download_progress",
-      "download_state",
-      "temporal_status",
-      "chat_session_created",
-      "chat_session_updated",
-      "chat_session_deleted",
-      "chat_session_forked",
-      "chat_session_compacted",
-      "chat_message_upserted",
-      "chat_usage_updated",
-      "agent_files_listed",
-      "agent_file_read",
-      "agent_file_written",
-      "agent_file_deleted",
-      "agent_directory_created",
-      "agent_file_moved",
-      "agent_plan_updated",
-      "recipe_created",
-      "recipe_updated",
-      "recipe_deleted",
-      "mcp_server_created",
-      "mcp_server_updated",
-      "mcp_server_deleted",
-      "mcp_server_enabled",
-      "mcp_server_disabled",
-      "mcp_tool_called",
-      "runtime_vllm_upgraded",
-    ];
-
-    for (const type of eventTypes) {
+    for (const type of CONTROLLER_EVENT_TYPES) {
       es.addEventListener(type, (event) => handleMessage(event as MessageEvent));
     }
 

@@ -7,48 +7,23 @@
 
 import { useContext, useCallback } from "react";
 import { ContextManagementContext } from "./context";
-import { getContextManagementService } from "./factory";
 import { DEFAULT_CONTEXT_CONFIG } from "./types";
 import type {
-  IContextManagementService,
-  ContextConfig,
   ContextMessage,
   CompactionStrategy,
   UtilizationLevel,
 } from "./types";
 
 /**
- * Hook to access the ContextManagementService
- */
-export function useContextManagementService(): IContextManagementService {
-  const context = useContext(ContextManagementContext);
-
-  if (!context) {
-    return getContextManagementService();
-  }
-
-  return context.service;
-}
-
-/**
- * Hook to access the context management configuration
- */
-export function useContextManagementConfig(): ContextConfig {
-  const context = useContext(ContextManagementContext);
-
-  if (!context) {
-    return DEFAULT_CONTEXT_CONFIG;
-  }
-
-  return context.config;
-}
-
-/**
  * Main hook for context management operations
  */
 export function useContextManagement() {
-  const service = useContextManagementService();
-  const config = useContextManagementConfig();
+  const context = useContext(ContextManagementContext);
+  const service = context?.service ?? null;
+  const config = context?.config ?? DEFAULT_CONTEXT_CONFIG;
+  if (!service) {
+    throw new Error("useContextManagement must be used within a ContextManagementProvider");
+  }
 
   const estimateTokens = useCallback((text: string) => service.estimateTokens(text), [service]);
 

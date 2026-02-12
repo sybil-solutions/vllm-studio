@@ -8,7 +8,9 @@ struct AgentFilesSheet: View {
     NavigationStack {
       AgentFilesView(sessionId: sessionId)
         .navigationTitle("Agent Files")
+        #if canImport(UIKit)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar { Button("Done") { dismiss() } }
     }
   }

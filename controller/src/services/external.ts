@@ -1,6 +1,7 @@
 export * from "./backends";
 export * from "./event-manager";
 export * from "./gpu";
+export * from "./inference/inference-client";
 export * from "./launch-state";
 export * from "./mcp-runner";
 export * from "./metrics";

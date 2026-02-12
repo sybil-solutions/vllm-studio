@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 @main
@@ -11,6 +12,13 @@ struct VllmStudioApp: App {
         .environmentObject(container)
         .environmentObject(realtime)
         .onAppear { realtime.start(api: container.api) }
+        // Avoid "stuck offline" after changing backend settings.
+        .onReceive(container.settings.$backendUrl.dropFirst().debounce(for: .milliseconds(600), scheduler: RunLoop.main)) { _ in
+          realtime.start(api: container.api)
+        }
+        .onReceive(container.settings.$apiKey.dropFirst().debounce(for: .milliseconds(600), scheduler: RunLoop.main)) { _ in
+          realtime.start(api: container.api)
+        }
     }
   }
 }

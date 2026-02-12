@@ -76,16 +76,6 @@ export function createSystemApi(core: ApiCore) {
 
     getMetrics: (): Promise<Metrics> => core.request("/v1/metrics/vllm"),
 
-    switchModel: (
-      recipeId: string,
-      force = true,
-    ): Promise<{ success: boolean; pid?: number; message: string }> =>
-      core.request(`/launch/${recipeId}?force=${force}`, {
-        method: "POST",
-        timeout: 6 * 60 * 1000,
-        retries: 0,
-      }),
-
     runBenchmark: (
       promptTokens = 1000,
       maxTokens = 100,

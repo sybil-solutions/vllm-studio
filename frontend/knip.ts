@@ -11,8 +11,6 @@ const config = {
     'playwright-report/**',
     '**/*.test.ts',
     '**/*.test.tsx',
-    // Barrel/index files export for external use
-    '**/index.ts',
   ],
   // Some tooling is used implicitly (CSS/postcss pipeline, git hooks), which knip can't reliably
   // infer from source imports. Keep this list small and intentional.

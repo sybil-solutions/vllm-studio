@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Recipe } from "../types/models";
+import { fetchLocal } from "../http/local-fetch";
 
 /**
  * Split a command line string into arguments.
@@ -125,13 +126,7 @@ export const fetchTabbyModel = async (
   const apiKey = readTabbyApiKey(tabbyDirectory);
   const headers: Record<string, string> = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-    const response = await fetch(`http://localhost:${port}/v1/models`, {
-      headers,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+    const response = await fetchLocal(port, "/v1/models", { headers, timeoutMs: 2000 });
     if (response.ok) {
       const data = (await response.json()) as { data?: Array<{ id?: string }> };
       const modelId = data.data?.[0]?.id;

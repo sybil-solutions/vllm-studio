@@ -10,48 +10,13 @@ import {
   type RefObject,
 } from "react";
 import { Virtuoso } from "react-virtuoso";
-import * as Icons from "../icons";
 import { ChatMessageItem } from "./chat-message-item";
 import { PerfProfiler } from "../perf/perf-profiler";
 import type { AgentFileEntry, Artifact, ChatMessage } from "@/lib/types";
+import { fileIcon, flattenAgentFiles } from "./chat-message-list/agent-file-chips";
+import { filterVisibleMessages } from "./chat-message-list/visible-messages";
 
-// Check if a message is tool-only (assistant message with only tool parts, no text content)
-function isToolOnlyMessage(message: ChatMessage): boolean {
-  if (message.role !== "assistant") return false;
-
-  let hasToolParts = false;
-  for (const part of message.parts) {
-    if (part.type === "text") {
-      const text = (part as { text?: unknown }).text;
-      if (typeof text === "string" && text.trim().length > 0) return false;
-      continue;
-    }
-    if (part.type === "dynamic-tool") {
-      hasToolParts = true;
-      continue;
-    }
-    if (typeof part.type === "string" && part.type.startsWith("tool-")) {
-      hasToolParts = true;
-    }
-  }
-
-  return hasToolParts;
-}
-
-type MessageGroup =
-  | { type: "single"; message: ChatMessage; messageIndex: number }
-  ;
-
-function hasNonEmptyText(message: ChatMessage): boolean {
-  for (const part of message.parts ?? []) {
-    if (!part || typeof part !== "object") continue;
-    const type = (part as { type?: unknown }).type;
-    if (type !== "text") continue;
-    const text = (part as { text?: unknown }).text;
-    if (typeof text === "string" && text.trim().length > 0) return true;
-  }
-  return false;
-}
+type MessageGroup = { type: "single"; message: ChatMessage; messageIndex: number };
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
@@ -99,25 +64,11 @@ export function ChatMessageList({
   // Filter out internal/continuation messages from display
   const visibleMessages = useMemo(
     () =>
-      messages.filter((m) => {
-        const metadata = m.metadata as { internal?: boolean } | undefined;
-        if (metadata?.internal) return false;
-
-        // Keep the in-flight assistant message mounted while loading to avoid flicker
-        // (it may start empty and later receive streamed text).
-        if (isLoading && m.role === "assistant" && m.id === lastRawMessageId) return true;
-
-        // Desktop transcript should be "conversation only":
-        // Hide tool-only assistant messages (they live in the Activity panel).
-        if (isToolOnlyMessage(m)) return false;
-
-        // Also hide assistant messages that carry no user-visible text.
-        // (Reasoning/tool telemetry is handled elsewhere; artifacts are still shown.)
-        if (m.role === "assistant") {
-          const hasArtifacts = Boolean(artifactsByMessage?.get(m.id)?.length);
-          if (!hasArtifacts && !hasNonEmptyText(m)) return false;
-        }
-        return true;
+      filterVisibleMessages({
+        messages,
+        isLoading,
+        lastRawMessageId,
+        artifactsByMessage,
       }),
     [artifactsByMessage, isLoading, lastRawMessageId, messages],
   );
@@ -280,33 +231,4 @@ export function ChatMessageList({
       </PerfProfiler>
     </div>
   );
-}
-
-type AgentFileChip = { path: string; name: string };
-
-function getFileExtension(name: string): string {
-  return name.split(".").pop()?.toLowerCase() ?? "";
-}
-
-function fileIcon(name: string) {
-  const ext = getFileExtension(name);
-  if (["ts", "tsx", "js", "jsx", "py", "rs", "go", "rb", "java", "c", "cpp", "h", "css", "scss", "html"].includes(ext))
-    return Icons.FileCode;
-  if (["json", "yaml", "yml", "toml", "xml"].includes(ext)) return Icons.FileJson;
-  if (["md", "txt", "csv", "log", "env"].includes(ext)) return Icons.FileText;
-  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext)) return Icons.File;
-  return Icons.File;
-}
-
-function flattenAgentFiles(entries: AgentFileEntry[], parentPath: string = ""): AgentFileChip[] {
-  const result: AgentFileChip[] = [];
-  for (const entry of entries) {
-    const fullPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-    if (entry.type === "file") {
-      result.push({ path: fullPath, name: entry.name });
-    } else if (entry.children) {
-      result.push(...flattenAgentFiles(entry.children, fullPath));
-    }
-  }
-  return result;
 }

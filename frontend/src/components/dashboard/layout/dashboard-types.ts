@@ -1,12 +1,4 @@
-import type { GPU, Metrics, ProcessInfo, RecipeWithStatus } from "@/lib/types";
-
-type LaunchStage = "preempting" | "evicting" | "launching" | "waiting" | "ready" | "cancelled" | "error";
-
-type LaunchProgress = {
-  stage: LaunchStage;
-  message?: string;
-  progress?: number;
-} | null;
+import type { GPU, LaunchProgress, Metrics, ProcessInfo, RecipeWithStatus } from "@/lib/types";
 
 export interface DashboardLayoutProps {
   currentProcess: ProcessInfo | null;
@@ -17,7 +9,7 @@ export interface DashboardLayoutProps {
   logs: string[];
   launching: boolean;
   benchmarking: boolean;
-  launchProgress: LaunchProgress;
+  launchProgress: LaunchProgress | null;
   isConnected: boolean;
   reconnectAttempts: number;
   inferencePort?: number;

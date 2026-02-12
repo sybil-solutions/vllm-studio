@@ -3,6 +3,7 @@ import type { Hono } from "hono";
 import { performance } from "node:perf_hooks";
 import type { AppContext } from "../types/context";
 import { getGpuInfo } from "../services/gpu";
+import { fetchInference } from "../services/inference/inference-client";
 
 /**
  * Register monitoring routes.
@@ -67,20 +68,20 @@ export const registerMonitoringRoutes = (app: Hono, context: AppContext): void =
       return ctx.json({ error: "No model running" });
     }
     const modelId = current.served_model_name ?? current.model_path?.split("/").pop() ?? "unknown";
-    const prompt = `Please count: ${Array.from({ length: Math.floor(promptTokens / 2) }).map((_, index) => index.toString()).join(" ")}`;
+      const prompt = `Please count: ${Array.from({ length: Math.floor(promptTokens / 2) }).map((_, index) => index.toString()).join(" ")}`;
 
-    try {
-      const start = performance.now();
-      const response = await fetch(`http://localhost:${context.config.inference_port}/v1/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: modelId,
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: maxTokens,
-          stream: false,
-        }),
-      });
+      try {
+        const start = performance.now();
+        const response = await fetchInference(context, "/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: maxTokens,
+            stream: false,
+          }),
+        });
       const totalTime = (performance.now() - start) / 1000;
       if (!response.ok) {
         return ctx.json({ error: `Request failed: ${response.status}` });

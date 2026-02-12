@@ -2,6 +2,7 @@
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { parseJsonOrNull } from "./chat-store-hydration";
+import type { ChatRun, ChatRunEvent, ChatToolExecution } from "../types/chat";
 
 /**
  * Create a run record.
@@ -27,7 +28,7 @@ export function createRun(
     toolsetId?: string;
     status?: string;
   } = {},
-): Record<string, unknown> {
+): ChatRun {
   db.query(
     `INSERT INTO chat_runs
     (id, session_id, user_message_id, model, system, toolset_id, status)
@@ -46,7 +47,7 @@ export function createRun(
       `SELECT id, session_id, user_message_id, model, system, toolset_id, created_at, updated_at, finished_at, status
        FROM chat_runs WHERE id = ?`,
     )
-    .get(runId) as Record<string, unknown>;
+    .get(runId) as ChatRun;
 }
 
 /**
@@ -66,7 +67,7 @@ export function addRunEvent(
   type: string,
   data: Record<string, unknown>,
   eventId: string = randomUUID(),
-): Record<string, unknown> {
+): ChatRunEvent {
   const dataJson = JSON.stringify(data);
   db.query(
     `INSERT INTO chat_run_events (id, run_id, seq, type, data)
@@ -78,7 +79,7 @@ export function addRunEvent(
   if (typeof row["data"] === "string") {
     row["data"] = parseJsonOrNull(row["data"]);
   }
-  return row;
+  return row as ChatRunEvent;
 }
 
 /**
@@ -111,7 +112,7 @@ export function addToolExecution(
     finishedAt?: string;
     id?: string;
   } = {},
-): Record<string, unknown> {
+): ChatToolExecution {
   const argumentsJson =
     typeof options.arguments === "string" ? options.arguments : JSON.stringify(options.arguments ?? {});
   const id = options.id ?? randomUUID();
@@ -136,7 +137,7 @@ export function addToolExecution(
       `SELECT id, run_id, tool_call_id, tool_name, tool_server, arguments_json, result_text, is_error,
        started_at, finished_at FROM chat_tool_executions WHERE id = ?`,
     )
-    .get(id) as Record<string, unknown>;
+    .get(id) as ChatToolExecution;
 }
 
 /**

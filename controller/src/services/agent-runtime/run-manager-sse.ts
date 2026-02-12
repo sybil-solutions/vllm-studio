@@ -22,11 +22,11 @@ export function encodeSseEvent(type: string, data: Record<string, unknown>): str
 export async function* createSseStream(
   queue: AsyncQueue<string>,
   abort: AbortController,
-  runPromise: Promise<void>,
+  runPromise: Promise<void>
 ): AsyncIterable<string> {
   const KEEPALIVE_INTERVAL_MS = 15_000;
 
-  const sleep = (ms: number, signal: AbortSignal) =>
+  const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
     new Promise<void>((resolve, reject) => {
       if (signal.aborted) {
         reject(new Error("aborted"));
@@ -36,7 +36,7 @@ export async function* createSseStream(
         signal.removeEventListener("abort", onAbort);
         resolve();
       }, ms);
-      const onAbort = () => {
+      const onAbort = (): void => {
         clearTimeout(id);
         reject(new Error("aborted"));
       };
@@ -84,7 +84,7 @@ export function createRunPublisher(
     runId: string;
     sessionId: string;
     queue: AsyncQueue<string>;
-  },
+  }
 ): { publish: (type: string, data: Record<string, unknown>) => void } {
   const { runId, sessionId, queue } = params;
   let eventSeq = 0;

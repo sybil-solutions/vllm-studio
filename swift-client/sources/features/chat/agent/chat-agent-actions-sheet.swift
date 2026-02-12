@@ -98,7 +98,9 @@ struct ChatAgentActionsSheet: View {
       }
       .background(AppTheme.background)
       .navigationTitle(actions.title)
+      #if canImport(UIKit)
       .navigationBarTitleDisplayMode(.inline)
+      #endif
     }
   }
 

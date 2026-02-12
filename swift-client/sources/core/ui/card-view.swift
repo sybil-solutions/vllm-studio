@@ -6,9 +6,9 @@ struct CardView<Content: View>: View {
 
   var body: some View {
     content
-      .padding(12)
+      .padding(16)
       .background(AppTheme.card)
-      .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.border))
-      .cornerRadius(14)
+      .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.border))
+      .cornerRadius(16)
   }
 }

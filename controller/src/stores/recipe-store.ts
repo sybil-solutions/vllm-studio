@@ -1,14 +1,14 @@
 // CRITICAL
-import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { parseRecipe } from "./recipe-serializer";
 import type { Recipe } from "../types/models";
+import { openSqliteDatabase } from "./sqlite";
 
 /**
  * SQLite-backed recipe storage.
  */
 export class RecipeStore {
-  private readonly db: Database;
+  private readonly db: ReturnType<typeof openSqliteDatabase>;
   private useJsonColumn = false;
 
   /**
@@ -16,8 +16,7 @@ export class RecipeStore {
    * @param dbPath - SQLite database path.
    */
   public constructor(dbPath: string) {
-    this.db = new Database(dbPath);
-    this.db.run("PRAGMA busy_timeout = 5000");
+    this.db = openSqliteDatabase(dbPath);
     this.migrate();
   }
 
