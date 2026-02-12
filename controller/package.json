@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.5.3",
-    "@hono/zod-openapi": "0.18.4",
     "agentfs-sdk": "^0.5.3",
     "@mariozechner/pi-agent-core": "^0.50.9",
     "@mariozechner/pi-ai": "^0.50.9",
