@@ -60,17 +60,17 @@ export const ToolItem = memo(
     }, [expanded, item.output]);
 
     return (
-      <div className="relative pl-7 pr-2 py-2 bg-white/1 rounded hover:bg-white/2 transition-colors">
+      <div className="relative pl-7 pr-2 py-2 bg-(--surface) rounded border-b border-(--border) hover:bg-(--surface) transition-colors">
         <div
           className="absolute left-1.75 top-3 w-2.25 h-2.25 rounded-full border flex items-center justify-center"
           style={{
-            borderColor: isExecuting ? "#444" : isError ? "#522" : hasResult ? "#353" : "#333",
-            backgroundColor: "#1c1b1a",
+            borderColor: isExecuting ? "var(--hl2)" : isError ? "var(--err)" : hasResult ? "var(--hl1)" : "var(--border)",
+            backgroundColor: "var(--surface)",
           }}
         >
-          {isExecuting && <div className="w-1 h-1 rounded-full bg-[#666] animate-pulse" />}
-          {isError && <div className="w-1 h-1 rounded-full bg-[#633]" />}
-          {hasResult && !isError && <div className="w-1 h-1 rounded-full bg-[#464]" />}
+          {isExecuting && <div className="w-1 h-1 rounded-full bg-(--dim) animate-pulse" />}
+          {isError && <div className="w-1 h-1 rounded-full bg-(--err)" />}
+          {hasResult && !isError && <div className="w-1 h-1 rounded-full bg-(--hl2)" />}
         </div>
 
         <button onClick={toggleExpanded} className="flex items-center gap-2 w-full text-left group">
@@ -81,34 +81,34 @@ export const ToolItem = memo(
           )}
           <span
             className={`text-[11px] truncate ${
-              isExecuting ? "text-[#777]" : isError ? "text-[#755]" : hasResult ? "text-[#797]" : "text-[#555]"
+              isExecuting ? "text-(--hl1)" : isError ? "text-(--err)" : hasResult ? "text-(--hl2)" : "text-(--fg)"
             }`}
           >
             {toolName}
           </span>
-          {isComplete && !isError && <span className="text-[10px] text-[#4a7]">✓</span>}
-          {isError && <span className="text-[10px] text-[#a54]">✗</span>}
-          <span className="ml-auto text-[9px] text-[#333]">{expanded ? "−" : "+"}</span>
+          {isComplete && !isError && <span className="text-[10px] text-(--hl2)">✓</span>}
+          {isError && <span className="text-[10px] text-(--err)">✗</span>}
+          <span className="ml-auto text-[9px] text-(--dim)">{expanded ? "−" : "+"}</span>
         </button>
 
-        {mainArg && <p className="mt-1 text-[10px] text-[#444] line-clamp-1 pl-5">{mainArg.slice(0, 100)}</p>}
+        {mainArg && <p className="mt-1 text-[10px] text-(--fg) line-clamp-1 pl-5">{mainArg.slice(0, 100)}</p>}
 
         {expanded && (
           <div className="mt-2 space-y-2 pl-5">
             {item.input != null && (
-              <div className="text-[10px] text-[#333]">
-                <span className="text-[#444]">Input:</span>
-                <pre className="mt-1 p-1.5 bg-[#252321] rounded overflow-x-auto max-h-20 overflow-y-auto text-[9px] font-mono">
+              <div className="text-[10px] text-(--dim)">
+                <span className="text-(--dim)">Input:</span>
+                <pre className="mt-1 p-1.5 bg-(--surface) rounded overflow-x-auto max-h-20 overflow-y-auto text-[9px] font-mono">
                   {String(safeJsonStringify(item.input, ""))}
                 </pre>
               </div>
             )}
             {outputText && (
-              <div className="text-[10px] text-[#333]">
-                <span className="text-[#444]">Output:</span>
+              <div className="text-[10px] text-(--dim)">
+                <span className="text-(--dim)">Output:</span>
                 <pre
                   className={`mt-1 p-1.5 rounded overflow-x-auto max-h-32 overflow-y-auto text-[9px] font-mono ${
-                    isError ? "bg-[#2a1f1f] text-[#755]" : "bg-[#252321] text-[#555]"
+                    isError ? "bg-(--surface) text-(--err)" : "bg-(--surface) text-(--fg)"
                   }`}
                 >
                   {outputText.slice(0, 500)}
@@ -232,4 +232,3 @@ function CategoryIcon({ category, className }: { category: ToolCategory; classNa
       );
   }
 }
-

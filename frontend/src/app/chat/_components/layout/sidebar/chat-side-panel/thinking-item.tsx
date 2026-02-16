@@ -18,28 +18,28 @@ export const ThinkingItem = memo(
 
     return (
       <div className="relative pl-7 pr-2 py-2">
-        <div className="absolute left-1.75 top-2.5 w-2.25 h-2.25 rounded-full border border-white/[0.16] bg-[#111217] flex items-center justify-center">
-          {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#5cf2d6] animate-pulse" />}
+        <div className="absolute left-1.75 top-2.5 w-2.25 h-2.25 rounded-full border border-(--border) bg-(--bg) flex items-center justify-center">
+          {isActive && <div className="w-1.5 h-1.5 rounded-full bg-(--hl2) animate-pulse" />}
         </div>
 
         <button onClick={toggleExpanded} className="flex items-center gap-2 w-full text-left group">
           {isActive ? (
-            <Loader2 className="h-3 w-3 text-[#7aa6ff] animate-spin shrink-0" />
+            <Loader2 className="h-3 w-3 text-(--hl1) animate-spin shrink-0" />
           ) : (
-            <BrainIcon className="h-3 w-3 text-[#8b93a5] shrink-0" />
+            <BrainIcon className="h-3 w-3 text-(--fg) shrink-0" />
           )}
           <span
-            className={`text-[11px] ${isActive ? "text-[#b8c3d8]" : "text-[#9aa3b2]"} group-hover:text-[#d1d9e8] transition-colors`}
+            className={`text-[11px] ${isActive ? "text-(--fg)" : "text-(--fg)"} group-hover:text-(--fg) transition-colors`}
           >
             {isActive ? "Thinking..." : "Thought"}
           </span>
-          {content && <span className="ml-auto text-[9px] text-[#6f7785]">{expanded ? "−" : "+"}</span>}
+          {content && <span className="ml-auto text-[9px] text-(--dim)">{expanded ? "−" : "+"}</span>}
         </button>
 
         {expanded && content && (
           <div
             ref={contentRef}
-            className="mt-2 max-h-50 overflow-y-auto text-[11px] leading-relaxed text-[#9aa3b2] whitespace-pre-wrap wrap-break-word scrollbar-thin"
+            className="mt-2 max-h-50 overflow-y-auto text-[11px] leading-relaxed text-(--fg) whitespace-pre-wrap wrap-break-word scrollbar-thin"
           >
             {content}
           </div>
@@ -68,4 +68,3 @@ function BrainIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-

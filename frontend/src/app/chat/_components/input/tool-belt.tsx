@@ -168,7 +168,7 @@ export function ToolBelt({
         />
 
         <div
-          className={`relative flex flex-col bg-[#1a1a1a] rounded-3xl border border-white/[0.08] ${
+          className={`relative flex flex-col bg-(--surface) rounded-3xl border border-(--border) ${
             isLoading ? "ring-1 ring-blue-500/30" : ""
           }`}
           style={{
@@ -190,7 +190,7 @@ export function ToolBelt({
             }
             disabled={isDisabled}
             rows={1}
-            className="w-full px-3 py-2.5 md:px-4 md:py-3 bg-transparent text-[15px] md:text-sm resize-none focus:outline-none disabled:opacity-50 placeholder:text-[#9a9590] overflow-y-hidden min-h-[44px] md:min-h-[44px]"
+            className="w-full px-3 py-2.5 md:px-4 md:py-3 bg-transparent text-[15px] md:text-sm resize-none focus:outline-none disabled:opacity-50 placeholder:text-(--dim) overflow-y-hidden min-h-[44px] md:min-h-[44px]"
             style={{ fontSize: "16px", lineHeight: "1.5" }}
           />
 

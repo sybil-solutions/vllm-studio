@@ -36,7 +36,7 @@ export function ArtifactGroupPill({
       className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] whitespace-nowrap transition-colors shrink-0 ${
         isSelected
           ? "bg-white/8 text-foreground border border-white/8"
-          : "bg-transparent text-[#666] hover:bg-white/4 border border-transparent"
+          : "bg-transparent text-(--dim) hover:bg-white/4 border border-transparent"
       }`}
     >
       <ArtifactTypeIcon type={group.artifacts[0]?.type ?? "html"} className="h-3 w-3" />
@@ -67,7 +67,7 @@ export function ArtifactVersionPill({
       className={`px-2 py-1 rounded-md text-[10px] font-mono transition-colors ${
         isSelected
           ? "bg-violet-500/15 text-violet-300 border border-violet-500/30"
-          : "bg-white/2 text-[#666] hover:text-[#888] border border-white/5"
+          : "bg-white/2 text-(--dim) hover:text-(--dim) border border-white/5"
       }`}
     >
       {versionLabel}
@@ -92,7 +92,7 @@ export function ArtifactTypeIcon({
     case "javascript":
       return <Icons.Code className={`${className} text-yellow-400`} />;
     default:
-      return <Icons.Code className={`${className} text-[#666]`} />;
+      return <Icons.Code className={`${className} text-(--dim)`} />;
   }
 }
 
@@ -121,7 +121,7 @@ export function ArtifactPreviewIframe({ artifact, isPlaying }: { artifact: Artif
   }, [artifact, isPlaying]);
 
   return (
-    <div className="w-full h-full bg-[#0a0a0a]">
+    <div className="w-full h-full bg-(--bg)">
       <iframe
         ref={iframeRef}
         srcDoc={srcDoc}

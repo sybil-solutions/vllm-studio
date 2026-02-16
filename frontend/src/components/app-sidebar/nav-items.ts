@@ -1,20 +1,19 @@
 import {
-  BarChart3,
+  Activity,
+  BookOpen,
   Compass,
-  LayoutDashboard,
-  MessageSquareText,
-  ScrollText,
-  Settings2,
-  Sparkles,
+  FileText,
+  Home,
+  MessageCircle,
+  Settings,
 } from "lucide-react";
 
 export const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/chat", label: "Chat", icon: MessageSquareText },
-  { href: "/recipes", label: "Recipes", icon: Sparkles },
+  { href: "/", label: "Dashboard", icon: Home },
+  { href: "/chat", label: "Chat", icon: MessageCircle },
+  { href: "/recipes", label: "Recipes", icon: BookOpen },
   { href: "/discover", label: "Discover", icon: Compass },
-  { href: "/logs", label: "Logs", icon: ScrollText },
-  { href: "/usage", label: "Usage", icon: BarChart3 },
-  { href: "/configs", label: "Configs", icon: Settings2 },
+  { href: "/logs", label: "Logs", icon: FileText },
+  { href: "/usage", label: "Usage", icon: Activity },
+  { href: "/configs", label: "Configs", icon: Settings },
 ];
-

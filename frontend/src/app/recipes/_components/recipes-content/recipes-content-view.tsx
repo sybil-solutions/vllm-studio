@@ -73,7 +73,7 @@ export function RecipesContentView(props: Props) {
   } = props;
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0d0d] text-[#e8e6e3]">
+    <div className="flex flex-col h-full bg-(--bg) text-(--fg)">
       <RecipesContentHeader tab={tab} setTab={setTab} refreshing={refreshing} onRefresh={onRefresh} />
 
       <div className="flex-1 overflow-auto">

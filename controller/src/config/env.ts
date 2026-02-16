@@ -13,7 +13,7 @@ export interface Config {
   port: number;
   api_key?: string;
   inference_port: number;
-  temporal_address: string;
+
   data_dir: string;
   db_path: string;
   litellm_database_url?: string;
@@ -62,7 +62,7 @@ export const createConfig = (): Config => {
     VLLM_STUDIO_PORT: z.coerce.number().int().positive().default(8080),
     VLLM_STUDIO_API_KEY: z.string().optional(),
     VLLM_STUDIO_INFERENCE_PORT: z.coerce.number().int().positive().default(8000),
-    VLLM_STUDIO_TEMPORAL_ADDRESS: z.string().default("localhost:7233"),
+
     VLLM_STUDIO_DATA_DIR: z.string().default(defaultDataDirectory),
     VLLM_STUDIO_DB_PATH: z.string().default(defaultDatabasePath),
     VLLM_STUDIO_MODELS_DIR: z.string().default("/models"),
@@ -80,16 +80,14 @@ export const createConfig = (): Config => {
     host: parsed.VLLM_STUDIO_HOST,
     port: parsed.VLLM_STUDIO_PORT,
     inference_port: parsed.VLLM_STUDIO_INFERENCE_PORT,
-    temporal_address: parsed.VLLM_STUDIO_TEMPORAL_ADDRESS,
+
     data_dir: resolve(parsed.VLLM_STUDIO_DATA_DIR),
     db_path: resolve(parsed.VLLM_STUDIO_DB_PATH),
     models_dir: resolve(parsed.VLLM_STUDIO_MODELS_DIR),
   };
 
   const litellmDatabaseUrl =
-    parsed.VLLM_STUDIO_LITELLM_DATABASE_URL ??
-    parsed.LITELLM_DATABASE_URL ??
-    parsed.DATABASE_URL;
+    parsed.VLLM_STUDIO_LITELLM_DATABASE_URL ?? parsed.LITELLM_DATABASE_URL ?? parsed.DATABASE_URL;
   if (litellmDatabaseUrl) {
     config.litellm_database_url = litellmDatabaseUrl;
   }

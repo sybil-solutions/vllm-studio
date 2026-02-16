@@ -170,7 +170,7 @@ export function ChatMessageList({
       <div className="pt-4">
         {hasAgentFiles && onOpenAgentFile && (
           <div className="mb-4">
-            <div className="text-[10px] uppercase tracking-[0.24em] text-[#6a6560] mb-2">
+            <div className="text-[10px] uppercase tracking-[0.24em] text-(--dim) mb-2">
               Agent Files
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -184,7 +184,7 @@ export function ChatMessageList({
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono border transition-colors whitespace-nowrap ${
                       isSelected
                         ? "bg-violet-500/20 text-violet-200 border-violet-500/40"
-                        : "bg-white/4 text-[#b6b1aa] border-white/10 hover:text-[#e8e4dd] hover:bg-white/8"
+                        : "bg-white/4 text-(--dim) border-white/10 hover:text-(--fg) hover:bg-white/8"
                     }`}
                     title={file.path}
                   >

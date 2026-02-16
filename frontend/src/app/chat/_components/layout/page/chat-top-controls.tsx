@@ -17,7 +17,7 @@ function ChatTopControlsBase({ onOpenSidebar, onOpenSettings }: ChatTopControlsP
           className="p-2 rounded-lg hover:bg-(--accent) transition-colors"
           title="Open navigation"
         >
-          <Menu className="h-5 w-5 text-[#9a9590]" />
+          <Menu className="h-5 w-5 text-(--dim)" />
         </button>
       </div>
       <div className="fixed right-4 top-[calc(env(safe-area-inset-top,0)+16px)] z-20 md:hidden">
@@ -26,7 +26,7 @@ function ChatTopControlsBase({ onOpenSidebar, onOpenSettings }: ChatTopControlsP
           className="p-2 rounded-lg hover:bg-(--accent) transition-colors"
           title="Chat settings"
         >
-          <Settings className="h-5 w-5 text-[#9a9590]" />
+          <Settings className="h-5 w-5 text-(--dim)" />
         </button>
       </div>
     </>

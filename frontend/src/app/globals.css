@@ -1,6 +1,7 @@
 /* CRITICAL */
 @import "tailwindcss";
 @import "./styles/globals/tokens.css";
+@import "./styles/globals/themes.css";
 @import "./styles/globals/base.css";
 @import "./styles/globals/mobile.css";
 @import "./styles/globals/animations.css";

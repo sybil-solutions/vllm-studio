@@ -54,17 +54,17 @@ export const categorize = (toolName?: string): ToolCategory => {
 
 export const CATEGORY_META: Record<ToolCategory, { label: string; color: string; iconColor: string }> =
   {
-    file: { label: "File ops", color: "#6aa2ff", iconColor: "#6aa2ff" },
-    search: { label: "Search", color: "#c084fc", iconColor: "#c084fc" },
-    plan: { label: "Planning", color: "#32f2c2", iconColor: "#32f2c2" },
-    web: { label: "Web", color: "#fb923c", iconColor: "#fb923c" },
-    code: { label: "Code", color: "#facc15", iconColor: "#facc15" },
-    other: { label: "Tools", color: "#8b93a5", iconColor: "#8b93a5" },
+    file: { label: "File ops", color: "var(--hl1)", iconColor: "var(--hl1)" },
+    search: { label: "Search", color: "var(--hl1)", iconColor: "var(--hl1)" },
+    plan: { label: "Planning", color: "var(--hl2)", iconColor: "var(--hl2)" },
+    web: { label: "Web", color: "var(--accent)", iconColor: "var(--accent)" },
+    code: { label: "Code", color: "var(--hl3)", iconColor: "var(--hl3)" },
+    other: { label: "Tools", color: "var(--dim)", iconColor: "var(--dim)" },
   };
 
 export const getTurnSummary = (items: ActivityItem[]): { label: string; count: number; color: string } => {
   const toolItems = items.filter((i) => i.type !== "thinking");
-  if (toolItems.length === 0) return { label: "Thinking", count: 0, color: "#8b93a5" };
+  if (toolItems.length === 0) return { label: "Thinking", count: 0, color: "var(--dim)" };
   const counts = new Map<ToolCategory, number>();
   for (const item of toolItems) {
     const cat = categorize(item.toolName);

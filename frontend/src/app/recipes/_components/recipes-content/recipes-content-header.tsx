@@ -15,7 +15,7 @@ export function RecipesContentHeader({ tab, setTab, refreshing, onRefresh }: Pro
   return (
     <>
       <div
-        className="flex items-center justify-between border-b border-[#1f1f1f]"
+        className="flex items-center justify-between border-b border-(--surface)"
         style={{
           paddingLeft: "1.5rem",
           paddingRight: "1.5rem",
@@ -28,7 +28,7 @@ export function RecipesContentHeader({ tab, setTab, refreshing, onRefresh }: Pro
           <button
             onClick={onRefresh}
             disabled={refreshing}
-            className="p-2 hover:bg-[#1f1f1f] rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 hover:bg-(--surface) rounded-lg transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
           </button>
@@ -36,15 +36,15 @@ export function RecipesContentHeader({ tab, setTab, refreshing, onRefresh }: Pro
       </div>
 
       <div
-        className="flex gap-1 border-b border-[#1f1f1f]"
+        className="flex gap-1 border-b border-(--surface)"
         style={{ paddingLeft: "1.5rem", paddingRight: "1.5rem", paddingTop: "1rem" }}
       >
         <button
           onClick={() => setTab("recipes")}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
             tab === "recipes"
-              ? "text-[#e8e6e3] border-[#d97706]"
-              : "text-[#9a9088] border-transparent hover:text-[#e8e6e3]"
+              ? "text-(--fg) border-(--accent)"
+              : "text-(--dim) border-transparent hover:text-(--fg)"
           }`}
         >
           Recipes
@@ -53,8 +53,8 @@ export function RecipesContentHeader({ tab, setTab, refreshing, onRefresh }: Pro
           onClick={() => setTab("tools")}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
             tab === "tools"
-              ? "text-[#e8e6e3] border-[#d97706]"
-              : "text-[#9a9088] border-transparent hover:text-[#e8e6e3]"
+              ? "text-(--fg) border-(--accent)"
+              : "text-(--dim) border-transparent hover:text-(--fg)"
           }`}
         >
           <Calculator className="w-4 h-4 inline mr-2" />
@@ -64,8 +64,8 @@ export function RecipesContentHeader({ tab, setTab, refreshing, onRefresh }: Pro
           onClick={() => setTab("runtime")}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
             tab === "runtime"
-              ? "text-[#e8e6e3] border-[#d97706]"
-              : "text-[#9a9088] border-transparent hover:text-[#e8e6e3]"
+              ? "text-(--fg) border-(--accent)"
+              : "text-(--dim) border-transparent hover:text-(--fg)"
           }`}
         >
           <Package className="w-4 h-4 inline mr-2" />

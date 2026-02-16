@@ -73,7 +73,7 @@ function MetricBox({
         {label}
       </div>
       <div className="flex items-baseline gap-2">
-        <span className={`text-2xl font-light tabular-nums ${accent ? "text-(--success)" : ""}`}>
+        <span className={`text-2xl font-light tabular-nums ${accent ? "text-(--hl2)" : ""}`}>
           {value}
         </span>
         <span className="text-xs text-foreground/30">{unit}</span>

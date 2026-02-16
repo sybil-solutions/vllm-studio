@@ -36,7 +36,7 @@ export function ContextPanel({
   canCompact = false,
 }: ContextPanelProps) {
   if (!stats || !breakdown) {
-    return <div className="py-8 text-center text-sm text-[#555]">Context stats unavailable</div>;
+    return <div className="py-8 text-center text-sm text-(--dim)">Context stats unavailable</div>;
   }
 
   const fmt = formatTokenCount ?? ((value: number) => value.toString());
@@ -48,34 +48,34 @@ export function ContextPanel({
   const lastCompaction = compactionHistory[compactionHistory.length - 1];
 
   return (
-    <div className="space-y-4 text-xs text-[#888]">
-      <div className="rounded-lg border border-[#1c1b1a] bg-[#0d0d0d]/90 p-3">
+    <div className="space-y-4 text-xs text-(--fg)">
+      <div className="rounded-lg border border-(--border) bg-(--bg)/90 p-3">
         <div className="flex items-center justify-between">
-          <span className="text-[#aaa]">Context Usage</span>
-          <span className={`${isOverEighty ? "text-[#755]" : "text-[#666]"}`}>
+          <span className="text-(--fg)">Context Usage</span>
+          <span className={`${isOverEighty ? "text-(--err)" : "text-(--dim)"}`}>
             {utilizationPct}%
           </span>
         </div>
-        <div className="mt-2 text-[11px] text-[#555]">
+        <div className="mt-2 text-[11px] text-(--fg)">
           {fmt(stats.currentTokens)} / {fmt(stats.maxContext)} tokens • headroom {fmt(headroom)}
         </div>
-        <div className="mt-2 h-1.5 w-full rounded-full bg-[#252321] relative">
-          <div className="absolute top-0 bottom-0 w-px bg-[#444] z-10" style={{ left: "80%" }} />
+        <div className="mt-2 h-1.5 w-full rounded-full bg-(--surface) relative">
+          <div className="absolute top-0 bottom-0 w-px bg-(--border) z-10" style={{ left: "80%" }} />
           <div
-            className={`h-full rounded-full ${isOverEighty ? "bg-[#633]" : "bg-[#555]"}`}
+            className={`h-full rounded-full ${isOverEighty ? "bg-(--err)" : "bg-(--hl2)"}`}
             style={{ width: `${Math.min(100, utilizationPct)}%` }}
           />
         </div>
-        <div className="mt-1 text-[9px] text-[#444] flex justify-between">
+        <div className="mt-1 text-[9px] text-(--fg) flex justify-between">
           <span>0</span>
-          <span className="text-[#555]">80% limit: {fmt(eightyPercentMax)}</span>
+          <span className="text-(--dim)">80% limit: {fmt(eightyPercentMax)}</span>
           <span>{fmt(stats.maxContext)}</span>
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#1c1b1a] bg-[#0d0d0d]/90 p-3 space-y-2">
-        <div className="text-[#aaa]">Breakdown</div>
-        <div className="grid grid-cols-2 gap-2 text-[11px] text-[#555]">
+      <div className="rounded-lg border border-(--border) bg-(--bg)/90 p-3 space-y-2">
+        <div className="text-(--fg)">Breakdown</div>
+        <div className="grid grid-cols-2 gap-2 text-[11px] text-(--fg)">
           <div>Messages: {breakdown.messages}</div>
           <div>Tool calls: {breakdown.toolCalls}</div>
           <div>User tokens: {fmt(breakdown.userTokens)}</div>
@@ -85,25 +85,25 @@ export function ContextPanel({
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#1c1b1a] bg-[#0d0d0d]/90 p-3 space-y-2">
-        <div className="flex items-center justify-between text-[#aaa]">
+      <div className="rounded-lg border border-(--border) bg-(--bg)/90 p-3 space-y-2">
+        <div className="flex items-center justify-between text-(--fg)">
           <span>Compaction</span>
           <div className="flex items-center gap-2">
-            {compacting && <span className="text-[#555]">Running…</span>}
+            {compacting && <span className="text-(--fg)">Running…</span>}
             {onCompact && (
               <button
                 onClick={onCompact}
                 disabled={!canCompact || compacting}
-                className="px-2 py-1 rounded border border-white/10 text-[10px] uppercase tracking-[0.2em] text-[#c8c4bd] hover:text-white hover:border-white/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-2 py-1 rounded border border-(--border) text-[10px] uppercase tracking-[0.2em] text-(--dim) hover:text-(--fg) hover:border-(--accent)/40 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Compact Now
               </button>
             )}
           </div>
         </div>
-        {compactionError && <div className="text-[11px] text-[#633]">{compactionError}</div>}
+        {compactionError && <div className="text-[11px] text-(--err)">{compactionError}</div>}
         {lastCompaction && (
-          <div className="text-[11px] text-[#555] flex items-center justify-between">
+          <div className="text-[11px] text-(--fg) flex items-center justify-between">
             <span>Last</span>
             <span>
               {fmt(lastCompaction.beforeTokens)} → {fmt(lastCompaction.afterTokens)} • saved{" "}
@@ -112,9 +112,9 @@ export function ContextPanel({
           </div>
         )}
         {recentCompactions.length === 0 ? (
-          <div className="text-[11px] text-[#444]">No compactions yet</div>
+          <div className="text-[11px] text-(--fg)">No compactions yet</div>
         ) : (
-          <div className="space-y-2 text-[11px] text-[#555]">
+          <div className="space-y-2 text-[11px] text-(--fg)">
             {recentCompactions.map((event) => (
               <div key={event.id} className="flex items-center justify-between">
                 <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
@@ -129,4 +129,3 @@ export function ContextPanel({
     </div>
   );
 }
-

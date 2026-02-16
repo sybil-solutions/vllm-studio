@@ -25,18 +25,18 @@ export function ExportModal({
         onClick={onClose}
         aria-label="Close"
       />
-      <div className="relative z-10 w-full max-w-sm mx-4 bg-(--card) border border-(--border) rounded-xl shadow-xl">
+      <div className="relative z-10 w-full max-w-sm mx-4 bg-(--surface) border border-(--border) rounded-xl shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-(--border)">
           <div className="flex items-center gap-2">
-            <Download className="h-5 w-5 text-[#9a9590]" />
+            <Download className="h-5 w-5 text-(--dim)" />
             <h2 className="text-lg font-semibold">Export Chat</h2>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 rounded hover:bg-(--accent)"
           >
-            <X className="h-5 w-5 text-[#9a9590]" />
+            <X className="h-5 w-5 text-(--dim)" />
           </button>
         </div>
 
@@ -47,12 +47,12 @@ export function ExportModal({
               onExportJson();
               onClose();
             }}
-            className="w-full flex items-center gap-3 p-4 bg-(--background) border border-(--border) rounded-lg hover:bg-(--accent) transition-colors"
+            className="w-full flex items-center gap-3 p-4 bg-(--bg) border border-(--border) rounded-lg hover:bg-(--accent) transition-colors"
           >
-            <FileJson className="h-5 w-5 text-(--link)" />
+            <FileJson className="h-5 w-5 text-(--hl1)" />
             <div className="text-left">
               <div className="font-medium">Export as JSON</div>
-              <div className="text-xs text-[#6a6560]">
+              <div className="text-xs text-(--dim)">
                 Full conversation data with metadata
               </div>
             </div>
@@ -63,12 +63,12 @@ export function ExportModal({
               onExportMarkdown();
               onClose();
             }}
-            className="w-full flex items-center gap-3 p-4 bg-(--background) border border-(--border) rounded-lg hover:bg-(--accent) transition-colors"
+            className="w-full flex items-center gap-3 p-4 bg-(--bg) border border-(--border) rounded-lg hover:bg-(--accent) transition-colors"
           >
-            <FileText className="h-5 w-5 text-(--success)" />
+            <FileText className="h-5 w-5 text-(--hl2)" />
             <div className="text-left">
               <div className="font-medium">Export as Markdown</div>
-              <div className="text-xs text-[#6a6560]">
+              <div className="text-xs text-(--dim)">
                 Human-readable format
               </div>
             </div>

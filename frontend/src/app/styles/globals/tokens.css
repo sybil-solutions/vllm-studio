@@ -1,55 +1,29 @@
-/* CRITICAL */
+/* CRITICAL — 10-variable theme system */
 :root {
-  /* Warm Paper Design v2 - Light Mode (High Readability) */
-  --background: hsl(40, 20%, 96%);
-  --foreground: hsl(30, 15%, 12%);
-  --muted: hsl(35, 10%, 35%);
-  --muted-foreground: hsl(35, 10%, 30%);
+  --bg: hsl(40, 20%, 96%);
+  --fg: hsl(30, 15%, 12%);
+  --dim: hsl(35, 10%, 32%);
   --border: hsl(35, 12%, 80%);
-  --card: hsl(40, 15%, 94%);
-  --card-hover: hsl(40, 12%, 90%);
-  --accent: hsl(270, 20%, 94%);
-  --accent-hover: hsl(270, 25%, 88%);
-  --accent-foreground: hsl(30, 15%, 10%);
-  --success: hsl(142, 50%, 35%);
-  --warning: hsl(38, 90%, 45%);
-  --error: hsl(0, 65%, 45%);
-  --ring: hsl(270, 60%, 50%);
-  --link: hsl(270, 50%, 50%);
-  --link-hover: hsl(270, 60%, 45%);
-  --accent-purple: hsl(270, 50%, 55%);
-  --accent-purple-shine: hsl(270, 60%, 60%);
-  --highlight: hsl(270, 50%, 55%);
-  --highlight-bg: hsl(270, 50%, 95%);
-  --scrollbar-thumb: hsla(270, 50%, 55%, 0.18);
-  --scrollbar-thumb-hover: hsla(270, 60%, 60%, 0.32);
+  --surface: hsl(40, 15%, 94%);
+  --accent: hsl(32, 94%, 44%);
+  --hl1: hsl(270, 50%, 55%);
+  --hl2: hsl(142, 50%, 35%);
+  --hl3: hsl(38, 90%, 45%);
+  --err: hsl(0, 65%, 45%);
   --app-height: 100vh;
 }
 
 .dark {
-  /* Warm Paper Design v2 - Dark Mode */
-  --background: hsl(30, 5%, 10.5%);
-  --foreground: hsl(40, 20%, 92%);
-  --muted: hsl(30, 8%, 40%);
-  --muted-foreground: hsl(35, 12%, 60%);
+  --bg: hsl(30, 5%, 10.5%);
+  --fg: hsl(40, 20%, 92%);
+  --dim: hsl(35, 12%, 60%);
   --border: hsl(30, 5%, 20%);
-  --card: hsl(30, 5%, 12%);
-  --card-hover: hsl(30, 5%, 15%);
-  --accent: hsl(270, 25%, 22%);
-  --accent-hover: hsl(270, 30%, 28%);
-  --accent-foreground: hsl(40, 20%, 92%);
-  --success: hsl(142, 45%, 45%);
-  --warning: hsl(38, 85%, 55%);
-  --error: hsl(0, 60%, 55%);
-  --ring: hsl(270, 60%, 60%);
-  --link: hsl(270, 60%, 70%);
-  --link-hover: hsl(270, 65%, 75%);
-  --accent-purple: hsl(270, 50%, 55%);
-  --accent-purple-shine: hsl(270, 60%, 60%);
-  --highlight: hsl(270, 60%, 65%);
-  --highlight-bg: hsl(270, 30%, 18%);
-  --scrollbar-thumb: hsla(270, 60%, 70%, 0.18);
-  --scrollbar-thumb-hover: hsla(270, 70%, 78%, 0.34);
+  --surface: hsl(30, 5%, 13%);
+  --accent: hsl(32, 94%, 44%);
+  --hl1: hsl(270, 50%, 55%);
+  --hl2: hsl(142, 45%, 45%);
+  --hl3: hsl(38, 85%, 55%);
+  --err: hsl(0, 60%, 55%);
 }
 
 @supports (height: 100dvh) {
@@ -59,9 +33,8 @@
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
-

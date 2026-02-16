@@ -3,19 +3,19 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { AppContext } from "./types/context";
 import { createConfig } from "./config/env";
-import { createEventManager } from "./services/event-manager";
-import { createLaunchState } from "./services/launch-state";
-import { createMetrics } from "./services/metrics";
-import { createProcessManager } from "./services/process-manager";
-import { DownloadManager } from "./services/download-manager";
+import { createEventManager } from "./modules/monitoring/event-manager";
+import { createLaunchState } from "./modules/lifecycle/launch-state";
+import { createMetrics } from "./modules/monitoring/metrics";
+import { createProcessManager } from "./modules/lifecycle/process-manager";
+import { DownloadManager } from "./modules/downloads/manager";
 import { createLogger, resolveLogLevel } from "./core/logger";
 import { primaryLogPathFor } from "./core/log-files";
-import { ChatStore } from "./stores/chat-store";
-import { DownloadStore } from "./stores/download-store";
-import { PeakMetricsStore, LifetimeMetricsStore } from "./stores/metrics-store";
-import { McpStore } from "./stores/mcp-store";
-import { RecipeStore } from "./stores/recipe-store";
-import { ChatRunManager } from "./services/agent-runtime/run-manager";
+import { ChatStore } from "./modules/chat/store";
+import { DownloadStore } from "./modules/downloads/store";
+import { PeakMetricsStore, LifetimeMetricsStore } from "./modules/monitoring/metrics-store";
+import { McpStore } from "./modules/mcp/store";
+import { RecipeStore } from "./modules/lifecycle/recipe-store";
+import { ChatRunManager } from "./modules/chat/agent/run-manager";
 
 /**
  * Create the application dependency container.

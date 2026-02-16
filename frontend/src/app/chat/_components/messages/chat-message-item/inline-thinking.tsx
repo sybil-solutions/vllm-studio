@@ -26,18 +26,18 @@ export function InlineThinking({
         {isActive ? (
           <Icons.Loader2 className="h-3 w-3 text-blue-400 animate-spin" />
         ) : (
-          <Icons.Brain className="h-3 w-3 text-[#6a6560]" />
+          <Icons.Brain className="h-3 w-3 text-(--dim)" />
         )}
-        <span className="text-xs text-[#6a6560]">{isActive ? "Thinking..." : "Reasoning"}</span>
+        <span className="text-xs text-(--dim)">{isActive ? "Thinking..." : "Reasoning"}</span>
         {content &&
           (expanded ? (
-            <Icons.ChevronUp className="h-3 w-3 text-[#6a6560]" />
+            <Icons.ChevronUp className="h-3 w-3 text-(--dim)" />
           ) : (
-            <Icons.ChevronDown className="h-3 w-3 text-[#6a6560]" />
+            <Icons.ChevronDown className="h-3 w-3 text-(--dim)" />
           ))}
       </button>
       {content && expanded && (
-        <p className="mt-1 text-xs text-[#6a6560] whitespace-pre-wrap wrap-break-word max-h-40 overflow-auto pl-5">
+        <p className="mt-1 text-xs text-(--dim) whitespace-pre-wrap wrap-break-word max-h-40 overflow-auto pl-5">
           {content}
         </p>
       )}

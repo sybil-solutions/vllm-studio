@@ -45,7 +45,7 @@ export function CodePreview({
         }}
         showLineNumbers={showLineNumbers}
         lineNumberStyle={{
-          color: "var(--muted)",
+          color: "var(--dim)",
           fontSize: "0.75rem",
           paddingRight: "1rem",
           minWidth: "2.5rem",

@@ -17,6 +17,8 @@ build/
 .pytest_cache/
 .coverage
 
+AGENTS.md
+
 # Data directories
 data/
 *.db

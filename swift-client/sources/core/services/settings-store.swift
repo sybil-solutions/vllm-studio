@@ -7,6 +7,7 @@ final class SettingsStore: ObservableObject {
   @Published var voiceModel: String { didSet { save() } }
   @Published var mcpEnabled: Bool { didSet { save() } }
   @Published var planModeEnabled: Bool { didSet { save() } }
+  @Published var themeId: String { didSet { save() } }
 
   init() {
     let defaults = UserDefaults.standard
@@ -25,6 +26,7 @@ final class SettingsStore: ObservableObject {
     voiceModel = defaults.string(forKey: "voice-model") ?? "whisper-large-v3-turbo"
     mcpEnabled = defaults.object(forKey: "mcp-enabled") as? Bool ?? true
     planModeEnabled = defaults.object(forKey: "plan-mode-enabled") as? Bool ?? false
+    themeId = defaults.string(forKey: "theme-id") ?? AppTheme.default.id
   }
 
   func saveNow() {
@@ -39,5 +41,6 @@ final class SettingsStore: ObservableObject {
     defaults.set(voiceModel, forKey: "voice-model")
     defaults.set(mcpEnabled, forKey: "mcp-enabled")
     defaults.set(planModeEnabled, forKey: "plan-mode-enabled")
+    defaults.set(themeId, forKey: "theme-id")
   }
 }

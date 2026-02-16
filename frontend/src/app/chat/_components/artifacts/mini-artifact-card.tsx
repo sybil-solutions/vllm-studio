@@ -25,21 +25,21 @@ export function MiniArtifactCard({ artifact, onClick }: MiniArtifactCardProps) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-full border border-(--border) bg-(--card) hover:bg-(--accent) px-3 py-1 text-left transition-colors text-xs"
+      className="inline-flex items-center gap-2 rounded-full border border-(--border) bg-(--surface) hover:bg-(--accent) px-3 py-1 text-left transition-colors text-xs"
     >
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-(--accent) text-[#9a9590]">
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-(--accent) text-(--dim)">
         {icon}
       </span>
-      <span className="max-w-[160px] truncate text-(--foreground)">{title}</span>
+      <span className="max-w-[160px] truncate text-(--fg)">{title}</span>
       {versionLabel && (
         <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-violet-300">
           {versionLabel}
         </span>
       )}
-      <span className="rounded-full border border-(--border) bg-(--background) px-2 py-0.5 text-[10px] uppercase tracking-wide text-[#9a9590]">
+      <span className="rounded-full border border-(--border) bg-(--bg) px-2 py-0.5 text-[10px] uppercase tracking-wide text-(--dim)">
         {artifact.type}
       </span>
-      <span className="text-[10px] text-[#9a9590]">{lines} lines</span>
+      <span className="text-[10px] text-(--dim)">{lines} lines</span>
     </button>
   );
 }

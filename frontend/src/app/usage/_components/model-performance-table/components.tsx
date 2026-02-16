@@ -24,7 +24,7 @@ export function SortHeader({
 
   return (
     <th
-      className={`py-3 px-3 sm:px-4 text-xs text-[#9a9088] font-normal cursor-pointer hover:text-[#f0ebe3] transition-colors select-none ${
+      className={`py-3 px-3 sm:px-4 text-xs text-(--dim) font-normal cursor-pointer hover:text-(--fg) transition-colors select-none ${
         align === "right" ? "text-right" : "text-left"
       }`}
       onClick={onClick}
@@ -40,13 +40,13 @@ export function SortHeader({
 export function StatusPill({ value, type }: { value: number; type: "success" | "latency" }) {
   const getColor = () => {
     if (type === "success") {
-      if (value >= 95) return "text-[#7d9a6a]";
-      if (value >= 90) return "text-[#c9a66b]";
-      return "text-[#c97a6b]";
+      if (value >= 95) return "text-(--hl2)";
+      if (value >= 90) return "text-(--hl3)";
+      return "text-(--err)";
     }
-    if (value < 500) return "text-[#7d9a6a]";
-    if (value < 1500) return "text-[#c9a66b]";
-    return "text-[#c97a6b]";
+    if (value < 500) return "text-(--hl2)";
+    if (value < 1500) return "text-(--hl3)";
+    return "text-(--err)";
   };
 
   return <span className={`text-sm tabular-nums ${getColor()}`}>{type === "success" ? `${value.toFixed(1)}%` : formatDuration(value)}</span>;

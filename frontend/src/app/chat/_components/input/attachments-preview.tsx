@@ -40,29 +40,29 @@ export const AttachmentsPreview = memo(function AttachmentsPreview({
               )}
               <div className="text-xs font-medium">
                 <p className="font-medium truncate max-w-[100px]">{attachment.name}</p>
-                <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
+                <p className="text-(--dim)">{formatFileSize(attachment.size)}</p>
               </div>
             </div>
           ) : attachment.type === "audio" ? (
             <div className="flex items-center gap-2">
-              <Mic className="h-3.5 w-3.5 text-(--success)" />
+              <Mic className="h-3.5 w-3.5 text-(--hl2)" />
               <div className="text-xs font-medium">
                 <p className="font-medium truncate">{attachment.name}</p>
-                <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
+                <p className="text-(--dim)">{formatFileSize(attachment.size)}</p>
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <FileText className="h-3.5 w-3.5 text-[#9a9590]" />
+              <FileText className="h-3.5 w-3.5 text-(--dim)" />
               <div className="text-xs font-medium">
                 <p className="font-medium truncate max-w-[100px]">{attachment.name}</p>
-                <p className="text-[#9a9590]">{formatFileSize(attachment.size)}</p>
+                <p className="text-(--dim)">{formatFileSize(attachment.size)}</p>
               </div>
             </div>
           )}
           <button
             onClick={() => onRemove(attachment.id)}
-            className="absolute -top-1 -right-1 p-0.5 rounded-full bg-(--error) text-white opacity-0 group-hover:opacity-100 transition-opacity:ease-in:200ms"
+            className="absolute -top-1 -right-1 p-0.5 rounded-full bg-(--err) text-white opacity-0 group-hover:opacity-100 transition-opacity:ease-in:200ms"
           >
             <X className="h-2.5 w-2.5" />
           </button>

@@ -150,24 +150,24 @@ export function RecipeModal({
       <button className="flex-1 bg-black/60" onClick={onClose} aria-label="Close" />
 
       {/* Drawer */}
-      <div className="w-full max-w-2xl bg-[#1b1b1b] border-l border-[#363432] flex flex-col h-full animate-in slide-in-from-right duration-200">
+      <div className="w-full max-w-2xl bg-(--surface) border-l border-(--border) flex flex-col h-full animate-in slide-in-from-right duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#363432] shrink-0 bg-[#1b1b1b]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-(--border) shrink-0 bg-(--surface)">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#d97706]/10 rounded-lg flex items-center justify-center">
-              <Layers className="w-5 h-5 text-[#d97706]" />
+            <div className="w-10 h-10 bg-(--accent)/10 rounded-lg flex items-center justify-center">
+              <Layers className="w-5 h-5 text-(--accent)" />
             </div>
             <div>
               <h3 className="text-lg font-semibold">{recipe.id ? "Edit Recipe" : "New Recipe"}</h3>
-              <div className="flex items-center gap-2 text-xs text-[#6a6560]">
+              <div className="flex items-center gap-2 text-xs text-(--dim)">
                 <span>Engine</span>
-                <span className="px-2 py-0.5 rounded-full bg-[#1b1b1b] border border-[#363432] text-[#d97706]">
+                <span className="px-2 py-0.5 rounded-full bg-(--surface) border border-(--border) text-(--accent)">
                   {formatBackendLabel(recipe.backend)}
                 </span>
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-[#363432] rounded-lg transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-(--border) rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -200,23 +200,23 @@ export function RecipeModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#363432] shrink-0 bg-[#1b1b1b]">
-          <div className="text-xs text-[#6a6560]">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-(--border) shrink-0 bg-(--surface)">
+          <div className="text-xs text-(--dim)">
             {recipe.id ? `Editing ${recipe.name}` : "Creating new recipe"}
-            {extraArgsError && <span className="ml-3 text-[#fca5a5]">Extra args has errors</span>}
+            {extraArgsError && <span className="ml-3 text-(--err)">Extra args has errors</span>}
           </div>
           <div className="flex gap-3">
             <button
               onClick={onClose}
               disabled={saving}
-              className="px-4 py-2 bg-[#363432] hover:bg-[#494745] rounded-lg text-sm transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-(--border) hover:bg-(--surface) rounded-lg text-sm transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={onSave}
               disabled={saving || !!extraArgsError || !(recipe.name ?? "").trim() || !(recipe.model_path ?? "").trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-[#d97706] hover:bg-[#b45309] text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-(--accent) hover:bg-(--accent) text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>

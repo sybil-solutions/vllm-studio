@@ -100,10 +100,10 @@ function ToolCallGroupBase({ groupId, messages, isStreaming }: ToolCallGroupProp
       {/* Collapsed view */}
       <button
         onClick={handleToggleExpanded}
-        className="flex items-center gap-2 text-xs text-[#6a6560] hover:text-[#9a9590] transition-colors w-full text-left py-1"
+        className="flex items-center gap-2 text-xs text-(--dim) hover:text-(--dim) transition-colors w-full text-left py-1"
       >
         {isRunning ? (
-          <Icons.Loader2 className="h-3 w-3 text-[#6a6560] animate-spin shrink-0" />
+          <Icons.Loader2 className="h-3 w-3 text-(--dim) animate-spin shrink-0" />
         ) : hasError ? (
           <span className="w-3 h-3 flex items-center justify-center shrink-0 text-red-400 text-[10px]">
             ✕
@@ -112,13 +112,13 @@ function ToolCallGroupBase({ groupId, messages, isStreaming }: ToolCallGroupProp
           <Icons.Check className="h-3 w-3 text-emerald-500/70 shrink-0" />
         )}
         <span className={hasError ? "text-red-400/70" : ""}>{label}</span>
-        <span className="text-[#3a3735]">·</span>
+        <span className="text-(--border)">·</span>
         <span>
           {totalCalls} tool call{totalCalls !== 1 ? "s" : ""}
         </span>
         {toolNamesPreview && (
           <>
-            <span className="text-[#3a3735]">·</span>
+            <span className="text-(--border)">·</span>
             <span className="font-mono truncate max-w-[200px]">
               {toolNamesPreview}
               {moreCount > 0 ? ` +${moreCount}` : ""}
@@ -151,7 +151,7 @@ function ToolCallGroupBase({ groupId, messages, isStreaming }: ToolCallGroupProp
             return (
               <div
                 key={`${toolPart.toolCallId}-${idx}`}
-                className="flex items-center gap-2 text-xs text-[#6a6560] py-0.5"
+                className="flex items-center gap-2 text-xs text-(--dim) py-0.5"
               >
                 {isPending ? (
                   <Icons.Loader2 className="h-2.5 w-2.5 text-amber-400 animate-spin shrink-0" />
@@ -162,7 +162,7 @@ function ToolCallGroupBase({ groupId, messages, isStreaming }: ToolCallGroupProp
                 ) : isComplete ? (
                   <Icons.Check className="h-2.5 w-2.5 text-emerald-500/70 shrink-0" />
                 ) : (
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#6a6560]/50 shrink-0" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-(--dim)/50 shrink-0" />
                 )}
                 <span className="font-mono truncate">{toolPart.toolName}</span>
               </div>

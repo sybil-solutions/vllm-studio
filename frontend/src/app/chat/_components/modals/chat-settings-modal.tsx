@@ -95,24 +95,24 @@ export function ChatSettingsModal({
         onClick={onClose}
         aria-label="Close"
       />
-      <div className="relative z-10 w-full max-w-lg mx-4 bg-(--card) border border-(--border) rounded-xl shadow-xl">
+      <div className="relative z-10 w-full max-w-lg mx-4 bg-(--surface) border border-(--border) rounded-xl shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-(--border)">
           <div className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-[#9a9590]" />
+            <Settings className="h-5 w-5 text-(--dim)" />
             <h2 className="text-lg font-semibold">Chat Settings</h2>
           </div>
           <button onClick={onClose} className="p-1.5 rounded hover:bg-(--accent)">
-            <X className="h-5 w-5 text-[#9a9590]" />
+            <X className="h-5 w-5 text-(--dim)" />
           </button>
         </div>
 
         <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
           <div>
-            <label className="block text-sm font-medium text-[#c8c4bd] mb-2">Model</label>
+            <label className="block text-sm font-medium text-(--dim) mb-2">Model</label>
             <select
               value={selectedModel}
               onChange={(e) => onSelectedModelChange(e.target.value)}
-              className="w-full px-3 py-2 bg-background border border-(--border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--link)/50"
+              className="w-full px-3 py-2 bg-background border border-(--border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--hl1)/50"
             >
               <option value="">Select a model</option>
               {availableModels.map((model) => (
@@ -124,13 +124,13 @@ export function ChatSettingsModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#c8c4bd] mb-2">System Prompt</label>
+            <label className="block text-sm font-medium text-(--dim) mb-2">System Prompt</label>
             <textarea
               value={systemPrompt}
               onChange={(e) => onSystemPromptChange(e.target.value)}
               rows={4}
               placeholder="Enter a system prompt..."
-              className="w-full px-3 py-2 bg-background border border-(--border) rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-(--link)/50"
+              className="w-full px-3 py-2 bg-background border border-(--border) rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-(--hl1)/50"
             />
           </div>
 
@@ -142,16 +142,16 @@ export function ChatSettingsModal({
                 onChange={(e) => onDeepResearchChange({ ...deepResearch, enabled: e.target.checked })}
                 className="w-4 h-4 rounded border-(--border) bg-background"
               />
-              <span className="text-sm font-medium text-[#c8c4bd]">Enable Deep Research</span>
+              <span className="text-sm font-medium text-(--dim)">Enable Deep Research</span>
             </label>
-            <p className="text-xs text-[#6a6560] mt-1 ml-6">
+            <p className="text-xs text-(--dim) mt-1 ml-6">
               Uses web search to gather context before responding
             </p>
           </div>
 
           <div className="border-t border-(--border) pt-4">
-            <label className="block text-sm font-medium text-[#c8c4bd] mb-2">Custom Models</label>
-            <p className="text-xs text-[#6a6560] mb-3">
+            <label className="block text-sm font-medium text-(--dim) mb-2">Custom Models</label>
+            <p className="text-xs text-(--dim) mb-3">
               Add custom OpenAI-compatible model IDs for the chat model selector (example: provider/model-name).
             </p>
 
@@ -164,12 +164,12 @@ export function ChatSettingsModal({
                 }}
                 onKeyDown={handleCustomModelKeyDown}
                 placeholder="provider/model"
-                className="w-full px-3 py-2 bg-background border border-(--border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--link)/50"
+                className="w-full px-3 py-2 bg-background border border-(--border) rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-(--hl1)/50"
               />
               <button
                 type="button"
                 onClick={handleAddCustomModel}
-                className="px-3 py-2 rounded-lg border border-(--border) bg-(--card-hover) hover:bg-white/5 text-sm whitespace-nowrap"
+                className="px-3 py-2 rounded-lg border border-(--border) bg-(--surface) hover:bg-(--border) text-sm whitespace-nowrap"
               >
                 Add
               </button>
@@ -178,18 +178,18 @@ export function ChatSettingsModal({
 
             <ul className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
               {normalizedCustomModels.length === 0 ? (
-                <li className="text-xs text-[#7a766f]">No custom models configured.</li>
+                <li className="text-xs text-(--dim)">No custom models configured.</li>
               ) : (
                 normalizedCustomModels.map((model) => (
                   <li
                     key={model}
-                    className="text-xs text-[#e8e4dd] flex items-center justify-between gap-2 px-2 py-1 border border-white/10 rounded-md bg-white/5"
+                    className="text-xs text-(--fg) flex items-center justify-between gap-2 px-2 py-1 border border-(--border) rounded-md bg-(--border)"
                   >
                     <span className="truncate">{model}</span>
                     <button
                       type="button"
                       onClick={() => onRemoveCustomChatModel(model)}
-                      className="text-[#f28b82] hover:text-red-300 text-xs"
+                      className="text-(--err) hover:text-red-300 text-xs"
                       title={`Remove ${model}`}
                     >
                       Remove

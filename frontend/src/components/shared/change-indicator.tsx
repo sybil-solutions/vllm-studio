@@ -10,11 +10,11 @@ interface ChangeIndicatorOptions {
 
 function ChangeIndicator({
   value,
-  positiveColor = "text-(--success)",
-  negativeColor = "text-(--error)",
+  positiveColor = "text-(--hl2)",
+  negativeColor = "text-(--err)",
 }: ChangeIndicatorOptions) {
   if (value === null || value === undefined)
-    return <span className="text-(--muted-foreground)">—</span>;
+    return <span className="text-(--dim)">—</span>;
   const isPositive = value > 0;
   const Icon = isPositive ? TrendingUp : TrendingDown;
   return (

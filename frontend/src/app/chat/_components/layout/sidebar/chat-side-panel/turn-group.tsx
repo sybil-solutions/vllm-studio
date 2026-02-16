@@ -20,10 +20,10 @@ export function TurnGroup({ group, hasActiveThinking }: { group: ActivityGroup; 
   return (
     <div>
       <button onClick={toggleCollapsed} className="flex items-center gap-2 py-2 pl-1 pr-2 w-full text-left group">
-        <div className="w-5 h-5 rounded-full bg-[#0b0c0f] border border-white/[0.12] flex items-center justify-center z-10">
-          <span className="text-[9px] text-[#9aa3b2] font-medium">{group.turnNumber || 1}</span>
+        <div className="w-5 h-5 rounded-full bg-(--bg) border border-(--border) flex items-center justify-center z-10">
+          <span className="text-[9px] text-(--fg) font-medium">{group.turnNumber || 1}</span>
         </div>
-        <span className="text-[10px] text-[#8b93a5] uppercase tracking-wider">
+        <span className="text-[10px] text-(--fg) uppercase tracking-wider">
           {group.isLatest ? "Current" : "Turn"}
         </span>
         {!group.isLatest && summary.count > 0 && (
@@ -36,12 +36,12 @@ export function TurnGroup({ group, hasActiveThinking }: { group: ActivityGroup; 
         )}
         {group.isLatest && hasActiveThinking && (
           <span className="relative flex h-1.5 w-1.5 ml-auto mr-2">
-            <span className="animate-ping absolute h-full w-full rounded-full bg-[#5cf2d6] opacity-60" />
-            <span className="relative h-1.5 w-1.5 rounded-full bg-[#5cf2d6]" />
+            <span className="animate-ping absolute h-full w-full rounded-full bg-(--hl2) opacity-60" />
+            <span className="relative h-1.5 w-1.5 rounded-full bg-(--hl2)" />
           </span>
         )}
         {!group.isLatest && (
-          <span className="ml-auto text-[9px] text-[#444] group-hover:text-[#666] transition-colors">
+          <span className="ml-auto text-[9px] text-(--dim) group-hover:text-(--dim) transition-colors">
             {isCollapsed ? "+" : "−"}
           </span>
         )}
@@ -61,4 +61,3 @@ export function TurnGroup({ group, hasActiveThinking }: { group: ActivityGroup; 
     </div>
   );
 }
-

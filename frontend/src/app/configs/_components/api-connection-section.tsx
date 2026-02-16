@@ -29,11 +29,11 @@ export function ApiConnectionSection({
 }) {
   return (
     <div className="mb-6 sm:mb-8">
-      <div className="text-xs text-[#9a9088] uppercase tracking-wider mb-3">API Connection</div>
-      <div className="bg-[#1e1e1e] rounded-lg p-4 sm:p-6">
+      <div className="text-xs text-(--dim) uppercase tracking-wider mb-3">API Connection</div>
+      <div className="bg-(--surface) rounded-lg p-4 sm:p-6">
         {apiSettingsLoading ? (
           <div className="flex items-center justify-center py-4">
-            <Activity className="h-5 w-5 text-[#9a9088] animate-pulse" />
+            <Activity className="h-5 w-5 text-(--dim) animate-pulse" />
           </div>
         ) : (
           <div className="space-y-4">
@@ -71,7 +71,7 @@ export function ApiConnectionSection({
                 <button
                   onClick={onTestConnection}
                   disabled={testing}
-                  className="px-3 py-1.5 bg-[#363432] rounded-lg text-xs text-[#f0ebe3] hover:bg-[#4a4846] disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-(--border) rounded-lg text-xs text-(--fg) hover:bg-(--surface) disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {testing ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -83,7 +83,7 @@ export function ApiConnectionSection({
                 <button
                   onClick={onSave}
                   disabled={saving}
-                  className="px-3 py-1.5 bg-(--accent-purple) rounded-lg text-xs text-[#f0ebe3] hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-(--hl1) rounded-lg text-xs text-(--fg) hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {saving ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -115,13 +115,13 @@ function ApiField({
 }) {
   return (
     <div>
-      <label className="block text-xs text-[#9a9088] mb-1.5">{label}</label>
+      <label className="block text-xs text-(--dim) mb-1.5">{label}</label>
       <input
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full px-3 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] placeholder-[#9a9088]/50 focus:outline-none focus:border-(--accent-purple)"
+        className="w-full px-3 py-2 bg-(--surface) border border-(--border) rounded-lg text-sm text-(--fg) placeholder-(--dim)/50 focus:outline-none focus:border-(--hl1)"
       />
     </div>
   );
@@ -142,19 +142,19 @@ function ApiKeyField({
 }) {
   return (
     <div>
-      <label className="block text-xs text-[#9a9088] mb-1.5">API Key</label>
+      <label className="block text-xs text-(--dim) mb-1.5">API Key</label>
       <div className="relative">
         <input
           type={showApiKey ? "text" : "password"}
           value={apiKey}
           onChange={(event) => onChange(event.target.value)}
           placeholder={hasApiKey ? "••••••••" : "Optional"}
-          className="w-full px-3 py-2 pr-10 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm text-[#f0ebe3] placeholder-[#9a9088]/50 focus:outline-none focus:border-(--accent-purple)"
+          className="w-full px-3 py-2 pr-10 bg-(--surface) border border-(--border) rounded-lg text-sm text-(--fg) placeholder-(--dim)/50 focus:outline-none focus:border-(--hl1)"
         />
         <button
           type="button"
           onClick={onToggle}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#9a9088] hover:text-[#f0ebe3]"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-(--dim) hover:text-(--fg)"
         >
           {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
@@ -174,13 +174,13 @@ function ApiStatus({
     <div
       className={`flex items-center gap-1.5 text-xs ${
         status === "connected"
-          ? "text-[#7d9a6a]"
+          ? "text-(--hl2)"
           : status === "error"
-            ? "text-[#c97a6b]"
-            : "text-[#9a9088]"
+            ? "text-(--err)"
+            : "text-(--dim)"
       }`}
     >
-      {status === "connected" && <div className="w-2 h-2 rounded-full bg-[#7d9a6a]" />}
+      {status === "connected" && <div className="w-2 h-2 rounded-full bg-(--hl2)" />}
       {status === "error" && <X className="h-3 w-3" />}
       {message}
     </div>

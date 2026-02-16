@@ -88,28 +88,28 @@ export function ArtifactViewerContent({
         </div>
         <div className="flex items-center gap-0.5">
           {isRunning ? (
-            <button onClick={onStop} className="p-1.5 rounded hover:bg-background text-(--error)" title="Stop">
+            <button onClick={onStop} className="p-1.5 rounded hover:bg-background text-(--err)" title="Stop">
               <Square className="h-3.5 w-3.5" />
             </button>
           ) : (
-            <button onClick={onRun} className="p-1.5 rounded hover:bg-background text-(--success)" title="Run">
+            <button onClick={onRun} className="p-1.5 rounded hover:bg-background text-(--hl2)" title="Run">
               <Play className="h-3.5 w-3.5" />
             </button>
           )}
           <button onClick={onRefresh} className="p-1.5 rounded hover:bg-background" title="Refresh">
-            <RefreshCw className="h-3.5 w-3.5 text-[#9a9590]" />
+            <RefreshCw className="h-3.5 w-3.5 text-(--dim)" />
           </button>
           <button onClick={onToggleCode} className="p-1.5 rounded hover:bg-background" title={showCode ? "Hide code" : "Show code"}>
-            {showCode ? <EyeOff className="h-3.5 w-3.5 text-[#9a9590]" /> : <Eye className="h-3.5 w-3.5 text-[#9a9590]" />}
+            {showCode ? <EyeOff className="h-3.5 w-3.5 text-(--dim)" /> : <Eye className="h-3.5 w-3.5 text-(--dim)" />}
           </button>
           <button onClick={onCopy} className="p-1.5 rounded hover:bg-background" title="Copy">
-            {copied ? <Check className="h-3.5 w-3.5 text-(--success)" /> : <Copy className="h-3.5 w-3.5 text-[#9a9590]" />}
+            {copied ? <Check className="h-3.5 w-3.5 text-(--hl2)" /> : <Copy className="h-3.5 w-3.5 text-(--dim)" />}
           </button>
           <button onClick={onDownload} className="p-1.5 rounded hover:bg-background" title="Download">
-            <Download className="h-3.5 w-3.5 text-[#9a9590]" />
+            <Download className="h-3.5 w-3.5 text-(--dim)" />
           </button>
           <button onClick={onOpenExternal} className="p-1.5 rounded hover:bg-background" title="Open in new tab">
-            <ExternalLink className="h-3.5 w-3.5 text-[#9a9590]" />
+            <ExternalLink className="h-3.5 w-3.5 text-(--dim)" />
           </button>
           {!inModal && onEnterFullscreen && (
             <button onClick={onEnterFullscreen} className="p-1.5 rounded hover:bg-background" title="Fullscreen">
@@ -127,35 +127,35 @@ export function ArtifactViewerContent({
       {inModal && (
         <div className="flex items-center justify-center gap-2 px-3 py-1.5 bg-background border-b border-(--border) shrink-0">
           <button onClick={zoomOut} className="p-1 rounded hover:bg-(--accent)" title="Zoom out">
-            <ZoomOut className="h-3.5 w-3.5 text-[#9a9590]" />
+            <ZoomOut className="h-3.5 w-3.5 text-(--dim)" />
           </button>
-          <span className="text-xs text-[#9a9590] tabular-nums w-12 text-center">{Math.round(scale * 100)}%</span>
+          <span className="text-xs text-(--dim) tabular-nums w-12 text-center">{Math.round(scale * 100)}%</span>
           <button onClick={zoomIn} className="p-1 rounded hover:bg-(--accent)" title="Zoom in">
-            <ZoomIn className="h-3.5 w-3.5 text-[#9a9590]" />
+            <ZoomIn className="h-3.5 w-3.5 text-(--dim)" />
           </button>
           <div className="w-px h-4 bg-(--border) mx-1" />
           <button onClick={resetView} className="p-1 rounded hover:bg-(--accent)" title="Reset view">
-            <RotateCcw className="h-3.5 w-3.5 text-[#9a9590]" />
+            <RotateCcw className="h-3.5 w-3.5 text-(--dim)" />
           </button>
           <button className={`p-1 rounded ${isDragging ? "bg-(--accent)" : "hover:bg-(--accent)"}`} title="Pan (drag)">
-            <Move className="h-3.5 w-3.5 text-[#9a9590]" />
+            <Move className="h-3.5 w-3.5 text-(--dim)" />
           </button>
         </div>
       )}
 
       {showCode && (
-        <pre className="p-3 text-xs bg-[#1e1d1c] overflow-auto border-b border-(--border) shrink-0 max-h-40">
-          <code className="text-[#e8e4dd]">{artifact.code}</code>
+        <pre className="p-3 text-xs bg-(--surface) overflow-auto border-b border-(--border) shrink-0 max-h-40">
+          <code className="text-(--fg)">{artifact.code}</code>
         </pre>
       )}
 
       {error && (
-        <div className="px-3 py-2 bg-(--error)/10 text-(--error) text-xs border-b border-(--border) shrink-0">{error}</div>
+        <div className="px-3 py-2 bg-(--err)/10 text-(--err) text-xs border-b border-(--border) shrink-0">{error}</div>
       )}
 
       <div
         ref={containerRef}
-        className={`relative overflow-hidden bg-[#0f0f10] ${inModal ? "flex-1 min-h-0" : "h-100"}`}
+        className={`relative overflow-hidden bg-(--bg) ${inModal ? "flex-1 min-h-0" : "h-100"}`}
         style={inModal && scale !== 1 ? { cursor: isDragging ? "grabbing" : "grab" } : undefined}
         onMouseDown={inModal ? onMouseDown : undefined}
         onWheel={inModal ? onWheel : undefined}

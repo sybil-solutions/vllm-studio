@@ -128,15 +128,18 @@ export function SidebarPane({
   return (
     <>
       <div
-        className="hidden md:flex shrink-0 flex-col h-full border-l border-white/[0.06] bg-[#050505] relative shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-        style={{ width: `${displayWidth}px` }}
+        className="hidden md:flex shrink-0 flex-col h-full border-l border-(--border) bg-(--bg) relative shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+        style={{
+          width: `${displayWidth}px`,
+          backgroundImage:
+            "linear-gradient(180deg, var(--bg), var(--surface))",
+        }}
       >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_70%_at_10%_-10%,rgba(90,255,214,0.08),transparent_55%),radial-gradient(140%_80%_at_90%_-20%,rgba(126,141,255,0.10),transparent_60%),linear-gradient(180deg,rgba(10,10,10,0.9),rgba(4,4,4,0.9))]" />
-        <div className="absolute inset-0 border-l border-white/[0.02]" />
+        <div className="absolute inset-0 border-l border-(--border)" />
 
         <div
           className={`absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 group flex items-center justify-center ${
-            isResizing ? "bg-violet-500/30" : "hover:bg-violet-500/20"
+            isResizing ? "bg-(--hl2)/30" : "hover:bg-(--hl2)/20"
           }`}
           onMouseDown={handleResizeStart}
         >
@@ -145,33 +148,27 @@ export function SidebarPane({
               isResizing ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
           >
-            <GripVertical className="h-4 w-4 text-violet-400/50" />
+            <GripVertical className="h-4 w-4 text-(--hl2)/70" />
           </div>
         </div>
 
-        <div className="relative flex items-center justify-between px-3 py-2 border-b border-white/[0.06]">
+        <div className="relative flex items-center justify-between px-2 py-1.5 border-b border-(--border)">
           <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-hide">
             <TabButton active={activeTab === "activity"} onClick={handleSetActivity} label="Activity" />
             <TabButton active={activeTab === "context"} onClick={handleSetContext} label="Context" />
             {hasArtifacts && <TabButton active={activeTab === "artifacts"} onClick={handleSetArtifacts} label="Preview" />}
-            <div className="w-px h-4 bg-white/[0.06] mx-1" />
+            <div className="w-px h-4 bg-(--border) mx-1" />
             <TabButton active={activeTab === "files"} onClick={handleSetFiles} label="Files" accent />
           </div>
 
           <div className="flex items-center gap-1 shrink-0 ml-2">
-            <button onClick={onToggle} className="p-1.5 rounded hover:bg-white/[0.06] text-[#555]" title="Close sidebar">
+            <button onClick={onToggle} className="p-1.5 rounded hover:bg-(--border) text-(--dim)" title="Close sidebar">
               <PanelRightClose className="h-4 w-4" />
             </button>
           </div>
         </div>
 
         <div className="relative flex-1 overflow-hidden">{activeContent}</div>
-
-        <div className="relative px-3 py-2 border-t border-white/[0.06] flex items-center justify-center">
-          <span className="text-[10px] text-[#555]">
-            {activeTab === "files" ? "Agent Files" : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-          </span>
-        </div>
       </div>
 
       {isResizing && (
@@ -185,4 +182,3 @@ export function SidebarPane({
     </>
   );
 }
-

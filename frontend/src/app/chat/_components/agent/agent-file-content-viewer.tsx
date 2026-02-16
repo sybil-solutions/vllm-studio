@@ -85,20 +85,43 @@ export function AgentFileContentViewer({
   }, [activeTab, allFileVersions, displayContent, ext, isImage, isMarkdown, path, previewable]);
 
   return (
-    <div className="flex flex-col h-full border-t border-white/6">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/6 bg-[#0c0c0c]">
-        <div className="flex items-center gap-2 min-w-0">
-          <FileCode className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-          <span className="text-[11px] text-[#aaa] truncate font-mono">{fileName}</span>
+    <div className="flex flex-col h-full border-t border-(--border)">
+      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-(--border) bg-(--bg)">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <FileCode className="h-3 w-3 text-violet-400 shrink-0" />
+          <span className="text-[11px] text-(--dim) truncate font-mono">{fileName}</span>
           {!loading && displayContent && (
-            <span className="text-[9px] text-[#555] shrink-0">{lineCount} lines</span>
+            <span className="text-[9px] text-(--dim) shrink-0">{lineCount} lines</span>
+          )}
+          {!loading && versionList.length > 0 && (
+            <span className="text-[9px] text-(--dim) shrink-0">v{activeVersion?.version ?? versionList[0].version}</span>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {previewable && (
+            <div className="mr-1 flex items-center gap-0.5 rounded bg-white/4 p-0.5">
+              <button
+                onClick={() => setActiveTab("preview")}
+                className={`px-1.5 py-0.5 rounded text-[10px] ${
+                  activeTab === "preview" ? "bg-(--border) text-foreground" : "text-(--dim) hover:text-(--dim)"
+                }`}
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => setActiveTab("code")}
+                className={`px-1.5 py-0.5 rounded text-[10px] ${
+                  activeTab === "code" ? "bg-(--border) text-foreground" : "text-(--dim) hover:text-(--dim)"
+                }`}
+              >
+                Code
+              </button>
+            </div>
+          )}
           {!loading && displayContent && !isImage && (
             <button
               onClick={handleCopy}
-              className="p-1 rounded hover:bg-white/5 text-[#555] hover:text-[#888] transition-colors"
+              className="p-1 rounded hover:bg-(--border) text-(--dim) hover:text-(--dim) transition-colors"
               title="Copy content"
             >
               {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -106,7 +129,7 @@ export function AgentFileContentViewer({
           )}
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-white/5 text-[#555] hover:text-[#888] transition-colors"
+            className="p-1 rounded hover:bg-(--border) text-(--dim) hover:text-(--dim) transition-colors"
             title="Close file"
           >
             <X className="h-3.5 w-3.5" />
@@ -114,8 +137,8 @@ export function AgentFileContentViewer({
         </div>
       </div>
 
-      {(versionList.length > 0 || previewable) && (
-        <div className="px-3 py-2 border-b border-white/6 flex items-center gap-2 overflow-x-auto">
+      {versionList.length > 1 && (
+        <div className="px-2.5 py-1 border-b border-(--border) flex items-center gap-2 overflow-x-auto">
           {versionList.map((version) => (
             <button
               key={`${path}-${version.version}`}
@@ -123,45 +146,25 @@ export function AgentFileContentViewer({
               className={`px-2 py-1 rounded-md text-[10px] font-mono transition-colors ${
                 version.version === activeVersion?.version
                   ? "bg-violet-500/15 text-violet-300 border border-violet-500/30"
-                  : "bg-white/3 text-[#666] hover:text-[#888] border border-white/5"
+                  : "bg-white/3 text-(--dim) hover:text-(--dim) border border-white/5"
               }`}
               title={new Date(version.timestamp).toLocaleTimeString()}
             >
               v{version.version}
             </button>
           ))}
-          {previewable && (
-            <div className="ml-auto flex items-center gap-1">
-              <button
-                onClick={() => setActiveTab("preview")}
-                className={`px-2 py-1 rounded text-[10px] ${
-                  activeTab === "preview" ? "bg-white/8 text-foreground" : "text-[#666] hover:text-[#888]"
-                }`}
-              >
-                Preview
-              </button>
-              <button
-                onClick={() => setActiveTab("code")}
-                className={`px-2 py-1 rounded text-[10px] ${
-                  activeTab === "code" ? "bg-white/8 text-foreground" : "text-[#666] hover:text-[#888]"
-                }`}
-              >
-                Code
-              </button>
-            </div>
-          )}
         </div>
       )}
 
-      <div className="flex-1 overflow-auto bg-[#0a0a0a]">
+      <div className="flex-1 overflow-auto bg-(--bg)">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
           </div>
         ) : content === null && versionList.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <File className="h-6 w-6 text-[#333] mb-2" />
-            <p className="text-xs text-[#555]">{hasSession ? "Failed to load file" : "Start a chat to view files"}</p>
+            <File className="h-6 w-6 text-(--dim) mb-2" />
+            <p className="text-xs text-(--dim)">{hasSession ? "Failed to load file" : "Start a chat to view files"}</p>
           </div>
         ) : isImage ? (
           <div className="flex items-center justify-center p-4 h-full">
@@ -173,9 +176,9 @@ export function AgentFileContentViewer({
               />
             ) : (
               <div className="flex flex-col items-center justify-center text-center px-4">
-                <ImageIcon className="h-8 w-8 text-[#2a2725] mb-3" />
-                <p className="text-xs text-[#555]">Binary image file</p>
-                <p className="text-[10px] text-[#444]">Preview not available</p>
+                <ImageIcon className="h-8 w-8 text-(--border) mb-3" />
+                <p className="text-xs text-(--dim)">Binary image file</p>
+                <p className="text-[10px] text-(--dim)">Preview not available</p>
               </div>
             )}
           </div>
@@ -204,7 +207,7 @@ export function AgentFileContentViewer({
             </div>
           </div>
         ) : previewable && activeTab === "preview" ? (
-          <div className="w-full h-full bg-[#0a0a0a]">
+          <div className="w-full h-full bg-(--bg)">
             <iframe
               srcDoc={previewDoc}
               className="w-full h-full border-0"
@@ -213,7 +216,7 @@ export function AgentFileContentViewer({
             />
           </div>
         ) : (
-          <CodePreview code={displayContent} language={language} className="text-[11px] text-[#e6e2dd]" />
+          <CodePreview code={displayContent} language={language} className="text-[11px] text-(--fg)" />
         )}
       </div>
     </div>

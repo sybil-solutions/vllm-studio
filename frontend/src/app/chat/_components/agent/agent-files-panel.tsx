@@ -37,9 +37,9 @@ function AgentFilesTree({
   if (files.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-        <Folder className="h-8 w-8 text-[#2a2725] mb-3" />
-        <p className="text-xs text-[#555] mb-1">No files yet</p>
-        <p className="text-[10px] text-[#444] max-w-45 leading-relaxed">
+        <Folder className="h-8 w-8 text-(--border) mb-3" />
+        <p className="text-xs text-(--dim) mb-1">No files yet</p>
+        <p className="text-[10px] text-(--dim) max-w-45 leading-relaxed">
           Files created by the agent during execution will appear here.
         </p>
       </div>
@@ -97,25 +97,25 @@ export function AgentFilesPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-white/6 flex items-center gap-2 shrink-0">
-        <Terminal className="h-3.5 w-3.5 text-violet-400" />
-        <span className="text-[10px] text-[#666] font-mono truncate">~/agent-workspace</span>
-        <span className="ml-auto text-[10px] text-[#555]">
+      <div className="px-2.5 py-1.5 border-b border-(--border) flex items-center gap-1.5 shrink-0">
+        <Terminal className="h-3 w-3 text-violet-400" />
+        <span className="text-[10px] text-(--dim) font-mono truncate">~/agent-workspace</span>
+        <span className="ml-auto text-[10px] text-(--dim)">
           {hasFiles ? `${countAgentFiles(files)} files` : "Empty"}
           {plan ? ` · ${doneSteps}/${plan.steps.length} steps` : ""}
         </span>
       </div>
 
-      <div className="px-2 py-1.5 border-b border-white/6 flex items-center gap-1 shrink-0 overflow-x-auto">
+      <div className="px-2 py-1 border-b border-(--border) flex items-center gap-1 shrink-0 overflow-x-auto">
         <button
           onClick={() => setPane("open")}
           disabled={!hasSelectedFile}
-          className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
+          className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
             effectivePane === "open"
-              ? "bg-white/[0.08] text-foreground"
+              ? "bg-(--border) text-foreground"
               : hasSelectedFile
-                ? "text-[#666] hover:text-[#888] hover:bg-white/[0.03]"
-                : "text-[#444] cursor-not-allowed"
+                ? "text-(--dim) hover:text-(--dim) hover:bg-(--border)"
+                : "text-(--dim) cursor-not-allowed"
           }`}
           title={hasSelectedFile ? selectedFilePath ?? "Open file" : "Select a file first"}
         >
@@ -126,7 +126,7 @@ export function AgentFilesPanel({
         </button>
         <button
           onClick={() => setPane("browse")}
-          className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
+          className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
             effectivePane === "browse"
               ? "bg-violet-500/15 text-violet-300"
               : "text-violet-400/50 hover:text-violet-300/70 hover:bg-violet-500/5"
@@ -152,7 +152,7 @@ export function AgentFilesPanel({
           />
         ) : (
           <div className="flex items-center justify-center h-full text-center px-4">
-            <p className="text-xs text-[#555]">Select a file to preview</p>
+            <p className="text-xs text-(--dim)">Select a file to preview</p>
           </div>
         )}
       </div>

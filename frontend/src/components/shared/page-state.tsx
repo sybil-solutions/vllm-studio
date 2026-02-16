@@ -16,7 +16,7 @@ function PageState({ loading, data, hasData, error, onLoad }: PageStateOptions) 
   if (isInitialLoading) {
     return (
       <div className="flex items-center justify-center h-full min-h-50 bg-background">
-        <Activity className="h-6 w-6 text-(--muted-foreground) animate-pulse" />
+        <Activity className="h-6 w-6 text-(--dim) animate-pulse" />
       </div>
     );
   }
@@ -25,10 +25,10 @@ function PageState({ loading, data, hasData, error, onLoad }: PageStateOptions) 
     return (
       <div className="flex items-center justify-center h-full min-h-50 bg-background">
         <div className="text-center mb-0">
-          <p className="text-(--error) mb-4">{error}</p>
+          <p className="text-(--err) mb-4">{error}</p>
           <button
             onClick={onLoad}
-            className="px-4 py-2 bg-(--card) border border-(--border) rounded-lg text-foreground hover:bg-(--card-hover) transition-colors"
+            className="px-4 py-2 bg-(--surface) border border-(--border) rounded-lg text-foreground hover:bg-(--surface) transition-colors"
             title="Retry"
           >
             Retry

@@ -41,13 +41,13 @@ export function VramCalculatorPanel({
   return (
     <div style={{ padding: "1.5rem" }} className="max-w-2xl">
       <h2 className="text-lg font-semibold mb-4">VRAM Calculator</h2>
-      <div className="space-y-4 bg-[#1b1b1b] border border-[#363432] rounded-lg p-6">
+      <div className="space-y-4 bg-(--surface) border border-(--border) rounded-lg p-6">
         <div>
-          <label className="block text-sm text-[#9a9088] mb-2">Model</label>
+          <label className="block text-sm text-(--dim) mb-2">Model</label>
           <select
             value={vramModel}
             onChange={(e) => setVramModel(e.target.value)}
-            className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+            className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm focus:outline-none focus:border-(--accent)"
           >
             <option value="">Select a model...</option>
             {availableModels.map((model) => {
@@ -62,29 +62,29 @@ export function VramCalculatorPanel({
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm text-[#9a9088] mb-2">Context Length</label>
+            <label className="block text-sm text-(--dim) mb-2">Context Length</label>
             <input
               type="number"
               value={contextLength}
               onChange={(e) => setContextLength(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+              className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm focus:outline-none focus:border-(--accent)"
             />
           </div>
           <div>
-            <label className="block text-sm text-[#9a9088] mb-2">TP Size</label>
+            <label className="block text-sm text-(--dim) mb-2">TP Size</label>
             <input
               type="number"
               value={tpSize}
               onChange={(e) => setTpSize(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+              className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm focus:outline-none focus:border-(--accent)"
             />
           </div>
           <div>
-            <label className="block text-sm text-[#9a9088] mb-2">KV Dtype</label>
+            <label className="block text-sm text-(--dim) mb-2">KV Dtype</label>
             <select
               value={kvDtype}
               onChange={(e) => setKvDtype(e.target.value as KvDtype)}
-              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+              className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm focus:outline-none focus:border-(--accent)"
             >
               <option value="auto">Auto</option>
               <option value="fp16">FP16</option>
@@ -95,41 +95,41 @@ export function VramCalculatorPanel({
         <button
           onClick={calculateVRAM}
           disabled={calculating || !vramModel.trim()}
-          className="w-full py-2 bg-[#d97706] hover:bg-[#b45309] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-2 bg-(--accent) hover:bg-(--accent) text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {calculating ? "Calculating..." : "Calculate VRAM"}
         </button>
 
         {vramResult && (
-          <div className="mt-6 space-y-3 pt-6 border-t border-[#363432]">
+          <div className="mt-6 space-y-3 pt-6 border-t border-(--border)">
             <div className="flex justify-between text-sm">
-              <span className="text-[#9a9088]">Model Size</span>
+              <span className="text-(--dim)">Model Size</span>
               <span className="font-medium">
                 {vramResult.breakdown.model_weights_gb.toFixed(2)} GB
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-[#9a9088]">KV Cache</span>
+              <span className="text-(--dim)">KV Cache</span>
               <span className="font-medium">{vramResult.breakdown.kv_cache_gb.toFixed(2)} GB</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-[#9a9088]">Activations</span>
+              <span className="text-(--dim)">Activations</span>
               <span className="font-medium">
                 {vramResult.breakdown.activations_gb.toFixed(2)} GB
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-[#9a9088]">Per GPU</span>
+              <span className="text-(--dim)">Per GPU</span>
               <span className="font-medium">{vramResult.breakdown.per_gpu_gb.toFixed(2)} GB</span>
             </div>
-            <div className="flex justify-between text-sm font-semibold pt-3 border-t border-[#363432]">
+            <div className="flex justify-between text-sm font-semibold pt-3 border-t border-(--border)">
               <span>Total VRAM</span>
-              <span className={vramResult.fits ? "text-[#4ade80]" : "text-[#dc2626]"}>
+              <span className={vramResult.fits ? "text-(--hl2)" : "text-(--err)"}>
                 {vramResult.breakdown.total_gb.toFixed(2)} GB
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-[#9a9088]">Utilization</span>
+              <span className="text-(--dim)">Utilization</span>
               <span className="font-medium">{vramResult.utilization_percent.toFixed(1)}%</span>
             </div>
           </div>

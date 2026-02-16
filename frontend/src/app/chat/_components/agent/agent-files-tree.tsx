@@ -66,7 +66,7 @@ export const AgentFileTreeNode = memo(function AgentFileTreeNode({
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >
         {isDir && (
-          <span className="w-3 shrink-0 text-[#555]">
+          <span className="w-3 shrink-0 text-(--dim)">
             {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           </span>
         )}
@@ -76,9 +76,9 @@ export const AgentFileTreeNode = memo(function AgentFileTreeNode({
             isSelected ? "text-violet-400" : isDir ? "text-amber-500/70" : "text-blue-400/60"
           }`}
         />
-        <span className={`text-[11px] truncate ${isSelected ? "text-violet-300" : "text-[#aaa]"}`}>{entry.name}</span>
+        <span className={`text-[11px] truncate ${isSelected ? "text-violet-300" : "text-(--dim)"}`}>{entry.name}</span>
         {entry.size != null && !isDir && (
-          <span className="text-[9px] text-[#444] ml-auto pr-2 shrink-0">
+          <span className="text-[9px] text-(--dim) ml-auto pr-2 shrink-0">
             {entry.size < 1024
               ? `${entry.size}B`
               : entry.size < 1048576

@@ -93,7 +93,7 @@ function ToastItem({
 
   return (
     <div
-      className={`relative rounded-xl border ${meta.ring} bg-[#0b0b0c]/92 backdrop-blur px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.55)]`}
+      className={`relative rounded-xl border ${meta.ring} bg-(--bg)/92 backdrop-blur px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.55)]`}
     >
       <div className="flex items-start gap-2">
         <div className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center ${meta.tint}`}>
@@ -102,13 +102,13 @@ function ToastItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="text-xs font-medium text-[#e8e4dd] truncate">{title}</div>
-            {time && <div className="text-[10px] text-[#6a6560] font-mono shrink-0">{time}</div>}
+            <div className="text-xs font-medium text-(--fg) truncate">{title}</div>
+            {time && <div className="text-[10px] text-(--dim) font-mono shrink-0">{time}</div>}
           </div>
-          {message && <div className="mt-0.5 text-xs text-[#b6b1aa] leading-snug">{message}</div>}
+          {message && <div className="mt-0.5 text-xs text-(--dim) leading-snug">{message}</div>}
 
           {detail && expanded && (
-            <pre className="mt-2 max-h-44 overflow-auto rounded-lg border border-white/10 bg-[#050506] p-2 text-[10px] leading-relaxed text-[#a8a39b] font-mono whitespace-pre-wrap">
+            <pre className="mt-2 max-h-44 overflow-auto rounded-lg border border-(--border) bg-(--bg) p-2 text-[10px] leading-relaxed text-(--dim) font-mono whitespace-pre-wrap">
               {detail}
             </pre>
           )}
@@ -116,7 +116,7 @@ function ToastItem({
           {detail && (
             <button
               onClick={handleToggle}
-              className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#9a9590] hover:text-[#e8e4dd] transition-colors"
+              className="mt-2 inline-flex items-center gap-1 text-[11px] text-(--dim) hover:text-(--fg) transition-colors"
             >
               {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               {expanded ? "Hide details" : "Show details"}
@@ -126,7 +126,7 @@ function ToastItem({
 
         <button
           onClick={handleClose}
-          className="p-1.5 rounded-lg hover:bg-white/8 text-[#9a9590] hover:text-[#e8e4dd] transition-colors"
+          className="p-1.5 rounded-lg hover:bg-(--border) text-(--dim) hover:text-(--fg) transition-colors"
           title="Close"
           aria-label="Close"
         >

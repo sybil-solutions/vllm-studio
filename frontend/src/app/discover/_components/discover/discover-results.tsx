@@ -41,10 +41,10 @@ export function DiscoverResults({
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-(--error) mb-4">{error}</p>
+        <p className="text-(--err) mb-4">{error}</p>
         <button
           onClick={onRefresh}
-          className="px-4 py-2 bg-(--card) border border-(--border) rounded-lg text-(--foreground) hover:bg-(--card-hover) transition-colors"
+          className="px-4 py-2 bg-(--surface) border border-(--border) rounded-lg text-(--fg) hover:bg-(--surface) transition-colors"
         >
           Retry
         </button>
@@ -54,7 +54,7 @@ export function DiscoverResults({
 
   if (loading && models.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12 text-(--muted-foreground)">
+      <div className="flex items-center justify-center py-12 text-(--dim)">
         <RefreshCw className="h-5 w-5 animate-spin" />
       </div>
     );
@@ -62,7 +62,7 @@ export function DiscoverResults({
 
   if (filteredModels.length === 0) {
     return (
-      <div className="text-center py-12 text-(--muted-foreground)">
+      <div className="text-center py-12 text-(--dim)">
         <p>No models found</p>
         <p className="text-sm mt-1">Try adjusting your search or filters</p>
       </div>
@@ -71,35 +71,35 @@ export function DiscoverResults({
 
   return (
     <>
-      <div className="text-xs text-(--muted-foreground) mb-3">
+      <div className="text-xs text-(--dim) mb-3">
         {filteredModels.length} {filteredModels.length === 1 ? "model" : "models"}
         {providerFilter && ` from ${providerFilter}`}
       </div>
 
       <div className="border border-(--border) rounded-lg overflow-hidden">
         <table className="w-full">
-          <thead className="bg-(--card) border-b border-(--border)">
+          <thead className="bg-(--surface) border-b border-(--border)">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
                 Model
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
                 Provider
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
                 Task
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
                 Quantization
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
+              <th className="px-4 py-3 text-right text-xs font-medium text-(--dim) uppercase tracking-wider">
                 Stats
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-(--muted-foreground) uppercase tracking-wider w-8"></th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-(--muted-foreground) uppercase tracking-wider">
+              <th className="px-4 py-3 text-right text-xs font-medium text-(--dim) uppercase tracking-wider w-8"></th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-(--dim) uppercase tracking-wider">
                 Action
               </th>
             </tr>
@@ -127,7 +127,7 @@ export function DiscoverResults({
           <button
             onClick={onLoadMore}
             disabled={loading}
-            className="px-4 py-2 bg-(--card) border border-(--border) rounded-lg text-sm text-(--foreground) hover:bg-(--card-hover) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-(--surface) border border-(--border) rounded-lg text-sm text-(--fg) hover:bg-(--surface) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <span className="flex items-center gap-2">

@@ -152,8 +152,8 @@ export function ConfigCards({ data }: { data: ConfigData }) {
 function ConfigSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs text-[#9a9088] uppercase tracking-wider mb-3">{title}</div>
-      <div className="bg-[#1e1e1e] rounded-lg p-3 sm:p-4 space-y-3">{children}</div>
+      <div className="text-xs text-(--dim) uppercase tracking-wider mb-3">{title}</div>
+      <div className="bg-(--surface) rounded-lg p-3 sm:p-4 space-y-3">{children}</div>
     </div>
   );
 }

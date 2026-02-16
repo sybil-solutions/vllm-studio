@@ -21,7 +21,7 @@ interface PerformanceStats {
 function MiniBar({
   value,
   max,
-  colorClass = "bg-[#f0ebe3]/30",
+  colorClass = "bg-(--fg)/30",
 }: {
   value: number;
   max: number;
@@ -29,7 +29,7 @@ function MiniBar({
 }) {
   const percentage = Math.min(100, (value / max) * 100);
   return (
-    <div className="h-1 w-full bg-[#363432] rounded-full overflow-hidden">
+    <div className="h-1 w-full bg-(--border) rounded-full overflow-hidden">
       <div
         className={`h-full rounded-full ${colorClass}`}
         style={{ width: `${percentage}%` }}
@@ -43,9 +43,9 @@ export function PerformanceDetails(stats: PerformanceStats) {
   const maxTTFT = Math.max(stats.ttft.avg_ms, stats.ttft.p95_ms, stats.ttft.p99_ms);
 
   return (
-    <div className="bg-[#1e1e1e] rounded-lg overflow-hidden">
+    <div className="bg-(--surface) rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 sm:px-6 py-3 border-b border-[#363432] text-[#9a9088]">
+      <div className="flex items-center gap-2 px-4 sm:px-6 py-3 border-b border-(--border) text-(--dim)">
         <Timer className="h-4 w-4" />
         <span className="text-xs uppercase tracking-wider">Performance Metrics</span>
       </div>
@@ -54,20 +54,20 @@ export function PerformanceDetails(stats: PerformanceStats) {
         {/* Latency Section */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-[#9a9088]">Latency Distribution</span>
-            <span className="text-[10px] text-[#9a9088]">Lower is better</span>
+            <span className="text-xs text-(--dim)">Latency Distribution</span>
+            <span className="text-[10px] text-(--dim)">Lower is better</span>
           </div>
 
           <div className="space-y-3">
             {[
-              { label: "Average", value: stats.latency.avg_ms, color: "bg-[#6b9ac9]" },
-              { label: "P50", value: stats.latency.p50_ms, color: "bg-[#7d9a6a]" },
-              { label: "P95", value: stats.latency.p95_ms, color: "bg-[#c9a66b]" },
-              { label: "P99", value: stats.latency.p99_ms, color: "bg-[#c97a6b]" },
+              { label: "Average", value: stats.latency.avg_ms, color: "bg-(--hl1)" },
+              { label: "P50", value: stats.latency.p50_ms, color: "bg-(--hl2)" },
+              { label: "P95", value: stats.latency.p95_ms, color: "bg-(--hl3)" },
+              { label: "P99", value: stats.latency.p99_ms, color: "bg-(--err)" },
             ].map((item) => (
               <div key={item.label} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-[#9a9088]">{item.label}</span>
+                  <span className="text-(--dim)">{item.label}</span>
                   <span className="tabular-nums">{formatDuration(item.value)}</span>
                 </div>
                 <MiniBar value={item.value} max={maxLatency} colorClass={item.color} />
@@ -76,7 +76,7 @@ export function PerformanceDetails(stats: PerformanceStats) {
           </div>
 
           {stats.latency.min_ms !== undefined && stats.latency.max_ms !== undefined && (
-            <div className="mt-3 pt-3 border-t border-[#363432] flex items-center justify-between text-xs text-[#9a9088]">
+            <div className="mt-3 pt-3 border-t border-(--border) flex items-center justify-between text-xs text-(--dim)">
               <div className="flex items-center gap-1">
                 <TrendingDown className="h-3 w-3" />
                 <span>Min: {formatDuration(stats.latency.min_ms)}</span>
@@ -90,13 +90,13 @@ export function PerformanceDetails(stats: PerformanceStats) {
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-[#363432]" />
+        <div className="h-px bg-(--border)" />
 
         {/* TTFT Section */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-[#9a9088]">Time to First Token</span>
-            <span className="text-[10px] text-[#9a9088]">Lower is better</span>
+            <span className="text-xs text-(--dim)">Time to First Token</span>
+            <span className="text-[10px] text-(--dim)">Lower is better</span>
           </div>
 
           <div className="space-y-3">
@@ -108,7 +108,7 @@ export function PerformanceDetails(stats: PerformanceStats) {
             ].map((item) => (
               <div key={item.label} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-[#9a9088]">{item.label}</span>
+                  <span className="text-(--dim)">{item.label}</span>
                   <span className="tabular-nums">{formatDuration(item.value)}</span>
                 </div>
                 <MiniBar value={item.value} max={maxTTFT} />

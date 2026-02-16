@@ -52,17 +52,17 @@ export const RecipeRow = memo(function RecipeRow({
 
   const statusClassName =
     status === "running"
-      ? "bg-[#15803d]/20 text-[#4ade80] border border-[#15803d]/30"
+      ? "bg-(--hl2)/20 text-(--hl2) border border-(--hl2)/30"
       : status === "starting"
-        ? "bg-[#d97706]/20 text-[#fbbf24] border border-[#d97706]/30"
-        : "bg-[#363432]/20 text-[#9a9088] border border-[#363432]";
+        ? "bg-(--accent)/20 text-(--accent) border border-(--accent)/30"
+        : "bg-(--border)/20 text-(--dim) border border-(--border)";
 
   return (
-    <tr className="hover:bg-[#1b1b1b]/50 transition-colors">
+    <tr className="hover:bg-(--surface)/50 transition-colors">
       <td className="px-4 py-3">
         <button
           onClick={handleTogglePin}
-          className="text-[#9a9088] hover:text-[#d97706] transition-colors"
+          className="text-(--dim) hover:text-(--accent) transition-colors"
           title={isPinned ? "Unpin" : "Pin"}
         >
           {isPinned ? <Pin className="w-4 h-4 fill-current" /> : <PinOff className="w-4 h-4" />}
@@ -70,17 +70,17 @@ export const RecipeRow = memo(function RecipeRow({
       </td>
       <td className="px-4 py-3 font-medium text-sm">{recipe.name}</td>
       <td
-        className="px-4 py-3 text-sm text-[#9a9088] font-mono truncate max-w-xs"
+        className="px-4 py-3 text-sm text-(--dim) font-mono truncate max-w-xs"
         title={recipe.model_path}
       >
         {recipe.served_model_name || recipe.model_path.split("/").pop()}
       </td>
       <td className="px-4 py-3 text-sm">
-        <span className="px-2 py-1 bg-[#1b1b1b] border border-[#363432] rounded text-xs">
+        <span className="px-2 py-1 bg-(--surface) border border-(--border) rounded text-xs">
           {formatBackendLabel(recipe.backend)}
         </span>
       </td>
-      <td className="px-4 py-3 text-sm text-[#9a9088]">
+      <td className="px-4 py-3 text-sm text-(--dim)">
         {tp}/{pp}
       </td>
       <td className="px-4 py-3">
@@ -95,7 +95,7 @@ export const RecipeRow = memo(function RecipeRow({
           {status === "running" ? (
             <button
               onClick={onStop}
-              className="p-1.5 hover:bg-[#dc2626]/20 text-[#dc2626] rounded transition-colors"
+              className="p-1.5 hover:bg-(--err)/20 text-(--err) rounded transition-colors"
               title="Stop"
             >
               <Square className="w-4 h-4" />
@@ -104,7 +104,7 @@ export const RecipeRow = memo(function RecipeRow({
             <button
               onClick={handleLaunch}
               disabled={launchDisabled}
-              className="p-1.5 hover:bg-[#15803d]/20 text-[#4ade80] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1.5 hover:bg-(--hl2)/20 text-(--hl2) rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Launch"
             >
               <Play className="w-4 h-4" />
@@ -113,22 +113,22 @@ export const RecipeRow = memo(function RecipeRow({
           <div className="relative">
             <button
               onClick={handleToggleMenu}
-              className="p-1.5 hover:bg-[#1f1f1f] rounded transition-colors"
+              className="p-1.5 hover:bg-(--surface) rounded transition-colors"
               title="Actions"
             >
               <MoreVertical className="w-4 h-4" />
             </button>
             {isMenuOpen && (
-              <div className="absolute right-0 mt-1 w-32 bg-[#1b1b1b] border border-[#363432] rounded-lg shadow-lg z-50">
+              <div className="absolute right-0 mt-1 w-32 bg-(--surface) border border-(--border) rounded-lg shadow-lg z-50">
                 <button
                   onClick={handleEdit}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-[#363432] transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-(--border) transition-colors"
                 >
                   Edit
                 </button>
                 <button
                   onClick={handleRequestDelete}
-                  className="w-full px-3 py-2 text-left text-sm text-[#dc2626] hover:bg-[#363432] transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm text-(--err) hover:bg-(--border) transition-colors"
                 >
                   Delete
                 </button>

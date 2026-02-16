@@ -20,8 +20,8 @@ export function DiscoverSortChips({
             onClick={() => onSortChange(option.value)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors ${
               sort === option.value
-                ? "bg-(--accent-purple) text-white"
-                : "bg-(--card) border border-(--border) text-(--muted-foreground) hover:text-(--foreground) hover:bg-(--card-hover)"
+                ? "bg-(--hl1) text-white"
+                : "bg-(--surface) border border-(--border) text-(--dim) hover:text-(--fg) hover:bg-(--surface)"
             }`}
           >
             <Icon className="h-3 w-3" />

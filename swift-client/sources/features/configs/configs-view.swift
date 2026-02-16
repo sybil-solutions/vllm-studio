@@ -4,6 +4,7 @@ import SwiftUI
 struct ConfigsView: View {
   @EnvironmentObject private var container: AppContainer
   @EnvironmentObject private var realtime: RealtimeStore
+  @EnvironmentObject private var themeManager: ThemeManager
   @StateObject private var model = ConfigsViewModel()
   @State private var showAdd = false
 
@@ -16,6 +17,7 @@ struct ConfigsView: View {
             VStack(alignment: .leading, spacing: 16) {
               connectionCard
               apiCard
+              themeCard
               mcpCard
             }
             .frame(width: 420, alignment: .topLeading)
@@ -32,6 +34,7 @@ struct ConfigsView: View {
           VStack(alignment: .leading, spacing: 16) {
             connectionCard
             apiCard
+            themeCard
             loadState
             servicesCard
             runtimeCard
@@ -52,6 +55,11 @@ struct ConfigsView: View {
     }
     .onAppear { model.connect(api: container.api) }
     .refreshable { await model.load() }
+  }
+
+  @ViewBuilder
+  private var themeCard: some View {
+    ThemeSelector()
   }
 
   @ViewBuilder

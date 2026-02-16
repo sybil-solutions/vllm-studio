@@ -223,19 +223,19 @@ export const MobileResultsDrawer = memo(function MobileResultsDrawer({
           }`}
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0)", height: `${drawerHeight}px` }}
         >
-          <div className="mx-2 mb-2 h-full rounded-2xl border border-white/10 bg-[#070708]/95 backdrop-blur-xl shadow-[0_-12px_40px_rgba(0,0,0,0.65)] overflow-hidden flex flex-col min-h-0">
+          <div className="mx-2 mb-2 h-full rounded-2xl border border-(--border) bg-(--bg)/95 backdrop-blur-xl shadow-[0_-12px_40px_rgba(0,0,0,0.65)] overflow-hidden flex flex-col min-h-0">
             {/* Grab handle + close */}
             <div
-              className="px-3 pt-2 pb-2 border-b border-white/10 flex items-center gap-2 cursor-row-resize select-none touch-none"
+              className="px-3 pt-2 pb-2 border-b border-(--border) flex items-center gap-2 cursor-row-resize select-none touch-none"
               onPointerDown={handleDragStart}
             >
-              <div className="mx-auto h-1 w-10 rounded-full bg-white/10" />
-              <GripVertical className="h-3 w-3 text-white/40 shrink-0" />
+              <div className="mx-auto h-1 w-10 rounded-full bg-(--border)" />
+              <GripVertical className="h-3 w-3 text-(--dim) shrink-0" />
               <button
                 onClick={onClose}
                 onPointerDown={(event) => event.stopPropagation()}
                 onMouseDown={(event) => event.stopPropagation()}
-                className="ml-auto -mr-1 p-2 rounded-lg hover:bg-white/5 text-[#777]"
+                className="ml-auto -mr-1 p-2 rounded-lg hover:bg-(--border) text-(--dim)"
                 title="Close"
               >
                   <PanelRightClose className="h-4 w-4" />
@@ -243,7 +243,7 @@ export const MobileResultsDrawer = memo(function MobileResultsDrawer({
             </div>
 
             {/* Tabs */}
-            <div className="px-2 py-1.5 border-b border-white/10 flex items-center gap-1 overflow-x-auto">
+            <div className="px-2 py-1.5 border-b border-(--border) flex items-center gap-1 overflow-x-auto">
               {tabs.map((t) => {
                 const enabled = t.enabled;
                 const isActive = activeTab === t.id && enabled;
@@ -254,10 +254,10 @@ export const MobileResultsDrawer = memo(function MobileResultsDrawer({
                     disabled={!enabled}
                     className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
                       isActive
-                        ? "bg-violet-500/15 text-violet-200"
+                        ? "bg-(--hl2)/15 text-(--hl2)"
                         : enabled
-                          ? "text-[#888] hover:text-[#ddd] hover:bg-white/5"
-                          : "text-[#444] cursor-not-allowed"
+                          ? "text-(--fg) hover:text-(--fg) hover:bg-(--surface)"
+                          : "text-(--dim) cursor-not-allowed"
                     }`}
                   >
                     {TAB_LABELS[t.id]}

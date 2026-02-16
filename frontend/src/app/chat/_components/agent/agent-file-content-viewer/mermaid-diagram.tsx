@@ -49,7 +49,7 @@ export function MermaidDiagram({ code }: { code: string }) {
           <span>Diagram Error</span>
         </div>
         <div className="text-xs text-red-300 mb-2 break-words">{state.error}</div>
-        <pre className="text-xs text-[#d8d4cd] overflow-x-auto">{code}</pre>
+        <pre className="text-xs text-(--dim) overflow-x-auto">{code}</pre>
       </div>
     );
   }

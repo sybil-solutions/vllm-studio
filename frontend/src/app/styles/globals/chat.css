@@ -4,7 +4,7 @@
   word-wrap: break-word;
   overflow-wrap: break-word;
   hyphens: auto;
-  color: #e8e4dd !important;
+  color: var(--fg) !important;
 }
 
 .message-content p,
@@ -24,7 +24,7 @@
 .message-content td,
 .message-content th,
 .message-content div:not([class]) {
-  color: #e8e4dd !important;
+  color: var(--fg) !important;
 }
 
 .message-content pre {
@@ -39,7 +39,7 @@
 .chat-markdown {
   font-size: 16px;
   line-height: 1.6;
-  color: #e8e4dd;
+  color: var(--fg);
 }
 
 .chat-scroll-pad {
@@ -99,7 +99,7 @@
 .chat-markdown h2,
 .chat-markdown h3 {
   font-weight: 600;
-  color: #e8e4dd;
+  color: var(--fg);
 }
 
 .chat-markdown h1 {
@@ -121,7 +121,7 @@
   border-left: 2px solid var(--border);
   padding-left: 1rem;
   margin: 0.75rem 0;
-  color: #c8c4bd;
+  color: var(--dim);
   font-style: italic;
 }
 
@@ -131,7 +131,7 @@
 }
 
 .chat-markdown a {
-  color: var(--success);
+  color: var(--hl2);
   text-decoration: none;
 }
 
@@ -149,7 +149,7 @@
 }
 
 .chat-markdown thead {
-  background: var(--card);
+  background: var(--surface);
 }
 
 .chat-markdown tbody {
@@ -162,12 +162,12 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0.625rem 1rem;
-  color: #d8d4cd;
+  color: var(--dim);
 }
 
 .chat-markdown td {
   padding: 0.625rem 1rem;
-  color: #e8e4dd;
+  color: var(--fg);
   vertical-align: top;
 }
 
@@ -181,7 +181,7 @@
 .chat-markdown code {
   padding: 0.25rem 0.5rem;
   border-radius: 0.375rem;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
   font-family:
     var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -189,4 +189,3 @@
   font-size: 0.875rem;
   word-break: break-word;
 }
-

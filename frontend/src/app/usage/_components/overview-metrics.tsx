@@ -22,9 +22,9 @@ function MetricCard({
   trend?: React.ReactNode;
 }) {
   return (
-    <div className="bg-[#1e1e1e] rounded-lg p-4">
+    <div className="bg-(--surface) rounded-lg p-4">
       <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2 text-[#9a9088]">
+        <div className="flex items-center gap-2 text-(--dim)">
           <Icon className="h-4 w-4" />
           <span className="text-xs">{label}</span>
         </div>
@@ -35,7 +35,7 @@ function MetricCard({
           {value}
         </div>
         {(subvalue || subvalueNode) && (
-          <div className="mt-1.5 text-xs text-[#9a9088]">
+          <div className="mt-1.5 text-xs text-(--dim)">
             {subvalueNode || subvalue}
           </div>
         )}
@@ -60,7 +60,7 @@ export function OverviewMetrics(stats: UsageStats) {
           value={formatNumber(stats.totals.total_requests)}
           subvalueNode={
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#7d9a6a]" />
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-(--hl2)" />
               {formatNumber(stats.recent_activity.last_24h_requests)} last 24h
             </span>
           }

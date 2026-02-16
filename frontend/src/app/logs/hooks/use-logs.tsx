@@ -164,19 +164,19 @@ export function useLogs() {
     });
 
   const getLogLineClass = (line: string) => {
-    if (line.includes("ERROR") || line.includes("error")) return "text-[#c97a6b]";
-    if (line.includes("WARNING") || line.includes("warn")) return "text-[#c9a66b]";
-    if (line.includes("INFO")) return "text-[#6b9ac9]";
+    if (line.includes("ERROR") || line.includes("error")) return "text-(--err)";
+    if (line.includes("WARNING") || line.includes("warn")) return "text-(--hl3)";
+    if (line.includes("INFO")) return "text-(--hl1)";
     if (line.includes("loaded") || line.includes("started") || line.includes("success"))
-      return "text-[#7d9a6a]";
-    return "text-[#9a9088]";
+      return "text-(--hl2)";
+    return "text-(--dim)";
   };
 
   const renderLogs = useCallback(() => {
     const query = contentFilter.trim().toLowerCase();
     const visible = query ? logLines.filter((line) => line.toLowerCase().includes(query)) : logLines;
     return visible.map((line, index) => (
-      <div key={index} className={`${getLogLineClass(line)} hover:bg-[#2a2826] px-2 py-0.5`}>
+      <div key={index} className={`${getLogLineClass(line)} hover:bg-(--surface) px-2 py-0.5`}>
         {line || "\u00A0"}
       </div>
     ));

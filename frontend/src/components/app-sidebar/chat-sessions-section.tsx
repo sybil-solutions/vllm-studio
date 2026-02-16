@@ -24,7 +24,7 @@ export function ChatSessionsSection({
     return (
       <button
         onClick={onNewChat}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/15 rounded-lg transition-colors text-sm font-medium mb-2"
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-(--border) hover:bg-white/15 rounded-lg transition-colors text-sm font-medium mb-2"
       >
         <Plus className="w-4 h-4" />
         New Chat
@@ -36,7 +36,7 @@ export function ChatSessionsSection({
     <div className="ml-2 mt-2 mb-2">
       <button
         onClick={onNewChat}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/15 rounded-lg transition-colors text-sm font-medium mb-2"
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-(--border) hover:bg-white/15 rounded-lg transition-colors text-sm font-medium mb-2"
       >
         <Plus className="w-4 h-4" />
         New Chat
@@ -44,7 +44,7 @@ export function ChatSessionsSection({
 
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-[#9a9590] hover:text-[#b0a8a0] text-xs font-medium transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-(--dim) hover:text-(--dim) text-xs font-medium transition-colors"
       >
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`} />
         <span>Your chats</span>
@@ -69,7 +69,7 @@ export function ChatSessionsSection({
                 onClick={() => {
                   if (isMobile) onCloseMobile();
                 }}
-                className="block px-3 py-1.5 text-xs text-[#9a9590] hover:text-[#b0a8a0] hover:bg-(--accent)/10 rounded transition-colors truncate"
+                className="block px-3 py-1.5 text-xs text-(--dim) hover:text-(--dim) hover:bg-(--accent)/10 rounded transition-colors truncate"
                 title={displayTitle}
               >
                 {displayTitle}

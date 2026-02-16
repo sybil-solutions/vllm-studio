@@ -36,13 +36,13 @@ export function ModelPerformanceTable(
 ) {
   return (
     <section className="mb-6 sm:mb-8">
-      <div className="bg-[#1e1e1e] rounded-lg overflow-hidden">
+      <div className="bg-(--surface) rounded-lg overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[#363432]">
-          <div className="text-xs text-[#9a9088] uppercase tracking-wider">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-(--border)">
+          <div className="text-xs text-(--dim) uppercase tracking-wider">
             Model Performance
           </div>
-          <div className="text-xs text-[#9a9088]">
+          <div className="text-xs text-(--dim)">
             {sortedModels.length} models
           </div>
         </div>
@@ -51,7 +51,7 @@ export function ModelPerformanceTable(
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#363432]/50">
+              <tr className="border-b border-(--border)/50">
                 <th className="py-3 px-3 sm:px-4 w-8"></th>
                 <SortHeader field="model" currentField={sortField} direction={sortDirection} onClick={() => handleSort("model")}>
                   Model
@@ -85,16 +85,16 @@ export function ModelPerformanceTable(
                 return (
                   <Fragment key={model.model}>
                     <tr
-                      className={`cursor-pointer hover:bg-[#363432]/30 transition-colors ${
-                        i > 0 ? "border-t border-[#363432]/30" : ""
-                      } ${isExpanded ? "bg-[#363432]/20" : ""}`}
+                      className={`cursor-pointer hover:bg-(--border)/30 transition-colors ${
+                        i > 0 ? "border-t border-(--border)/30" : ""
+                      } ${isExpanded ? "bg-(--border)/20" : ""}`}
                       onClick={() => toggleRow(model.model)}
                     >
                       <td className="py-3 px-3 sm:px-4">
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-[#9a9088]" />
+                          <ChevronDown className="h-4 w-4 text-(--dim)" />
                         ) : (
-                          <ChevronUp className="h-4 w-4 text-[#9a9088] rotate-[-90deg]" />
+                          <ChevronUp className="h-4 w-4 text-(--dim) rotate-[-90deg]" />
                         )}
                       </td>
                       <td className="py-3 px-3 sm:px-4">
@@ -104,7 +104,7 @@ export function ModelPerformanceTable(
                             style={{ backgroundColor: modelColor }}
                           />
                           <div
-                            className="text-[#f0ebe3] truncate max-w-[150px] sm:max-w-[200px]"
+                            className="text-(--fg) truncate max-w-[150px] sm:max-w-[200px]"
                             title={model.model}
                           >
                             {model.model.split('/').pop()}
@@ -123,7 +123,7 @@ export function ModelPerformanceTable(
                       <td className="py-3 px-3 sm:px-4 text-right">
                         <StatusPill value={model.avg_latency_ms} type="latency" />
                       </td>
-                      <td className="py-3 px-3 sm:px-4 text-right tabular-nums text-[#9a9088]">
+                      <td className="py-3 px-3 sm:px-4 text-right tabular-nums text-(--dim)">
                         {formatDuration(model.avg_ttft_ms)}
                       </td>
                       <td className="py-3 px-3 sm:px-4 text-right">
@@ -143,7 +143,7 @@ export function ModelPerformanceTable(
                         ) : model.tokens_per_sec ? (
                           <span className="tabular-nums">{model.tokens_per_sec.toFixed(0)} tok/s</span>
                         ) : peak?.generation_tps || peak?.prefill_tps ? (
-                          <div className="flex flex-col items-end gap-0.5 text-[#9a9088]">
+                          <div className="flex flex-col items-end gap-0.5 text-(--dim)">
                             {peak.prefill_tps && (
                               <span className="tabular-nums text-xs">
                                 peak {peak.prefill_tps.toFixed(0)} prefill
@@ -156,47 +156,47 @@ export function ModelPerformanceTable(
                             )}
                           </div>
                         ) : (
-                          <span className="text-[#9a9088]">—</span>
+                          <span className="text-(--dim)">—</span>
                         )}
                       </td>
                     </tr>
                     {isExpanded && (
-                      <tr className="bg-[#363432]/10">
+                      <tr className="bg-(--border)/10">
                         <td colSpan={8} className="py-4 px-3 sm:px-4">
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                             <div>
-                              <div className="text-xs text-[#9a9088] mb-1">Prompt Tokens</div>
+                              <div className="text-xs text-(--dim) mb-1">Prompt Tokens</div>
                               <div className="tabular-nums">{formatNumber(model.prompt_tokens)}</div>
                             </div>
                             <div>
-                              <div className="text-xs text-[#9a9088] mb-1">Completion Tokens</div>
+                              <div className="text-xs text-(--dim) mb-1">Completion Tokens</div>
                               <div className="tabular-nums">{formatNumber(model.completion_tokens)}</div>
                             </div>
                             <div>
-                              <div className="text-xs text-[#9a9088] mb-1">Avg Tokens/Req</div>
+                              <div className="text-xs text-(--dim) mb-1">Avg Tokens/Req</div>
                               <div className="tabular-nums">{formatNumber(model.avg_tokens)}</div>
                             </div>
                             <div>
-                              <div className="text-xs text-[#9a9088] mb-1">P50 Latency</div>
+                              <div className="text-xs text-(--dim) mb-1">P50 Latency</div>
                               <div className="tabular-nums">{formatDuration(model.p50_latency_ms)}</div>
                             </div>
                             {peak && (
                               <>
                                 {peak.prefill_tps && (
                                   <div>
-                                    <div className="text-xs text-[#9a9088] mb-1">Peak Prefill</div>
+                                    <div className="text-xs text-(--dim) mb-1">Peak Prefill</div>
                                     <div className="tabular-nums">{peak.prefill_tps.toFixed(1)} tok/s</div>
                                   </div>
                                 )}
                                 {peak.generation_tps && (
                                   <div>
-                                    <div className="text-xs text-[#9a9088] mb-1">Peak Generation</div>
+                                    <div className="text-xs text-(--dim) mb-1">Peak Generation</div>
                                     <div className="tabular-nums">{peak.generation_tps.toFixed(1)} tok/s</div>
                                   </div>
                                 )}
                                 {peak.ttft_ms && (
                                   <div>
-                                    <div className="text-xs text-[#9a9088] mb-1">Best TTFT</div>
+                                    <div className="text-xs text-(--dim) mb-1">Best TTFT</div>
                                     <div className="tabular-nums">{Math.round(peak.ttft_ms)}ms</div>
                                   </div>
                                 )}

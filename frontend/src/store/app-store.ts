@@ -1,14 +1,17 @@
 import { create, type StateCreator } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import { createChatSlice, type ChatSlice } from "./chat-slice";
+import { createThemeSlice, type ThemeSlice } from "./theme-slice";
 
-export type AppStore = ChatSlice & {
-  _hasHydrated: boolean;
-  setHasHydrated: (hasHydrated: boolean) => void;
-};
+export type AppStore = ChatSlice &
+  ThemeSlice & {
+    _hasHydrated: boolean;
+    setHasHydrated: (hasHydrated: boolean) => void;
+  };
 
 const createAppStore: StateCreator<AppStore, [], [], AppStore> = (set, ...args) => ({
   ...createChatSlice(set, ...args),
+  ...createThemeSlice(set, ...args),
   _hasHydrated: false,
   setHasHydrated: (hasHydrated) => set({ _hasHydrated: hasHydrated }),
 });
@@ -30,10 +33,14 @@ export const useAppStore = create<AppStore>()(
         mcpEnabled: state.mcpEnabled,
         artifactsEnabled: state.artifactsEnabled,
         deepResearch: state.deepResearch,
+        themeId: state.themeId,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setAgentMode(true);
         state?.setHasHydrated(true);
+        if (state?.themeId) {
+          state.setThemeId(state.themeId);
+        }
       },
     }),
     {

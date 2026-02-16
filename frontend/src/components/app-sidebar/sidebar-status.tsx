@@ -23,7 +23,7 @@ export const SidebarStatus = memo(function SidebarStatus(props: { collapsed: boo
           <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-30" />
         )}
       </div>
-      {(!collapsed || isMobile) && <span className="text-xs text-[#a0a0a0] truncate font-medium">{status.activityLine}</span>}
+      {(!collapsed || isMobile) && <span className="text-xs text-(--dim) truncate font-medium">{status.activityLine}</span>}
     </div>
   );
 });

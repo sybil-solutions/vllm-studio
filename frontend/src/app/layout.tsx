@@ -35,6 +35,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: "/mocks/logo-1.svg", type: "image/svg+xml" },
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
@@ -48,13 +49,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className="dark" data-theme="warm-paper" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="icon" href="/mocks/logo-1.svg" type="image/svg+xml" />
         <meta name="mobile-web-app-capable" content="yes" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              try {
+                var s = JSON.parse(localStorage.getItem('vllm-studio-chat-state') || '{}');
+                var t = (s.state || s).themeId;
+                if (t) document.documentElement.setAttribute('data-theme', t);
+              } catch(e) {}
               const isProd = ${process.env.NODE_ENV === "production" ? "true" : "false"};
               if (isProd && 'serviceWorker' in navigator) {
                 window.addEventListener('load', () => {

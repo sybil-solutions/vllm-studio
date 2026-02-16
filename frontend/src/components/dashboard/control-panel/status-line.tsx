@@ -52,12 +52,12 @@ export function StatusLine({
         {/* Left - Model Status */}
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className={`w-2 h-2 ${isRunning ? "bg-(--success)" : "bg-foreground/30"}`} />
+            <div className={`w-2 h-2 ${isRunning ? "bg-(--hl2)" : "bg-foreground/30"}`} />
             <span className="text-xs uppercase tracking-widest text-foreground/40">
               {isRunning ? "Active" : "Standby"}
             </span>
             {!isConnected && (
-              <span className="text-xs text-(--warning)">[offline]</span>
+              <span className="text-xs text-(--hl3)">[offline]</span>
             )}
           </div>
           
@@ -93,7 +93,7 @@ export function StatusLine({
               {totalMemUsed.toFixed(1)}GB
             </span>
             {totalCost && (
-              <span className="text-(--success)">
+              <span className="text-(--hl2)">
                 {totalCost} PLN
               </span>
             )}
@@ -127,7 +127,7 @@ function Action({ text, onClick, disabled, danger }: { text: string; onClick: ()
       disabled={disabled}
       className={`px-3 py-1 text-xs uppercase tracking-wider transition-colors ${
         danger
-          ? "text-foreground/40 hover:text-(--error)"
+          ? "text-foreground/40 hover:text-(--err)"
           : "text-foreground/40 hover:text-foreground/70"
       } disabled:opacity-30 disabled:cursor-not-allowed`}
     >

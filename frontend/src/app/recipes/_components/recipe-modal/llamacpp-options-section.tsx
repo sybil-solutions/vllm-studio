@@ -33,8 +33,8 @@ export function LlamacppOptionsSection({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-[#e8e6e3] pb-2 border-b border-[#363432]/50">
-        <Settings className="w-4 h-4 text-[#d97706]" />
+      <div className="flex items-center gap-2 text-(--fg) pb-2 border-b border-(--border)/50">
+        <Settings className="w-4 h-4 text-(--accent)" />
         <span className="text-sm font-medium">llama.cpp Options</span>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -45,7 +45,7 @@ export function LlamacppOptionsSection({
             return (
               <label
                 key={option.key}
-                className={`flex items-center gap-2 px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-xs text-[#9a9088] ${
+                className={`flex items-center gap-2 px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-xs text-(--dim) ${
                   wide ? "col-span-2" : ""
                 }`}
               >
@@ -53,7 +53,7 @@ export function LlamacppOptionsSection({
                   type="checkbox"
                   checked={coerceBooleanValue(value)}
                   onChange={(e) => setValueForKey(option.key, e.target.checked ? true : undefined)}
-                  className="accent-[#d97706]"
+                  className="accent-(--accent)"
                 />
                 {option.label}
               </label>
@@ -62,11 +62,11 @@ export function LlamacppOptionsSection({
           if (option.type === "select") {
             return (
               <div key={option.key} className={wide ? "col-span-2" : ""}>
-                <label className="block text-xs font-medium text-[#9a9088] mb-2">{option.label}</label>
+                <label className="block text-xs font-medium text-(--dim) mb-2">{option.label}</label>
                 <select
                   value={value ? String(value) : ""}
                   onChange={(e) => setValueForKey(option.key, e.target.value || undefined)}
-                  className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                  className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm focus:outline-none focus:border-(--accent)"
                 >
                   <option value="">Default</option>
                   {option.options?.map((entry) => (
@@ -82,7 +82,7 @@ export function LlamacppOptionsSection({
           const inputType = option.type === "number" ? "number" : "text";
           return (
             <div key={option.key} className={wide ? "col-span-2" : ""}>
-              <label className="block text-xs font-medium text-[#9a9088] mb-2">{option.label}</label>
+              <label className="block text-xs font-medium text-(--dim) mb-2">{option.label}</label>
               <input
                 type={inputType}
                 value={value !== undefined && value !== null ? String(value) : ""}
@@ -93,13 +93,13 @@ export function LlamacppOptionsSection({
                   )
                 }
                 placeholder={option.placeholder}
-                className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+                className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm focus:outline-none focus:border-(--accent)"
               />
             </div>
           );
         })}
       </div>
-      <p className="text-xs text-[#6a6560]">
+      <p className="text-xs text-(--dim)">
         All llama.cpp flags are supported via Extra CLI Arguments. These fields cover the most-used options.
       </p>
     </div>

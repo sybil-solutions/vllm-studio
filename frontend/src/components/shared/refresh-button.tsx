@@ -13,9 +13,9 @@ function RefreshButton({ onRefresh, loading = false, className = "" }: RefreshBu
     <button
       onClick={onRefresh}
       disabled={loading}
-      className={`p-2 hover:bg-(--card-hover) rounded-lg transition-colors ${className}`}
+      className={`p-2 hover:bg-(--surface) rounded-lg transition-colors ${className}`}
     >
-      <RefreshCw className={`h-4 w-4 text-(--muted-foreground) ${loading ? "animate-spin" : ""}`} />
+      <RefreshCw className={`h-4 w-4 text-(--dim) ${loading ? "animate-spin" : ""}`} />
     </button>
   );
 }

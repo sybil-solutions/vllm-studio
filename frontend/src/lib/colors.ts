@@ -5,30 +5,30 @@
 function getStatusColor(status: string): string {
   switch (status.toLowerCase()) {
     case "running":
-      return "text-[#7d9a6a]";
+      return "text-(--hl2)";
     case "stopped":
-      return "text-[#363432]";
+      return "text-(--border)";
     case "error":
-      return "text-[#c97a6b]";
+      return "text-(--err)";
     case "degraded":
-      return "text-[#c9a66b]";
+      return "text-(--hl3)";
     default:
-      return "text-[#c9a66b]";
+      return "text-(--hl3)";
   }
 }
 
 function getStatusBg(status: string): string {
   switch (status.toLowerCase()) {
     case "running":
-      return "bg-[#7d9a6a]";
+      return "bg-(--hl2)";
     case "stopped":
-      return "bg-[#363432]";
+      return "bg-(--border)";
     case "error":
-      return "bg-[#c97a6b]";
+      return "bg-(--err)";
     case "degraded":
-      return "bg-[#c9a66b]";
+      return "bg-(--hl3)";
     default:
-      return "bg-[#c9a66b]";
+      return "bg-(--hl3)";
   }
 }
 

@@ -98,7 +98,7 @@ function RecipeItem({
       disabled={disabled}
       className={`w-full text-left px-3 py-2 border-b border-foreground/5 last:border-0 transition-colors overflow-hidden ${
         isCurrent
-          ? "bg-(--success)/10 text-(--success)"
+          ? "bg-(--hl2)/10 text-(--hl2)"
           : "hover:bg-foreground/[0.02]"
       } ${disabled && !isRunning ? "opacity-30 cursor-not-allowed" : ""}`}
     >
@@ -109,7 +109,7 @@ function RecipeItem({
         </span>
       </div>
       {isRunning && (
-        <div className="text-[10px] text-(--success)/60 mt-0.5">running</div>
+        <div className="text-[10px] text-(--hl2)/60 mt-0.5">running</div>
       )}
     </button>
   );

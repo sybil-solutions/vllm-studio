@@ -42,14 +42,14 @@ export function DiscoverFiltersPanel({
   };
 
   return (
-    <div className="mb-4 p-4 bg-(--card) border border-(--border) rounded-lg">
+    <div className="mb-4 p-4 bg-(--surface) border border-(--border) rounded-lg">
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div>
-          <label className="block text-xs text-(--muted-foreground) mb-1.5">Task</label>
+          <label className="block text-xs text-(--dim) mb-1.5">Task</label>
           <select
             value={task}
             onChange={(event) => onTaskChange(event.target.value)}
-            className="w-full px-3 py-2 bg-(--background) border border-(--border) rounded-lg text-sm text-(--foreground) focus:outline-none focus:border-(--accent-purple)"
+            className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm text-(--fg) focus:outline-none focus:border-(--hl1)"
           >
             {tasks.map((taskOption) => (
               <option key={taskOption.value} value={taskOption.value}>
@@ -60,11 +60,11 @@ export function DiscoverFiltersPanel({
         </div>
 
         <div>
-          <label className="block text-xs text-(--muted-foreground) mb-1.5">Provider</label>
+          <label className="block text-xs text-(--dim) mb-1.5">Provider</label>
           <select
             value={providerFilter}
             onChange={(event) => onProviderFilterChange(event.target.value)}
-            className="w-full px-3 py-2 bg-(--background) border border-(--border) rounded-lg text-sm text-(--foreground) focus:outline-none focus:border-(--accent-purple)"
+            className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm text-(--fg) focus:outline-none focus:border-(--hl1)"
           >
             <option value="">All Providers</option>
             {providers.map((provider) => (
@@ -76,11 +76,11 @@ export function DiscoverFiltersPanel({
         </div>
 
         <div>
-          <label className="block text-xs text-(--muted-foreground) mb-1.5">Library</label>
+          <label className="block text-xs text-(--dim) mb-1.5">Library</label>
           <select
             value={library}
             onChange={(event) => onLibraryChange(event.target.value)}
-            className="w-full px-3 py-2 bg-(--background) border border-(--border) rounded-lg text-sm text-(--foreground) focus:outline-none focus:border-(--accent-purple)"
+            className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm text-(--fg) focus:outline-none focus:border-(--hl1)"
           >
             <option value="">All Libraries</option>
             <option value="transformers">Transformers</option>
@@ -94,11 +94,11 @@ export function DiscoverFiltersPanel({
         </div>
 
         <div>
-          <label className="block text-xs text-(--muted-foreground) mb-1.5">Sort By</label>
+          <label className="block text-xs text-(--dim) mb-1.5">Sort By</label>
           <select
             value={sort}
             onChange={(event) => onSortChange(event.target.value)}
-            className="w-full px-3 py-2 bg-(--background) border border-(--border) rounded-lg text-sm text-(--foreground) focus:outline-none focus:border-(--accent-purple)"
+            className="w-full px-3 py-2 bg-(--bg) border border-(--border) rounded-lg text-sm text-(--fg) focus:outline-none focus:border-(--hl1)"
           >
             {sortOptions.map((sortOption) => (
               <option key={sortOption.value} value={sortOption.value}>
@@ -110,7 +110,7 @@ export function DiscoverFiltersPanel({
       </div>
 
       <div className="mt-4">
-        <label className="block text-xs text-(--muted-foreground) mb-2">Hide Quantization Tags</label>
+        <label className="block text-xs text-(--dim) mb-2">Hide Quantization Tags</label>
         <div className="flex flex-wrap gap-2">
           {QUANTIZATION_TAGS.map((quant) => {
             const tag = quant.toUpperCase();
@@ -123,8 +123,8 @@ export function DiscoverFiltersPanel({
                 className={
                   "px-2.5 py-1 rounded-md border text-xs transition-colors " +
                   (active
-                    ? "bg-[#fb7185]/10 border-[#fb7185]/30 text-[#fb7185]"
-                    : "bg-(--background) border-(--border) text-(--muted-foreground) hover:text-(--foreground)")
+                    ? "bg-(--err)/10 border-(--err)/30 text-(--err)"
+                    : "bg-(--bg) border-(--border) text-(--dim) hover:text-(--fg)")
                 }
               >
                 {tag}
@@ -135,7 +135,7 @@ export function DiscoverFiltersPanel({
             <button
               type="button"
               onClick={() => onExcludedQuantizationsChange([])}
-              className="px-2.5 py-1 rounded-md border text-xs bg-(--background) border-(--border) text-(--muted-foreground) hover:text-(--foreground)"
+              className="px-2.5 py-1 rounded-md border text-xs bg-(--bg) border-(--border) text-(--dim) hover:text-(--fg)"
             >
               Clear
             </button>

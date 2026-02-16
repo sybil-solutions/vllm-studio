@@ -2,7 +2,7 @@
 * {
   border-color: var(--border);
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-color: color-mix(in srgb, var(--hl1) 18%, transparent) transparent;
 }
 
 html,
@@ -15,24 +15,23 @@ body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--fg);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-/* Links - consistent, less dominant */
+/* Links */
 a {
-  color: var(--link);
+  color: var(--hl1);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
 a:hover {
-  color: var(--link-hover);
+  color: var(--hl1);
   text-decoration: underline;
 }
 
-/* Navigation links should inherit their color from parent classes, not use link color */
 nav a,
 a.nav-link,
 [role="navigation"] a {
@@ -47,7 +46,7 @@ a.nav-link:hover,
   text-decoration: none;
 }
 
-/* Scrollbar - minimal + branded (subtle violet) */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -58,25 +57,24 @@ a.nav-link:hover,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: color-mix(in srgb, var(--hl1) 18%, transparent);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+  background: color-mix(in srgb, var(--hl1) 34%, transparent);
   background-clip: padding-box;
 }
 
-/* Thin scrollbar variant - invisible until hover */
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 
 .scrollbar-thin:hover {
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-color: color-mix(in srgb, var(--hl1) 18%, transparent) transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -94,14 +92,13 @@ a.nav-link:hover,
 }
 
 .scrollbar-thin:hover::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: color-mix(in srgb, var(--hl1) 18%, transparent);
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+  background: color-mix(in srgb, var(--hl1) 34%, transparent);
 }
 
-/* Hide scrollbar but keep functionality */
 .scrollbar-hidden {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -111,7 +108,6 @@ a.nav-link:hover,
   display: none;
 }
 
-/* Smooth scrolling */
 .scroll-smooth {
   scroll-behavior: smooth;
 }
@@ -119,18 +115,18 @@ a.nav-link:hover,
 /* Focus */
 :focus-visible {
   outline: none;
-  ring: 2px solid var(--ring);
+  ring: 2px solid var(--accent);
   ring-offset: 2px;
-  ring-offset-color: var(--background);
+  ring-offset-color: var(--bg);
 }
 
 /* Selection */
 ::selection {
   background: var(--accent);
-  color: var(--foreground);
+  color: var(--fg);
 }
 
-/* Scroll shadow indicators */
+/* Scroll shadows */
 .scroll-shadow-top {
   box-shadow: inset 0 10px 10px -10px rgba(0, 0, 0, 0.3);
 }
@@ -145,7 +141,6 @@ a.nav-link:hover,
     inset 0 -10px 10px -10px rgba(0, 0, 0, 0.3);
 }
 
-/* Gradient fade for text overflow */
 .text-fade-right::after {
   content: "";
   position: absolute;
@@ -153,7 +148,6 @@ a.nav-link:hover,
   top: 0;
   bottom: 0;
   width: 40px;
-  background: linear-gradient(to right, transparent, var(--card));
+  background: linear-gradient(to right, transparent, var(--surface));
   pointer-events: none;
 }
-

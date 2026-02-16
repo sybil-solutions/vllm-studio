@@ -80,7 +80,7 @@ export function DiscoverView({
   onCancelDownload,
 }: DiscoverViewProps) {
   return (
-    <div className="flex flex-col h-full bg-(--background) text-(--foreground)">
+    <div className="flex flex-col h-full bg-(--bg) text-(--fg)">
       <DiscoverHeader showFilters={showFilters} onToggleFilters={onToggleFilters} onRefresh={onRefresh} loading={loading} />
 
       {/* Content */}
@@ -118,10 +118,10 @@ export function DiscoverView({
           <DiscoverSortChips sort={sort} sortOptions={SORT_OPTIONS} onSortChange={onSortChange} />
 
           {recommendations.length > 0 && (
-            <div className="mb-4 p-4 bg-(--card) border border-(--border) rounded-lg">
+            <div className="mb-4 p-4 bg-(--surface) border border-(--border) rounded-lg">
               <div className="flex items-baseline justify-between gap-3 mb-2">
-                <h3 className="text-sm font-semibold text-(--foreground)">VRAM-aware Recommendations</h3>
-                <div className="text-xs text-(--muted-foreground)">
+                <h3 className="text-sm font-semibold text-(--fg)">VRAM-aware Recommendations</h3>
+                <div className="text-xs text-(--dim)">
                   {maxVramGb > 0 ? `Max VRAM ${Math.round(maxVramGb)} GB` : "VRAM unknown"}
                 </div>
               </div>
@@ -129,16 +129,16 @@ export function DiscoverView({
                 {recommendations.slice(0, 5).map((rec) => (
                   <div key={rec.id} className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <div className="text-sm text-(--foreground) truncate">{rec.name}</div>
-                      <div className="text-xs text-(--muted-foreground) truncate">{rec.description}</div>
+                      <div className="text-sm text-(--fg) truncate">{rec.name}</div>
+                      <div className="text-xs text-(--dim) truncate">{rec.description}</div>
                     </div>
                     {typeof rec.min_vram_gb === "number" && (
                       <div
                         className={
                           "shrink-0 text-xs px-2 py-1 rounded-md border " +
                           ((maxVramGb === 0 || rec.min_vram_gb <= maxVramGb)
-                            ? "text-[#4ade80] border-[#4ade80]/30 bg-[#4ade80]/10"
-                            : "text-[#fb7185] border-[#fb7185]/30 bg-[#fb7185]/10")
+                            ? "text-(--hl2) border-(--hl2)/30 bg-(--hl2)/10"
+                            : "text-(--err) border-(--err)/30 bg-(--err)/10")
                         }
                       >
                         min {Math.round(rec.min_vram_gb)} GB

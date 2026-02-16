@@ -10,7 +10,7 @@ interface TypingIndicatorProps {
 
 export function TypingIndicator({
   size = "md",
-  color = "var(--foreground)",
+  color = "var(--fg)",
 }: TypingIndicatorProps) {
   const sizeClasses = {
     sm: "scale-75 gap-1",
@@ -61,7 +61,7 @@ interface StreamingCursorProps {
   color?: string;
 }
 
-export function StreamingCursor({ color = "var(--foreground)" }: StreamingCursorProps) {
+export function StreamingCursor({ color = "var(--fg)" }: StreamingCursorProps) {
   return (
     <motion.span
       className="inline-block w-0.5 h-4 ml-0.5 rounded-sm"

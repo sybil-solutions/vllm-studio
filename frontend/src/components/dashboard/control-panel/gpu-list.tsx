@@ -64,9 +64,9 @@ function GpuRow({ gpu }: { gpu: GPU }) {
   const power = gpu.power_draw || 0;
 
   const getTempColor = (t: number) => {
-    if (t > 80) return "text-(--error)";
-    if (t > 65) return "text-(--warning)";
-    return "text-(--success)";
+    if (t > 80) return "text-(--err)";
+    if (t > 65) return "text-(--hl3)";
+    return "text-(--hl2)";
   };
 
   return (

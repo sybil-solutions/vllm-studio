@@ -31,15 +31,15 @@ export function RecipeModalTabBar({
   onSelectTab: (tab: RecipeModalTabId) => void;
 }) {
   return (
-    <div className="flex gap-1 px-4 py-3 border-b border-[#363432] shrink-0 bg-[#0d0d0d] overflow-x-auto">
+    <div className="flex gap-1 px-4 py-3 border-b border-(--border) shrink-0 bg-(--bg) overflow-x-auto">
       {tabDefinitions.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onSelectTab(tab.id)}
           className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all whitespace-nowrap ${
             activeTab === tab.id
-              ? "bg-[#d97706] text-white shadow-lg shadow-[#d97706]/20"
-              : "text-[#9a9088] hover:text-[#e8e6e3] hover:bg-[#1b1b1b]"
+              ? "bg-(--accent) text-white shadow-lg shadow-(--accent)/20"
+              : "text-(--dim) hover:text-(--fg) hover:bg-(--surface)"
           }`}
         >
           {tab.icon}

@@ -13,7 +13,7 @@ export function InlineToolIndicator({ toolParts }: { toolParts: ToolPart[] }) {
     <div className="md:hidden mb-2">
       <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-white/10 bg-white/5">
         <Icons.Loader2 className="h-3 w-3 text-amber-400 animate-spin" />
-        <span className="text-xs text-[#b6b1aa]">
+        <span className="text-xs text-(--dim)">
           {activeTools.length} tool{activeTools.length > 1 ? "s" : ""} running
         </span>
       </div>

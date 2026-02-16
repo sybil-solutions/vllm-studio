@@ -35,18 +35,18 @@ export function RecipesTab({
     <div style={{ padding: "1.5rem" }}>
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9a9088]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-(--dim)" />
           <input
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Search recipes..."
-            className="w-full pl-10 pr-4 py-2 bg-[#1b1b1b] border border-[#363432] rounded-lg text-sm focus:outline-none focus:border-[#d97706]"
+            className="w-full pl-10 pr-4 py-2 bg-(--surface) border border-(--border) rounded-lg text-sm focus:outline-none focus:border-(--accent)"
           />
         </div>
         <button
           onClick={onNewRecipe}
-          className="flex items-center gap-2 px-4 py-2 bg-[#d97706] hover:bg-[#b45309] text-white rounded-lg transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2 bg-(--accent) hover:bg-(--accent) text-white rounded-lg transition-colors text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
           New Recipe
@@ -54,19 +54,19 @@ export function RecipesTab({
       </div>
 
       {runningRecipeId && (
-        <div className="mb-4 p-4 bg-[#15803d]/10 border border-[#15803d]/30 rounded-lg">
+        <div className="mb-4 p-4 bg-(--hl2)/10 border border-(--hl2)/30 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium text-[#4ade80]">
+              <div className="text-sm font-medium text-(--hl2)">
                 Model Running: {runningRecipeName}
               </div>
               {launchProgressMessage && (
-                <div className="text-xs text-[#9a9088] mt-1">{launchProgressMessage}</div>
+                <div className="text-xs text-(--dim) mt-1">{launchProgressMessage}</div>
               )}
             </div>
             <button
               onClick={onEvictModel}
-              className="flex items-center gap-2 px-3 py-1.5 bg-[#dc2626] hover:bg-[#b91c1c] text-white rounded text-xs font-medium"
+              className="flex items-center gap-2 px-3 py-1.5 bg-(--err) hover:bg-(--err) text-white rounded text-xs font-medium"
             >
               <Square className="w-3 h-3" />
               Stop
@@ -76,9 +76,9 @@ export function RecipesTab({
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-[#9a9088]">Loading recipes...</div>
+        <div className="text-center py-12 text-(--dim)">Loading recipes...</div>
       ) : sortedRecipes.length === 0 ? (
-        <div className="text-center py-12 text-[#9a9088]">
+        <div className="text-center py-12 text-(--dim)">
           {filter ? "No recipes match your search" : "No recipes yet. Create one to get started."}
         </div>
       ) : (

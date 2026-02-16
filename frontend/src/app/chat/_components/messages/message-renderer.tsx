@@ -88,7 +88,7 @@ const MermaidDiagram = memo(function MermaidDiagram({ code }: { code: string }) 
           <span>Diagram Error</span>
         </div>
         <div className="text-xs text-red-300 mb-2 break-words">{error}</div>
-        <pre className="text-xs text-[#d8d4cd] overflow-x-auto">{code}</pre>
+        <pre className="text-xs text-(--dim) overflow-x-auto">{code}</pre>
       </div>
     );
   }
@@ -96,7 +96,7 @@ const MermaidDiagram = memo(function MermaidDiagram({ code }: { code: string }) 
   return (
     <div
       ref={containerRef}
-      className="my-3 p-4 rounded-lg border border-(--border) bg-(--card) overflow-x-auto"
+      className="my-3 p-4 rounded-lg border border-(--border) bg-(--surface) overflow-x-auto"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
@@ -114,11 +114,11 @@ const CodeBlock = memo(function CodeBlock({ segment, isStreaming }: CodeBlockPro
   if (lang === "mermaid") {
     if (isStreaming) {
       return (
-        <div className="my-3 p-4 rounded-lg border border-(--border) bg-(--card) animate-in fade-in">
-          <div className="text-xs text-[#b8b4ad] mb-2">
+        <div className="my-3 p-4 rounded-lg border border-(--border) bg-(--surface) animate-in fade-in">
+          <div className="text-xs text-(--dim) mb-2">
             Mermaid preview renders after streaming completes.
           </div>
-          <pre className="text-xs text-[#d8d4cd] overflow-x-auto">{segment.content}</pre>
+          <pre className="text-xs text-(--dim) overflow-x-auto">{segment.content}</pre>
         </div>
       );
     }
@@ -166,7 +166,7 @@ function MessageRendererBase({ content, isStreaming }: MessageRendererProps) {
     <div className="message-content min-w-0 break-words overflow-hidden max-w-full group relative text-inherit">
       {/* Main content */}
       {mainContent && (
-        <div style={{ color: "#e8e4dd" }}>
+        <div style={{ color: "var(--fg)" }}>
           {isStreaming ? (
             (() => {
               const isCodeLike =

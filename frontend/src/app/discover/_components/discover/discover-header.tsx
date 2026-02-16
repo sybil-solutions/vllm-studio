@@ -29,8 +29,8 @@ export function DiscoverHeader({
           onClick={onToggleFilters}
           className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
             showFilters
-              ? "bg-(--accent-purple) text-white"
-              : "bg-(--card) border border-(--border) text-(--muted-foreground) hover:text-(--foreground)"
+              ? "bg-(--hl1) text-white"
+              : "bg-(--surface) border border-(--border) text-(--dim) hover:text-(--fg)"
           }`}
         >
           <Filter className="h-4 w-4" />
@@ -39,7 +39,7 @@ export function DiscoverHeader({
         {RefreshButton({
           onRefresh,
           loading,
-          className: "hover:bg-(--card-hover) disabled:opacity-50",
+          className: "hover:bg-(--surface) disabled:opacity-50",
         })}
       </div>
     </div>

@@ -76,17 +76,17 @@ export function ToolDropdown({
           className={
             buttonVariant === "circle"
               ? [
-                  "h-10 w-10 rounded-full border border-white/10 flex items-center justify-center",
-                  "bg-white/5 text-[#cfcac2]",
-                  "hover:bg-white/8 transition-colors disabled:opacity-50",
+                  "h-10 w-10 rounded-full border border-(--border) flex items-center justify-center",
+                  "bg-(--border) text-(--dim)",
+                  "hover:bg-(--border) transition-colors disabled:opacity-50",
                   isActive ? "ring-1 ring-white/20" : "",
                   buttonClassName ?? "",
                 ].join(" ")
               : [
                   "flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all:ease-in:200ms disabled:opacity-50",
                   isActive
-                    ? "bg-(--card-hover) text-[#e8e4dd] border border-(--border)"
-                    : "hover:bg-(--accent) text-[#9a9590]",
+                    ? "bg-(--surface) text-(--fg) border border-(--border)"
+                    : "hover:bg-(--accent) text-(--dim)",
                   buttonClassName ?? "",
                 ].join(" ")
           }
@@ -100,7 +100,7 @@ export function ToolDropdown({
           )}
         </button>
         {open && (
-          <div className="absolute bottom-full left-0 mb-1 min-w-[160px] bg-(--card) border border-(--border) rounded-lg shadow-xl transition-all:ease-in:200ms py-1 z-50">
+          <div className="absolute bottom-full left-0 mb-1 min-w-[160px] bg-(--surface) border border-(--border) rounded-lg shadow-xl transition-all:ease-in:200ms py-1 z-50">
             {children}
           </div>
         )}
@@ -141,12 +141,12 @@ export function DropdownItem({
       onClick={handleClick}
       disabled={disabled}
       className={`w-full flex items-center gap-2 px-3 py-1.5 font-sans font-medium text-xs transition-colors:ease-in:200ms disabled:opacity-50 ${
-        isActive ? "bg-(--accent) text-[#e8e4dd]" : "hover:bg-(--accent) focus:bg-(--accent) text-[#9a9590]"
+        isActive ? "bg-(--accent) text-(--fg)" : "hover:bg-(--accent) focus:bg-(--accent) text-(--dim)"
       }`}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate font-medium text-xs">{label}</span>
-      {isActive && <span className="ml-auto w-2.5 h-2.5 rounded-full bg-(--success)" />}
+      {isActive && <span className="ml-auto w-2.5 h-2.5 rounded-full bg-(--hl2)" />}
     </button>
   );
 }

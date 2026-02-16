@@ -34,9 +34,9 @@ export function LogStream({ logs }: LogStreamProps) {
                   )}
                   <span 
                     className={`${
-                      isError ? "text-(--error)" : 
-                      isWarning ? "text-(--warning)" : 
-                      isInfo ? "text-(--foreground)/70" : 
+                      isError ? "text-(--err)" : 
+                      isWarning ? "text-(--hl3)" : 
+                      isInfo ? "text-(--fg)/70" : 
                       "text-foreground/50"
                     }`}
                   >

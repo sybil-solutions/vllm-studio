@@ -50,7 +50,7 @@ export const ChatPageView = memo(function ChatPageView(props: ChatPageViewProps)
   const desktopSidebarContents = buildSidebarContentsFromPageProps("desktop", props);
 
   return (
-    <div className="relative h-full flex overflow-hidden w-full max-w-full bg-[#0a0a0a]">
+    <div className="relative h-full flex overflow-hidden w-full max-w-full bg-background">
       <MobileResultsDrawer
         isOpen={props.sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -77,7 +77,7 @@ export const ChatPageView = memo(function ChatPageView(props: ChatPageViewProps)
         onWidthChange={props.setSidebarWidth}
       >
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden">
-          <div className="flex-1 flex flex-col overflow-hidden relative min-w-0 bg-[hsl(30,5%,10.5%)]">
+          <div className="flex-1 flex flex-col overflow-hidden relative min-w-0 bg-background">
             <ChatConversation
               messages={props.messages}
               isLoading={props.isLoading}

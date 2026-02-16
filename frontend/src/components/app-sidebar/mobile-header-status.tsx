@@ -11,10 +11,10 @@ export const MobileHeaderStatus = memo(function MobileHeaderStatus() {
     <>
       <div
         className={`w-1.5 h-1.5 rounded-full ${
-          status.inferenceOnline ? "bg-(--success)" : status.online ? "bg-yellow-500" : "bg-(--error)"
+          status.inferenceOnline ? "bg-(--hl2)" : status.online ? "bg-yellow-500" : "bg-(--err)"
         }`}
       />
-      <span className="text-[11px] text-[#9a9590] truncate">{text}</span>
+      <span className="text-[11px] text-(--dim) truncate">{text}</span>
     </>
   );
 });

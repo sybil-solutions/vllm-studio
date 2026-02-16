@@ -224,7 +224,7 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
 
   return (
     <>
-      <div className="rounded-lg border border-(--border) overflow-hidden bg-(--card)">
+      <div className="rounded-lg border border-(--border) overflow-hidden bg-(--surface)">
         <ArtifactViewerContent {...viewerContentProps} />
       </div>
 
@@ -234,7 +234,7 @@ export function ArtifactViewer({ artifact, isActive = true }: ArtifactViewerProp
             className="fixed inset-0 z-100 bg-black/80"
             onClick={onExitFullscreen}
           />
-          <div className="fixed inset-3 md:inset-6 z-101 bg-(--card) rounded-xl border border-(--border) overflow-hidden flex flex-col">
+          <div className="fixed inset-3 md:inset-6 z-101 bg-(--surface) rounded-xl border border-(--border) overflow-hidden flex flex-col">
             <ArtifactViewerContent
               {...viewerContentProps}
               inModal

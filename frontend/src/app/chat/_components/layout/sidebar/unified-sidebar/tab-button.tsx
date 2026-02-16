@@ -21,11 +21,11 @@ export const TabButton = memo(
         className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
           active
             ? accent
-              ? "bg-violet-500/15 text-violet-300"
-              : "bg-white/[0.08] text-foreground"
+              ? "bg-(--hl2)/15 text-(--hl2)"
+              : "bg-(--surface) text-(--fg)"
             : accent
-              ? "text-violet-400/50 hover:text-violet-300/70 hover:bg-violet-500/5"
-              : "text-[#666] hover:text-[#888] hover:bg-white/[0.03]"
+              ? "text-(--hl2)/70 hover:text-(--hl2) hover:bg-(--surface)"
+              : "text-(--dim) hover:text-(--fg) hover:bg-(--surface)"
         }`}
       >
         {label}
@@ -41,4 +41,3 @@ export const TabButton = memo(
     );
   },
 );
-

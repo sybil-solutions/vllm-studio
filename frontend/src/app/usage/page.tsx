@@ -34,17 +34,17 @@ export default function UsagePage() {
     error,
     onLoad: loadStats,
   });
-  if (pageStateRender) return <div className="min-h-full bg-[#1b1b1b]">{pageStateRender}</div>;
+  if (pageStateRender) return <div className="min-h-full bg-(--surface)">{pageStateRender}</div>;
 
   if (!stats) return null;
 
   return (
-    <div className="min-h-full bg-[#1b1b1b] text-[#f0ebe3] overflow-y-auto">
+    <div className="min-h-full bg-(--surface) text-(--fg) overflow-y-auto">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div className="flex items-center gap-3">
-            <BarChart3 className="h-5 w-5 text-[#9a9088]" />
+            <BarChart3 className="h-5 w-5 text-(--dim)" />
             <h1 className="text-lg font-medium">Usage Analytics</h1>
           </div>
           <RefreshButton onRefresh={loadStats} loading={loading} />

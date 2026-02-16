@@ -34,7 +34,7 @@ function StepIcon({ status }: { status: AgentPlanStep["status"] }) {
     default:
       return (
         <div className="w-4.5 h-4.5 rounded border border-white/8 flex items-center justify-center shrink-0">
-          <Icons.Circle className="h-2 w-2 text-[#444]" />
+          <Icons.Circle className="h-2 w-2 text-(--dim)" />
         </div>
       );
   }
@@ -49,23 +49,23 @@ export function AgentPlanDrawer({ plan, onClear }: AgentPlanDrawerProps) {
   const currentIndex = steps.findIndex((s) => s.status !== "done");
 
   return (
-    <div className="border-b border-white/6 bg-[#111] overflow-hidden">
+    <div className="border-b border-white/6 bg-(--bg) overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/2 transition-colors"
       >
         {collapsed ? (
-          <Icons.ChevronRight className="h-3 w-3 text-[#555] shrink-0" />
+          <Icons.ChevronRight className="h-3 w-3 text-(--dim) shrink-0" />
         ) : (
-          <Icons.ChevronDown className="h-3 w-3 text-[#555] shrink-0" />
+          <Icons.ChevronDown className="h-3 w-3 text-(--dim) shrink-0" />
         )}
 
         <ListChecks className="h-3.5 w-3.5 text-violet-400 shrink-0" />
 
-        <span className="text-[11px] font-medium text-[#aaa]">Plan</span>
+        <span className="text-[11px] font-medium text-(--dim)">Plan</span>
 
-        <span className="text-[10px] text-[#555] font-mono">
+        <span className="text-[10px] text-(--dim) font-mono">
           {allDone ? `${steps.length} steps · Done` : `${doneCount}/${steps.length} steps`}
         </span>
 
@@ -100,7 +100,7 @@ export function AgentPlanDrawer({ plan, onClear }: AgentPlanDrawerProps) {
               onClear();
             }
           }}
-          className="p-0.5 rounded hover:bg-white/6 text-[#444] hover:text-[#888] shrink-0 cursor-pointer"
+          className="p-0.5 rounded hover:bg-white/6 text-(--dim) hover:text-(--dim) shrink-0 cursor-pointer"
           title="Clear plan"
         >
           <Icons.X className="h-3 w-3" />
@@ -123,16 +123,16 @@ export function AgentPlanDrawer({ plan, onClear }: AgentPlanDrawerProps) {
                 <span
                   className={`text-[11px] leading-snug truncate ${
                     step.status === "done"
-                      ? "text-[#555] line-through decoration-[#444]"
+                      ? "text-(--dim) line-through decoration-(--border)"
                       : isCurrent
-                        ? "text-[#ccc]"
-                        : "text-[#888]"
+                        ? "text-(--dim)"
+                        : "text-(--dim)"
                   }`}
                 >
                   {step.title}
                 </span>
                 {step.notes && (
-                  <span className="text-[10px] text-[#444] truncate ml-auto shrink-0 max-w-30">
+                  <span className="text-[10px] text-(--dim) truncate ml-auto shrink-0 max-w-30">
                     {step.notes}
                   </span>
                 )}

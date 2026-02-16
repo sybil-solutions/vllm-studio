@@ -32,32 +32,32 @@ export function RecipesTable({
   onRequestDelete,
 }: Props) {
   return (
-    <div className="border border-[#363432] rounded-lg overflow-visible">
+    <div className="border border-(--border) rounded-lg overflow-visible">
       <table className="w-full">
-        <thead className="bg-[#1b1b1b] border-b border-[#363432]">
+        <thead className="bg-(--surface) border-b border-(--border)">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-[#9a9088] uppercase tracking-wider w-8"></th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-[#9a9088] uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider w-8"></th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
               Name
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-[#9a9088] uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
               Model
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-[#9a9088] uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
               Backend
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-[#9a9088] uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
               TP/PP
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-[#9a9088] uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-(--dim) uppercase tracking-wider">
               Status
             </th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-[#9a9088] uppercase tracking-wider">
+            <th className="px-4 py-3 text-right text-xs font-medium text-(--dim) uppercase tracking-wider">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#363432]">
+        <tbody className="divide-y divide-(--border)">
           {recipes.map((recipe) => {
             const isPinned = pinnedRecipes.has(recipe.id);
             const isMenuOpen = recipeMenuOpen === recipe.id;

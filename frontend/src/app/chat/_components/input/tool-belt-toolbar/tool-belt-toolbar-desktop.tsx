@@ -94,7 +94,7 @@ export function ToolBeltToolbarDesktop({
             <span className="text-xs font-mono font-medium text-blue-400 shrink-0">
               {Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, "0")}
             </span>
-            <span className="text-[#3a3735]">·</span>
+            <span className="text-(--border)">·</span>
             <div className="flex items-center gap-1.5 min-w-0">
               <Wrench className="h-3 w-3 text-blue-400/70 shrink-0" />
               <span className="text-xs text-blue-200/80 truncate">
@@ -119,10 +119,10 @@ export function ToolBeltToolbarDesktop({
           disabled={disabled || isTranscribing}
           className={`flex items-center justify-center p-2 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
             isRecording
-              ? "bg-(--error) text-(--error)"
+              ? "bg-(--err) text-(--err)"
               : isTranscribing
-                ? "bg-(--link) text-(--link)"
-                : "hover:bg-(--accent) text-[#9a9590]"
+                ? "bg-(--hl1) text-(--hl1)"
+                : "hover:bg-(--accent) text-(--dim)"
           }`}
           title={isTranscribing ? "Transcribing..." : isRecording ? "Stop recording" : "Voice input"}
         >
@@ -140,7 +140,7 @@ export function ToolBeltToolbarDesktop({
             onClick={onTTSToggle}
             disabled={disabled}
             className={`flex items-center justify-center p-2 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
-              isTTSEnabled ? "bg-(--success) text-(--success)" : "hover:bg-(--accent) text-[#9a9590]"
+              isTTSEnabled ? "bg-(--hl2) text-(--hl2)" : "hover:bg-(--accent) text-(--dim)"
             }`}
             title={isTTSEnabled ? "Disable TTS" : "Enable TTS"}
           >
@@ -174,8 +174,8 @@ export function ToolBeltToolbarDesktop({
             disabled={disabled}
             className={`flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all:ease-in:200ms disabled:opacity-50 ${
               hasSystemPrompt
-                ? "bg-(--card-hover) text-[#e8e4dd] border border-(--border)"
-                : "hover:bg-(--accent) text-[#9a9590]"
+                ? "bg-(--surface) text-(--fg) border border-(--border)"
+                : "hover:bg-(--accent) text-(--dim)"
             }`}
             title={hasSystemPrompt ? "System prompt (active)" : "System prompt"}
           >
@@ -190,7 +190,7 @@ export function ToolBeltToolbarDesktop({
             value={selectedModel || ""}
             onChange={(e) => onModelChange(e.target.value)}
             disabled={disabled || isLoading}
-            className="max-w-[180px] px-2 py-1 font-sans font-medium text-xs bg-transparent border border-(--border) rounded-lg text-[#9a9590] focus:outline-none disabled:opacity-50 truncate appearance-none cursor-pointer hover:border-[#4a4745] transition-colors:ease-in:200ms"
+            className="max-w-[180px] px-2 py-1 font-sans font-medium text-xs bg-transparent border border-(--border) rounded-lg text-(--dim) focus:outline-none disabled:opacity-50 truncate appearance-none cursor-pointer hover:border-(--border) transition-colors:ease-in:200ms"
             title={selectedModel || "Select model"}
             >
             {availableModels.map((model, idx) => (
@@ -204,7 +204,7 @@ export function ToolBeltToolbarDesktop({
         {isLoading ? (
           <button
             onClick={onStop}
-            className="h-8 w-8 flex items-center justify-center rounded-full bg-(--error) text-white transition-colors:ease-in:200ms shrink-0"
+            className="h-8 w-8 flex items-center justify-center rounded-full bg-(--err) text-white transition-colors:ease-in:200ms shrink-0"
             title="Stop"
           >
             <Square className="h-3 w-3 fill-current" />
@@ -214,7 +214,7 @@ export function ToolBeltToolbarDesktop({
             onClick={onSubmit}
             disabled={!canSend}
             className={`h-8 w-8 flex items-center justify-center rounded-full transition-colors:ease-in:200ms shrink-0 ${
-              canSend ? "bg-[#e8e4dd] text-[#1a1918]" : "bg-(--accent) text-[#9a9590]/50 cursor-not-allowed"
+              canSend ? "bg-(--fg) text-(--bg)" : "bg-(--accent) text-(--dim)/50 cursor-not-allowed"
             }`}
             title="Send"
           >

@@ -121,22 +121,16 @@ export function AppSidebar({ children }: AppSidebarProps) {
           ${isMobile ? "fixed left-0 top-0 bottom-0 z-50" : "relative"}
           ${isMobile && !mobileOpen ? "-translate-x-full" : "translate-x-0"}
           ${collapsed && !isMobile ? "w-16" : "w-56"}
-          shrink-0 bg-[#0a0a0a]/95 backdrop-blur-xl border-r border-white/[0.06]
+          shrink-0 bg-(--bg)/95 backdrop-blur-xl border-r border-(--border)
           flex flex-col transition-all duration-200 ease-out
         `}
         style={{ paddingTop: "env(safe-area-inset-top, 0)" }}
       >
         {/* Logo */}
         <div
-          className={`flex items-center h-14 px-3 border-b border-white/[0.06] ${collapsed && !isMobile ? "justify-center" : "gap-3"}`}
+          className={`flex items-center h-14 px-3 border-b border-(--border) ${collapsed && !isMobile ? "justify-center" : "gap-3"}`}
         >
-          <Image
-            src="/vllm-logo.jpg"
-            alt="vLLM"
-            width={28}
-            height={28}
-            className="rounded shrink-0"
-          />
+          <Image src="/mocks/logo-1.svg" alt="vLLM" width={28} height={28} className="rounded shrink-0" />
           {(!collapsed || isMobile) && (
             <span className="font-semibold text-sm truncate">vLLM Studio</span>
           )}
@@ -158,9 +152,10 @@ export function AppSidebar({ children }: AppSidebarProps) {
                   }}
                   className={`
                     flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 transition-colors
-                    ${isActive
-                      ? "bg-white/[0.08] text-foreground"
-                      : "text-[#9a9590] hover:text-foreground hover:bg-white/[0.04]"
+                    ${
+                      isActive
+                        ? "bg-(--border) text-foreground"
+                        : "text-(--dim) hover:text-foreground hover:bg-(--border)"
                     }
                     ${collapsed && !isMobile ? "justify-center" : ""}
                   `}
@@ -190,7 +185,7 @@ export function AppSidebar({ children }: AppSidebarProps) {
 
         {/* Status */}
         <div
-          className={`px-3 py-3 border-t border-white/[0.06] ${collapsed && !isMobile ? "flex justify-center" : ""}`}
+          className={`px-3 py-3 border-t border-(--border) ${collapsed && !isMobile ? "flex justify-center" : ""}`}
         >
           <SidebarStatus collapsed={collapsed} isMobile={isMobile} />
         </div>
@@ -199,12 +194,12 @@ export function AppSidebar({ children }: AppSidebarProps) {
         {!isMobile && (
           <button
             onClick={toggleCollapsed}
-            className="absolute -right-3 top-20 w-6 h-6 bg-[#111] border border-white/[0.08] rounded-full flex items-center justify-center hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors shadow-lg shadow-black/50"
+            className="absolute -right-3 top-20 w-6 h-6 bg-(--bg) border border-(--border) rounded-full flex items-center justify-center hover:bg-(--border) hover:border-(--border) transition-colors shadow-lg shadow-black/50"
           >
             {collapsed ? (
-              <ChevronRight className="h-3.5 w-3.5 text-[#888]" />
+              <ChevronRight className="h-3.5 w-3.5 text-(--dim)" />
             ) : (
-              <ChevronLeft className="h-3.5 w-3.5 text-[#888]" />
+              <ChevronLeft className="h-3.5 w-3.5 text-(--dim)" />
             )}
           </button>
         )}
@@ -215,14 +210,14 @@ export function AppSidebar({ children }: AppSidebarProps) {
         {/* Mobile header */}
         {isMobile && pathname !== "/chat" && (
           <div
-            className="sticky top-0 z-30 bg-(--card) border-b border-(--border) px-3 py-2 flex items-center gap-2"
+            className="sticky top-0 z-30 bg-(--surface) border-b border-(--border) px-3 py-2 flex items-center gap-2"
             style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0))" }}
           >
             <button
               onClick={() => setMobileOpen(true)}
               className="p-1 -ml-1 rounded hover:bg-(--accent)"
             >
-              <Image src="/vllm-logo.jpg" alt="vLLM" width={20} height={20} className="rounded" />
+              <Image src="/mocks/logo-1.svg" alt="vLLM" width={20} height={20} className="rounded" />
             </button>
             <span className="font-medium text-xs">
               {navItems.find((item) => item.href === pathname)?.label || "vLLM Studio"}
