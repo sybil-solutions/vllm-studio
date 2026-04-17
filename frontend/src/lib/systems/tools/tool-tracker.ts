@@ -1,6 +1,6 @@
 // CRITICAL
 import { safeJsonStringify } from "@/lib/safe-json";
-import type { ToolResult } from "@/lib/types";
+import type { ToolOutputDetails, ToolResult } from "@/lib/types";
 
 export function extractToolResultText(result: unknown): string {
   if (result == null) return "";
@@ -52,6 +52,7 @@ export function withToolExecutionEnd(
   toolCallId: string,
   resultText: string,
   isError: boolean,
+  outputDetails?: ToolOutputDetails,
 ): Map<string, ToolResult> {
   const next = new Map(prev);
   const existing = next.get(toolCallId);
@@ -61,6 +62,7 @@ export function withToolExecutionEnd(
     ...(existing?.name ? { name: existing.name } : {}),
     ...(existing?.input !== undefined ? { input: existing.input } : {}),
     isError,
+    ...(outputDetails ? { outputDetails } : {}),
   };
   next.set(toolCallId, payload);
   return next;

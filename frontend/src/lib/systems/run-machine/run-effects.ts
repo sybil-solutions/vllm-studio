@@ -2,7 +2,7 @@
 import { withExecutingToolEnded, withExecutingToolStarted } from "@/lib/systems/tools/tool-tracker";
 import { useAppStore } from "@/store";
 import type { AgentPlan } from "@/lib/types";
-import type { ChatMessage } from "@/lib/types/chat/chat";
+import type { ChatMessage, ToolOutputDetails } from "@/lib/types/chat/chat";
 import type { RunMachineEffect } from "./types";
 
 export interface RunMachineEffectRuntime {
@@ -16,7 +16,12 @@ export interface RunMachineEffectRuntime {
 
   updateExecutingTools: (updater: (prev: Set<string>) => Set<string>) => void;
   recordToolExecutionMetadata: (toolCallId: string, toolName: string, input: unknown) => void;
-  recordToolResult: (toolCallId: string, resultText: string, isError: boolean) => void;
+  recordToolResult: (
+    toolCallId: string,
+    resultText: string,
+    isError: boolean,
+    outputDetails?: ToolOutputDetails,
+  ) => void;
 
   upsertMessage: (message: ChatMessage) => void;
   setLastAssistantContent: (content: string) => void;
@@ -92,7 +97,12 @@ export function applyRunMachineEffects(
       }
       case "tools/end": {
         runtime.updateExecutingTools((prev) => withExecutingToolEnded(prev, effect.toolCallId));
-        runtime.recordToolResult(effect.toolCallId, effect.resultText, effect.isError);
+        runtime.recordToolResult(
+          effect.toolCallId,
+          effect.resultText,
+          effect.isError,
+          effect.outputDetails,
+        );
         break;
       }
       case "messages/upsert": {
@@ -107,7 +117,12 @@ export function applyRunMachineEffects(
           runtime.setLastAssistantContent(effect.assistantContentForTitle);
         }
         for (const toolResult of effect.toolResults) {
-          runtime.recordToolResult(toolResult.toolCallId, toolResult.resultText, toolResult.isError);
+          runtime.recordToolResult(
+            toolResult.toolCallId,
+            toolResult.resultText,
+            toolResult.isError,
+            toolResult.outputDetails,
+          );
         }
         break;
       }

@@ -32,6 +32,25 @@ export function extractToolResultText(result: unknown): string {
   return typeof result === "string" ? result : JSON.stringify(result ?? "");
 }
 
+/** Pluck structured diff fields from a tool result's `details` payload, if any.
+ *  These propagate to the frontend as `outputDetails` on the message part so
+ *  that file-editing tools can render an inline diff. */
+export function pickDiffOutputDetails(details: unknown): Record<string, unknown> | null {
+  if (!details || typeof details !== "object") return null;
+  const source = details as Record<string, unknown>;
+  const picked: Record<string, unknown> = {};
+  const stringKeys = ["path", "before", "after"] as const;
+  for (const key of stringKeys) {
+    const value = source[key];
+    if (typeof value === "string") picked[key] = value;
+  }
+  const changedFiles = source["changedFiles"];
+  if (Array.isArray(changedFiles) && changedFiles.length > 0) {
+    picked["changedFiles"] = changedFiles;
+  }
+  return Object.keys(picked).length > 0 ? picked : null;
+}
+
 export function persistAssistantMessage(
   context: AppContext,
   params: {
@@ -87,10 +106,12 @@ export function persistAssistantMessage(
             errorText: resultText,
           };
         } else {
+          const outputDetails = pickDiffOutputDetails(result.details);
           parts[parts.length - 1] = {
             ...parts[parts.length - 1],
             state: "output-available",
             output: resultText,
+            ...(outputDetails ? { outputDetails } : {}),
           };
         }
       }
@@ -125,6 +146,7 @@ export function persistAssistantMessage(
       const isError = result.isError;
       const argsInfo = toolArgs?.get(toolCallId);
       const input = argsInfo?.args ?? {};
+      const outputDetails = isError ? null : pickDiffOutputDetails(result.details);
 
       parts.push({
         type: "dynamic-tool",
@@ -132,7 +154,12 @@ export function persistAssistantMessage(
         toolName: argsInfo?.toolName ?? toolName,
         input,
         state: isError ? "output-error" : "output-available",
-        ...(isError ? { errorText: resultText } : { output: resultText }),
+        ...(isError
+          ? { errorText: resultText }
+          : {
+              output: resultText,
+              ...(outputDetails ? { outputDetails } : {}),
+            }),
       });
 
       toolCalls.push({

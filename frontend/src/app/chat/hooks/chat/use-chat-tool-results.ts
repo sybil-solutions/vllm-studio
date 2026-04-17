@@ -7,7 +7,12 @@ import {
   withToolExecutionEnd,
   withToolExecutionStart,
 } from "@/lib/systems/tools/tool-tracker";
-import type { ChatMessage, ChatMessagePart, ToolResult } from "@/lib/types";
+import type {
+  ChatMessage,
+  ChatMessagePart,
+  ToolOutputDetails,
+  ToolResult,
+} from "@/lib/types";
 
 type UseChatToolResultsArgs = {
   setMessages: (next: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
@@ -23,7 +28,12 @@ export function useChatToolResults({
   updateToolResultsMap,
 }: UseChatToolResultsArgs) {
   const applyToolResultToMessages = useCallback(
-    (toolCallId: string, resultText: string, isError: boolean) => {
+    (
+      toolCallId: string,
+      resultText: string,
+      isError: boolean,
+      outputDetails?: ToolOutputDetails,
+    ) => {
       setMessages((prev) =>
         prev.map((msg) => {
           if (msg.role !== "assistant") return msg;
@@ -36,6 +46,7 @@ export function useChatToolResults({
               state: isError ? "output-error" : "output-available",
               output: isError ? undefined : resultText,
               errorText: isError ? resultText : undefined,
+              ...(isError ? {} : outputDetails ? { outputDetails } : {}),
             } as ChatMessagePart;
           });
           return updated ? { ...msg, parts } : msg;
@@ -46,9 +57,16 @@ export function useChatToolResults({
   );
 
   const recordToolResult = useCallback(
-    (toolCallId: string, resultText: string, isError: boolean) => {
-      updateToolResultsMap((prev) => withToolExecutionEnd(prev, toolCallId, resultText, isError));
-      applyToolResultToMessages(toolCallId, resultText, isError);
+    (
+      toolCallId: string,
+      resultText: string,
+      isError: boolean,
+      outputDetails?: ToolOutputDetails,
+    ) => {
+      updateToolResultsMap((prev) =>
+        withToolExecutionEnd(prev, toolCallId, resultText, isError, outputDetails),
+      );
+      applyToolResultToMessages(toolCallId, resultText, isError, outputDetails);
     },
     [applyToolResultToMessages, updateToolResultsMap],
   );

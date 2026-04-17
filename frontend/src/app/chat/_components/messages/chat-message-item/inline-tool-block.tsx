@@ -12,6 +12,12 @@ export interface ToolPart {
   toolName?: string;
   input?: unknown;
   output?: unknown;
+  outputDetails?: {
+    path?: string;
+    before?: string;
+    after?: string;
+    changedFiles?: Array<{ path: string; before: string; after: string }>;
+  };
   errorText?: string;
   state?: string;
   [key: string]: unknown;
@@ -78,14 +84,49 @@ function resolveState(part: ToolPart): ToolState {
   return "pending";
 }
 
-/** Extract diff info from edit_file input */
-function getEditDiff(part: ToolPart): { oldContent: string; newContent: string } | null {
-  if (!part.input) return null;
-  const inp = part.input as Record<string, unknown>;
-  const oldStr = typeof inp["old_string"] === "string" ? inp["old_string"] : null;
-  const newStr = typeof inp["new_string"] === "string" ? inp["new_string"] : null;
-  if (oldStr && newStr && oldStr !== newStr) return { oldContent: oldStr, newContent: newStr };
-  return null;
+interface DiffEntry {
+  path?: string;
+  oldContent: string;
+  newContent: string;
+}
+
+/** Prefer structured before/after from the tool result (full file context);
+ *  fall back to the raw `old_string`/`new_string` input snippets. */
+function getToolDiffs(part: ToolPart): DiffEntry[] {
+  const details = part.outputDetails;
+  if (details) {
+    if (Array.isArray(details.changedFiles) && details.changedFiles.length > 0) {
+      return details.changedFiles
+        .filter((f) => f.before !== f.after)
+        .map((f) => ({ path: f.path, oldContent: f.before, newContent: f.after }));
+    }
+    if (typeof details.before === "string" && typeof details.after === "string" && details.before !== details.after) {
+      return [
+        {
+          ...(details.path ? { path: details.path } : {}),
+          oldContent: details.before,
+          newContent: details.after,
+        },
+      ];
+    }
+  }
+
+  const inp = part.input as Record<string, unknown> | undefined;
+  if (inp) {
+    const oldStr = typeof inp["old_string"] === "string" ? inp["old_string"] : null;
+    const newStr = typeof inp["new_string"] === "string" ? inp["new_string"] : null;
+    if (oldStr && newStr && oldStr !== newStr) {
+      const pathValue = typeof inp["path"] === "string" ? inp["path"] : undefined;
+      return [
+        {
+          ...(pathValue ? { path: pathValue } : {}),
+          oldContent: oldStr,
+          newContent: newStr,
+        },
+      ];
+    }
+  }
+  return [];
 }
 
 /** Try to extract diff from sed command output by parsing before/after patterns */
@@ -108,17 +149,23 @@ function InlineToolBlockBase({ part }: { part: ToolPart }) {
   const Icon = getToolIcon(toolName);
   const target = useMemo(() => getToolTarget(toolName, part.input), [toolName, part.input]);
 
-  const isEditFile = toolName.toLowerCase().includes("edit_file");
-  const isSedCommand = toolName.toLowerCase().includes("execute_command") || toolName.toLowerCase().includes("computer_use");
+  const isSedCommand =
+    toolName.toLowerCase().includes("execute_command") || toolName.toLowerCase().includes("computer_use");
 
-  const diffData = useMemo(() => {
-    if (isEditFile) return getEditDiff(part);
-    if (isSedCommand) return getSedDiff(part);
-    return null;
-  }, [isEditFile, isSedCommand, part]);
+  const diffs = useMemo((): DiffEntry[] => {
+    const fromTool = getToolDiffs(part);
+    if (fromTool.length > 0) return fromTool;
+    if (isSedCommand) {
+      const fallback = getSedDiff(part);
+      if (fallback) return [{ oldContent: fallback.oldContent, newContent: fallback.newContent }];
+    }
+    return [];
+  }, [isSedCommand, part]);
+
+  const hasDiff = diffs.length > 0;
 
   // Auto-expand if there's a diff to show
-  const [expanded, setExpanded] = useState(!!diffData);
+  const [expanded, setExpanded] = useState(hasDiff);
 
   const outputText = useMemo(() => {
     if (part.errorText) return part.errorText;
@@ -137,7 +184,7 @@ function InlineToolBlockBase({ part }: { part: ToolPart }) {
   const borderClass =
     state === "running" ? "border-violet-500/30" :
     state === "error" ? "border-red-500/30" :
-    diffData ? "border-green-500/20" :
+    hasDiff ? "border-green-500/20" :
     "border-(--border)";
 
   const headerBg =
@@ -158,7 +205,7 @@ function InlineToolBlockBase({ part }: { part: ToolPart }) {
         <Icon className={`h-3.5 w-3.5 shrink-0 ${
           state === "error" ? "text-red-400" :
           state === "running" ? "text-violet-400" :
-          diffData ? "text-green-400" :
+          hasDiff ? "text-green-400" :
           "text-(--dim)"
         }`} />
         <span className="text-[11px] font-medium text-(--fg) truncate">
@@ -170,7 +217,7 @@ function InlineToolBlockBase({ part }: { part: ToolPart }) {
           </span>
         )}
         <span className="ml-auto shrink-0 flex items-center gap-1">
-          {diffData && state === "complete" && (
+          {hasDiff && state === "complete" && (
             <span className="text-[10px] text-green-400/70 font-mono">changed</span>
           )}
           {state === "running" && <Icons.Loader2 className="h-3 w-3 text-violet-400 animate-spin" />}
@@ -182,11 +229,19 @@ function InlineToolBlockBase({ part }: { part: ToolPart }) {
 
       {expanded && (
         <div className="border-t border-(--border)">
-          {diffData ? (
-            <DiffViewer
-              oldContent={diffData.oldContent}
-              newContent={diffData.newContent}
-            />
+          {hasDiff ? (
+            <div className="flex flex-col">
+              {diffs.map((d, i) => (
+                <div key={`${d.path ?? "diff"}-${i}`} className={i > 0 ? "border-t border-(--border)" : ""}>
+                  {d.path && (
+                    <div className="px-3 py-1 text-[11px] text-(--dim) font-mono border-b border-(--border)/60 bg-(--bg)/50 truncate">
+                      {d.path}
+                    </div>
+                  )}
+                  <DiffViewer oldContent={d.oldContent} newContent={d.newContent} />
+                </div>
+              ))}
+            </div>
           ) : outputText ? (
             <div className="px-3 py-2 max-h-[300px] overflow-auto">
               <pre className="text-[11px] text-(--dim) font-mono whitespace-pre-wrap break-all">

@@ -124,6 +124,12 @@ export const buildAgentFsTools = (
       if (parentDirectory && parentDirectory !== ".") {
         await withAgentFs((fs) => mkdirp(fs, parentDirectory));
       }
+      let before = "";
+      try {
+        before = await withAgentFs((fs) => fs.readFile(toFsPath(path), "utf8"));
+      } catch {
+        before = "";
+      }
       await withAgentFs((fs) => fs.writeFile(toFsPath(path), content));
       context.stores.chatStore.addAgentFileVersion(
         sessionId,
@@ -138,7 +144,7 @@ export const buildAgentFsTools = (
         bytes,
         encoding: "utf8",
       });
-      return createTextResult(`Wrote ${path}`, { path });
+      return createTextResult(`Wrote ${path}`, { path, before, after: content });
     },
   };
 
@@ -220,7 +226,14 @@ export const buildAgentFsTools = (
         const summary = replaceAll && count > 1
           ? `Edited ${path}: replaced ${count} occurrences (+${linesAdded} -${linesRemoved} lines)`
           : `Edited ${path} (+${linesAdded} -${linesRemoved} lines)`;
-        return createTextResult(summary, { path, replacements, linesAdded, linesRemoved });
+        return createTextResult(summary, {
+          path,
+          replacements,
+          linesAdded,
+          linesRemoved,
+          before: content,
+          after: updatedContent,
+        });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         return createTextResult(`Error editing file "${path}": ${message}`, { path, error: true });

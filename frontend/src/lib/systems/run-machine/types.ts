@@ -1,7 +1,7 @@
 // CRITICAL
 import type { ChatRunStreamEvent } from "@/lib/api";
 import type { AgentPlan } from "@/lib/types";
-import type { ChatMessage } from "@/lib/types/chat/chat";
+import type { ChatMessage, ToolOutputDetails } from "@/lib/types/chat/chat";
 
 export type RunPhase = "idle" | "active" | "completed";
 
@@ -28,6 +28,7 @@ export interface TurnResultEntry {
   toolCallId: string;
   resultText: string;
   isError: boolean;
+  outputDetails?: ToolOutputDetails;
 }
 
 export type RunMachineEffect =
@@ -40,7 +41,13 @@ export type RunMachineEffect =
   | { type: "stream/update-duration"; runId: string | null }
   | { type: "tools/clear-executing" }
   | { type: "tools/start"; toolCallId: string; toolName: string; input: unknown }
-  | { type: "tools/end"; toolCallId: string; resultText: string; isError: boolean }
+  | {
+      type: "tools/end";
+      toolCallId: string;
+      resultText: string;
+      isError: boolean;
+      outputDetails?: ToolOutputDetails;
+    }
   | { type: "messages/upsert"; message: ChatMessage }
   | {
       type: "messages/turn-finished";

@@ -2,6 +2,7 @@
 import { exec } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { mkdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { resolve, sep } from "node:path";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
@@ -314,6 +315,78 @@ const executeLocal = (
   });
 };
 
+const MAX_DIFF_SNAPSHOT_BYTES = 256 * 1024;
+const MAX_DIFF_CHANGED_FILES = 5;
+
+/** Extract file paths likely to be written by this command (sed -i, awk -i
+ *  inplace, shell redirections, tee targets). This is a heuristic — it misses
+ *  exotic invocations but catches the common cases an agent tends to emit. */
+const collectFileTargetsFromCommand = (command: string): string[] => {
+  const targets = new Set<string>();
+
+  const addTarget = (raw: string | undefined | null): void => {
+    if (!raw) return;
+    const trimmed = raw.trim().replace(/^['"]/, "").replace(/['"]$/, "");
+    if (!trimmed) return;
+    if (trimmed.startsWith("/dev/") || trimmed.startsWith("&") || trimmed.startsWith("|")) return;
+    targets.add(trimmed);
+  };
+
+  // sed -i[.bak] [flags] '<expr>' <file>  OR  sed -i[.bak] [flags] "<expr>" <file>
+  const sedRegex = /\bsed\s+(?:-[A-Za-z]+[A-Za-z0-9.]*\s+)*(?:'[^']*'|"[^"]*")\s+([^\s;&|<>]+)/g;
+  for (let m; (m = sedRegex.exec(command)) !== null; ) addTarget(m[1]);
+
+  // awk -i inplace ... <file>
+  const awkRegex = /\bawk\s+(?:-[^\s]+\s+)*(?:'[^']*'|"[^"]*")\s+([^\s;&|<>]+)/g;
+  for (let m; (m = awkRegex.exec(command)) !== null; ) addTarget(m[1]);
+
+  // > <file> or >> <file> (including 2>, &> variants)
+  const redirectRegex = /(?:^|\s|\d)(?:>|>>|&>|2>)\s*([^\s;&|<>]+)/g;
+  for (let m; (m = redirectRegex.exec(command)) !== null; ) addTarget(m[1]);
+
+  // tee [-a] <file>
+  const teeRegex = /\btee\s+(?:-[^\s]+\s+)*([^\s;&|<>]+)/g;
+  for (let m; (m = teeRegex.exec(command)) !== null; ) addTarget(m[1]);
+
+  return Array.from(targets).slice(0, MAX_DIFF_CHANGED_FILES);
+};
+
+const snapshotFile = async (absolutePath: string): Promise<string | null> => {
+  try {
+    const content = await readFile(absolutePath, "utf8");
+    if (Buffer.byteLength(content, "utf8") > MAX_DIFF_SNAPSHOT_BYTES) return null;
+    return content;
+  } catch {
+    return null;
+  }
+};
+
+/** Reads after-snapshots for each detected target and returns entries that
+ *  actually changed (so the inline diff renderer has something worth showing). */
+const collectChangedFiles = async (
+  beforeSnapshots: Map<string, string | null>,
+): Promise<Array<{ path: string; before: string; after: string }>> => {
+  const changed: Array<{ path: string; before: string; after: string }> = [];
+  for (const [path, before] of beforeSnapshots) {
+    const after = await snapshotFile(path);
+    if (after === null) continue;
+    if (before === after) continue;
+    changed.push({ path, before: before ?? "", after });
+    if (changed.length >= MAX_DIFF_CHANGED_FILES) break;
+  }
+  return changed;
+};
+
+const resolveCommandTarget = (cwd: string, raw: string): string | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    return trimmed.startsWith("/") ? resolve(trimmed) : resolve(cwd, trimmed);
+  } catch {
+    return null;
+  }
+};
+
 const buildBrowserProbeCommand = (url: string): string =>
   [
     "set -euo pipefail",
@@ -345,15 +418,27 @@ export const buildLocalTools = (context: AppContext, options: LocalToolOptions):
       const cwd = resolveSandboxedCwd(sessionRoot, payload.cwd);
       const timeoutSeconds = clampTimeoutSeconds(payload.timeout, DEFAULT_TIMEOUT_SECONDS);
 
+      // Snapshot any files the command looks like it will modify, so we can
+      // return before/after diffs alongside the command output.
+      const beforeSnapshots = new Map<string, string | null>();
+      for (const rawTarget of collectFileTargetsFromCommand(payload.command)) {
+        const absolutePath = resolveCommandTarget(cwd, rawTarget);
+        if (!absolutePath) continue;
+        beforeSnapshots.set(absolutePath, await snapshotFile(absolutePath));
+      }
+
       const result = await executeLocal(payload.command, {
         cwd,
         timeoutSeconds,
       });
       const text = truncateText(result.result, MAX_OUTPUT_CHARS);
+      const changedFiles =
+        beforeSnapshots.size > 0 ? await collectChangedFiles(beforeSnapshots) : [];
       return createTextResult(text, {
         exitCode: result.exitCode,
         signal: result.signal,
         cwd,
+        ...(changedFiles.length > 0 ? { changedFiles } : {}),
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

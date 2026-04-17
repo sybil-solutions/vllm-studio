@@ -3,7 +3,7 @@
 
 import type { MutableRefObject } from "react";
 import type { ChatRunStreamEvent } from "@/lib/api";
-import type { AgentPlan, ChatMessage } from "@/lib/types";
+import type { AgentPlan, ChatMessage, ToolOutputDetails } from "@/lib/types";
 
 export type RunMeta = { runId?: string; turnIndex?: number } | undefined;
 
@@ -28,7 +28,12 @@ export type UseRunEventHandlerArgs = {
   ) => Promise<string | null>;
 
   recordToolExecutionMetadata: (toolCallId: string, toolName: string, input: unknown) => void;
-  recordToolResult: (toolCallId: string, resultText: string, isError: boolean) => void;
+  recordToolResult: (
+    toolCallId: string,
+    resultText: string,
+    isError: boolean,
+    outputDetails?: ToolOutputDetails,
+  ) => void;
   updateExecutingTools: (updater: (executingTools: Set<string>) => Set<string>) => void;
 
   mapAgentMessageToChatMessage: (

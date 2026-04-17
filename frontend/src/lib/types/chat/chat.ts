@@ -30,6 +30,7 @@ export interface ToolResult {
   name?: string;
   input?: unknown;
   isError?: boolean;
+  outputDetails?: ToolOutputDetails;
 }
 
 export interface ChatMessageUsage {
@@ -45,6 +46,14 @@ export interface ChatMessageMetadata {
   [key: string]: unknown;
 }
 
+/** Structured side-channel carried alongside `output` for rendering (e.g. inline diffs). */
+export interface ToolOutputDetails {
+  path?: string;
+  before?: string;
+  after?: string;
+  changedFiles?: Array<{ path: string; before: string; after: string }>;
+}
+
 export type ChatMessagePart =
   | { type: "text"; text: string }
   | { type: "reasoning"; text: string }
@@ -55,6 +64,7 @@ export type ChatMessagePart =
       toolName?: string;
       input?: unknown;
       output?: unknown;
+      outputDetails?: ToolOutputDetails;
       errorText?: string;
       state?: string;
       providerExecuted?: boolean;
@@ -65,6 +75,7 @@ export type ChatMessagePart =
       toolName?: string;
       input?: unknown;
       output?: unknown;
+      outputDetails?: ToolOutputDetails;
       errorText?: string;
       state?: string;
       providerExecuted?: boolean;

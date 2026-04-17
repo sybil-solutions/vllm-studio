@@ -78,13 +78,36 @@ function parseTurnToolResults(data: Record<string, unknown>): TurnResultEntry[] 
     const record = result as Record<string, unknown>;
     const toolCallId = typeof record["toolCallId"] === "string" ? record["toolCallId"] : "";
     if (!toolCallId) continue;
+    const outputDetails = extractOutputDetails(record["details"]);
     parsed.push({
       toolCallId,
       resultText: extractToolResultText(record["content"]),
       isError: record["isError"] === true,
+      ...(outputDetails ? { outputDetails } : {}),
     });
   }
   return parsed;
+}
+
+/** Pluck inline-diff fields from a tool result's `details` payload so they can
+ *  flow through the run machine to the inline tool block. */
+function extractOutputDetails(
+  raw: unknown,
+): TurnResultEntry["outputDetails"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const source = raw as Record<string, unknown>;
+  const picked: Record<string, unknown> = {};
+  for (const key of ["path", "before", "after"] as const) {
+    const value = source[key];
+    if (typeof value === "string") picked[key] = value;
+  }
+  const changedFiles = source["changedFiles"];
+  if (Array.isArray(changedFiles) && changedFiles.length > 0) {
+    picked["changedFiles"] = changedFiles;
+  }
+  return Object.keys(picked).length > 0
+    ? (picked as TurnResultEntry["outputDetails"])
+    : undefined;
 }
 
 function extractAssistantContentForTitle(message: { parts: Array<{ type: string; text?: string }> } | null): string {
@@ -294,11 +317,18 @@ export const transitionRunMachine: StateMachineTransition<
       if (!toolCallId) return { state: baseState, effects };
       const isError = data["isError"] === true;
       const resultText = extractToolResultText(data["result"]);
+      const rawResult = data["result"];
+      const detailsRaw =
+        rawResult && typeof rawResult === "object"
+          ? (rawResult as Record<string, unknown>)["details"]
+          : undefined;
+      const outputDetails = !isError ? extractOutputDetails(detailsRaw) : undefined;
       effects.push({
         type: "tools/end",
         toolCallId,
         resultText,
         isError,
+        ...(outputDetails ? { outputDetails } : {}),
       });
 
       if (isError) {
