@@ -87,6 +87,12 @@ export function useChatSessionBootstrap({
   }, [activeRunIdRef, runAbortControllerRef]);
 
   const handledNewChatResetRef = useRef(false);
+  // Tracks the URL state this effect last processed. We use this as a guard so
+  // the effect only drives session loading when the URL actually changed —
+  // otherwise, unrelated dep changes (callback identity churn from clicking
+  // the sidebar) can cause it to re-fire with a stale `sessionFromUrl` and
+  // snap state back to the previous session.
+  const lastHandledUrlKeyRef = useRef<string | null>(null);
 
   // Load sessions on mount
   useEffect(() => {
@@ -139,6 +145,14 @@ export function useChatSessionBootstrap({
 
   // Handle URL session/new params and restore last session if needed
   useEffect(() => {
+    // Only run when the URL actually changed. Other deps (callbacks whose
+    // identity churns when session state changes) can re-trigger this effect
+    // mid-click; acting on a stale `sessionFromUrl` would revert state back to
+    // the previous session.
+    const urlKey = `${newChatFromUrl ? "1" : "0"}:${sessionFromUrl ?? ""}`;
+    if (lastHandledUrlKeyRef.current === urlKey) return;
+    lastHandledUrlKeyRef.current = urlKey;
+
     // Snapshot the abort controller at the start of this effect so we only
     // abort the run that was active when the effect was scheduled, not a
     // new run that may have started between render and effect execution.
@@ -171,8 +185,11 @@ export function useChatSessionBootstrap({
     const targetSessionId = effectiveSessionFromUrl || getLastSessionId();
     if (!targetSessionId) return;
 
-    // Avoid re-loading the same session repeatedly
-    if (targetSessionId === currentSessionId) return;
+    // Avoid re-loading the same session repeatedly. Read the live id via ref
+    // so this effect only reacts to URL changes — not to state changes driven
+    // by sidebar clicks (which would race with the tail's URL-sync effect and
+    // cause sessions to flip-flop during click-through).
+    if (targetSessionId === sessionIdRef.current) return;
 
     // Only abort active runs and clear transient tool state; defer clearing messages
     // until the new session has loaded to avoid a flash of empty content.
@@ -214,7 +231,6 @@ export function useChatSessionBootstrap({
     clearActiveRun,
     clearAgentFiles,
     clearPlan,
-    currentSessionId,
     getLastSessionId,
     hydrateAgentState,
     loadAgentFiles,
@@ -226,6 +242,7 @@ export function useChatSessionBootstrap({
     runAbortControllerRef,
     selectedModel,
     sessionFromUrl,
+    sessionIdRef,
     sessionUrlSyncSuppressedRef,
     setExecutingTools,
     setLastSessionId,
