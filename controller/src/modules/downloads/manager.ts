@@ -11,10 +11,8 @@ import type { DownloadStore } from "./store";
 import { resolveDownloadRoot, sanitizePathSegments } from "./download-paths";
 import { buildHuggingFaceFileList, fetchHuggingFaceModelInfo } from "./huggingface-api";
 import { sumDownloadedBytes, sumTotalBytes } from "./download-math";
-import {
-  DOWNLOAD_DEFAULT_IGNORE_FILENAMES,
-  DOWNLOAD_PROGRESS_THROTTLE_MS,
-} from "./configs";
+import { waitForWriterDrain } from "./stream-backpressure";
+import { DOWNLOAD_DEFAULT_IGNORE_FILENAMES, DOWNLOAD_PROGRESS_THROTTLE_MS } from "./configs";
 
 type DownloadRequest = {
   model_id: string;
@@ -36,6 +34,13 @@ const toTimestamp = (): string => new Date().toISOString();
 export class DownloadManager {
   private readonly active = new Map<string, ActiveDownload>();
 
+  /**
+   * Build a download manager.
+   * @param config - Controller runtime configuration.
+   * @param store - Persistent download state store.
+   * @param eventManager - Event bus for progress and state updates.
+   * @param logger - Structured controller logger.
+   */
   public constructor(
     private readonly config: Config,
     private readonly store: DownloadStore,
@@ -60,14 +65,28 @@ export class DownloadManager {
     }
   }
 
+  /**
+   * List every persisted model download.
+   * @returns All known downloads.
+   */
   public list(): ModelDownload[] {
     return this.store.list();
   }
 
+  /**
+   * Look up a download by id.
+   * @param id - Download identifier.
+   * @returns The matching download, if present.
+   */
   public get(id: string): ModelDownload | null {
     return this.store.get(id);
   }
 
+  /**
+   * Queue a new model download.
+   * @param request - Download request details.
+   * @returns The queued download record.
+   */
   public async start(request: DownloadRequest): Promise<ModelDownload> {
     const modelId = request.model_id?.trim();
     if (!modelId) {
@@ -107,6 +126,11 @@ export class DownloadManager {
     return download;
   }
 
+  /**
+   * Pause an active download.
+   * @param id - Download identifier.
+   * @returns The updated download record.
+   */
   public pause(id: string): ModelDownload {
     const download = this.store.get(id);
     if (!download) {
@@ -120,6 +144,12 @@ export class DownloadManager {
     return download;
   }
 
+  /**
+   * Resume a paused or failed download.
+   * @param id - Download identifier.
+   * @param hfToken - Optional Hugging Face token override.
+   * @returns The updated download record.
+   */
   public resume(id: string, hfToken: string | null = null): ModelDownload {
     const download = this.store.get(id);
     if (!download) {
@@ -137,6 +167,11 @@ export class DownloadManager {
     return download;
   }
 
+  /**
+   * Cancel a download and stop any active transfer.
+   * @param id - Download identifier.
+   * @returns The updated download record.
+   */
   public cancel(id: string): ModelDownload {
     const download = this.store.get(id);
     if (!download) {
@@ -150,6 +185,10 @@ export class DownloadManager {
     return download;
   }
 
+  /**
+   * Abort an in-flight download controller if one exists.
+   * @param id - Download identifier.
+   */
   private abortActive(id: string): void {
     const active = this.active.get(id);
     if (active) {
@@ -158,6 +197,11 @@ export class DownloadManager {
     }
   }
 
+  /**
+   * Process a queued download until it completes, pauses, or fails.
+   * @param id - Download identifier.
+   * @param hfToken - Optional Hugging Face token override.
+   */
   private async runDownload(id: string, hfToken: string | null): Promise<void> {
     const download = this.store.get(id);
     if (!download || download.status === "completed" || download.status === "canceled") {
@@ -226,6 +270,13 @@ export class DownloadManager {
     }
   }
 
+  /**
+   * Download a single file, resuming from a partial `.part` file when possible.
+   * @param download - Parent download record.
+   * @param file - File entry to transfer.
+   * @param controller - Abort controller for the parent download.
+   * @param hfToken - Optional Hugging Face token override.
+   */
   private async downloadFile(
     download: ModelDownload,
     file: DownloadFileInfo,
@@ -309,10 +360,7 @@ export class DownloadManager {
         if (value) {
           const ok = writer.write(Buffer.from(value));
           if (!ok) {
-            await new Promise<void>((resolveDrain, rejectDrain) => {
-              writer.once("drain", resolveDrain);
-              writer.once("error", rejectDrain);
-            });
+            await waitForWriterDrain(writer);
           }
           downloaded += value.length;
           file.downloaded_bytes = downloaded;
@@ -340,6 +388,12 @@ export class DownloadManager {
     this.publishProgress(currentDownload, file);
   }
 
+  /**
+   * Persist the latest state for one file within a download.
+   * @param download - Parent download record.
+   * @param file - Updated file entry.
+   * @returns The refreshed download record.
+   */
   private persistFileUpdate(download: ModelDownload, file: DownloadFileInfo): ModelDownload {
     const latest = this.store.get(download.id) ?? download;
     const updatedFiles = latest.files.map((entry) =>
@@ -356,6 +410,11 @@ export class DownloadManager {
     return updated;
   }
 
+  /**
+   * Publish incremental progress for one download file.
+   * @param download - Parent download record.
+   * @param file - File whose progress changed.
+   */
   private publishProgress(download: ModelDownload, file: DownloadFileInfo): void {
     const payload = {
       id: download.id,
@@ -373,6 +432,11 @@ export class DownloadManager {
     void this.eventManager.publish(new Event(CONTROLLER_EVENTS.DOWNLOAD_PROGRESS, payload));
   }
 
+  /**
+   * Publish a download state transition.
+   * @param download - Parent download record.
+   * @param status - New download status.
+   */
   private publishState(download: ModelDownload, status: DownloadStatus): void {
     const payload = {
       id: download.id,
