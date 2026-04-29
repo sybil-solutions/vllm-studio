@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Diff,
   FileText,
+  FolderOpen,
   GitBranch,
   Hammer,
   Home,
@@ -55,6 +56,7 @@ type StreamPayload =
   | { type: "pi"; event: Record<string, unknown> };
 
 const SESSION_ID = "vllm-studio-agent";
+const DEFAULT_AGENT_CWD = "/Users/sero/projects/vllm-studio";
 
 function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -72,6 +74,11 @@ function compactNumber(value: number) {
   return String(value);
 }
 
+function pathLabel(value: string) {
+  const clean = value.replace(/\/+$/, "");
+  return clean.split("/").filter(Boolean).pop() || clean || "/";
+}
+
 function extractToolText(value: unknown): string {
   if (!value || typeof value !== "object") return "";
   const result = value as { content?: Array<{ type?: string; text?: string }> };
@@ -85,6 +92,7 @@ function extractToolText(value: unknown): string {
 export function AgentWorkspace() {
   const [models, setModels] = useState<AgentModel[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
+  const [agentCwd, setAgentCwd] = useState(DEFAULT_AGENT_CWD);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "intro",
@@ -275,7 +283,12 @@ export function AgentWorkspace() {
       const response = await fetch("/api/agent/turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: SESSION_ID, modelId: selectedModel, message: text }),
+        body: JSON.stringify({
+          sessionId: SESSION_ID,
+          modelId: selectedModel,
+          message: text,
+          cwd: agentCwd,
+        }),
       });
       if (!response.ok || !response.body) {
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -326,7 +339,7 @@ export function AgentWorkspace() {
         id: newId("system"),
         role: "system",
         timestamp: nowLabel(),
-        text: "New Pi agent thread. Models are still sourced from /v1/models.",
+        text: `New Pi agent thread in ${agentCwd}. Models are still sourced from /v1/models.`,
       },
     ]);
     setInput("");
@@ -376,12 +389,18 @@ export function AgentWorkspace() {
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           <SectionLabel>Project</SectionLabel>
-          <ThreadRow
-            active
-            title="vLLM Studio"
-            subtitle="server-configured workspace"
-            icon={GitBranch}
-          />
+          <ThreadRow active title={pathLabel(agentCwd)} subtitle={agentCwd} icon={GitBranch} />
+          <label className="mb-3 mt-2 flex items-center gap-2 rounded-md border border-[var(--agent-border)] bg-[var(--agent-bg)] px-2 py-1.5 text-[var(--agent-muted)]">
+            <FolderOpen className="size-3.5 shrink-0" />
+            <input
+              value={agentCwd}
+              onChange={(event) => setAgentCwd(event.target.value)}
+              disabled={running}
+              spellCheck={false}
+              className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-[var(--agent-fg)] outline-none disabled:opacity-60"
+              aria-label="Agent working directory"
+            />
+          </label>
           <SectionLabel className="mt-4">Threads</SectionLabel>
           <ThreadRow
             active
@@ -532,6 +551,11 @@ export function AgentWorkspace() {
                 </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <PanelCard title="Directory" icon={FolderOpen}>
+                  <p className="break-all font-mono text-xs leading-5 text-[var(--agent-muted)]">
+                    {agentCwd}
+                  </p>
+                </PanelCard>
                 <PanelCard title="Model" icon={Bot}>
                   <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                     <dt className="text-[var(--agent-muted)]">id</dt>

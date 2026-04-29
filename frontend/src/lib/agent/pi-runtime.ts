@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, realpath, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -46,11 +46,30 @@ function getWritableDataDir(): string {
   return candidates[0] ?? path.join(tmpdir(), "vllm-studio");
 }
 
-function resolveAgentCwd(): string {
+function resolveDefaultAgentCwd(): string {
   if (process.env.VLLM_STUDIO_AGENT_CWD) return process.env.VLLM_STUDIO_AGENT_CWD;
   const cwd = process.cwd();
   if (path.basename(cwd) === "frontend") return path.resolve(cwd, "..");
   return cwd;
+}
+
+function expandHome(value: string): string {
+  if (value === "~") return homedir();
+  if (value.startsWith(`~${path.sep}`)) return path.join(homedir(), value.slice(2));
+  return value;
+}
+
+async function resolveAgentCwd(input?: string): Promise<string> {
+  const defaultCwd = resolveDefaultAgentCwd();
+  const raw = input?.trim() || defaultCwd;
+  const expanded = expandHome(raw);
+  const candidate = path.isAbsolute(expanded) ? expanded : path.resolve(defaultCwd, expanded);
+  const resolved = await realpath(candidate);
+  const info = await stat(resolved);
+  if (!info.isDirectory()) {
+    throw new Error(`Agent cwd is not a directory: ${resolved}`);
+  }
+  return resolved;
 }
 
 function piBinaryPath(): string {
@@ -124,20 +143,36 @@ class PiRpcSession extends EventEmitter {
   private pending = new Map<string, PendingCommand>();
   private starting: Promise<void> | null = null;
   private currentModelId = "";
+  private currentCwd = "";
   private agentDir = "";
 
-  async ensureStarted(modelId: string): Promise<void> {
-    if (this.process && !this.process.killed && this.currentModelId === modelId) return;
+  async ensureStarted(modelId: string, cwd?: string): Promise<void> {
+    const resolvedCwd = await resolveAgentCwd(cwd);
+    if (
+      this.process &&
+      !this.process.killed &&
+      this.currentModelId === modelId &&
+      this.currentCwd === resolvedCwd
+    ) {
+      return;
+    }
     if (this.starting) await this.starting;
-    if (this.process && !this.process.killed && this.currentModelId === modelId) return;
+    if (
+      this.process &&
+      !this.process.killed &&
+      this.currentModelId === modelId &&
+      this.currentCwd === resolvedCwd
+    ) {
+      return;
+    }
 
-    this.starting = this.start(modelId).finally(() => {
+    this.starting = this.start(modelId, resolvedCwd).finally(() => {
       this.starting = null;
     });
     await this.starting;
   }
 
-  private async start(modelId: string): Promise<void> {
+  private async start(modelId: string, cwd: string): Promise<void> {
     await this.stop();
     const { models, agentDir } = await refreshPiModels();
     const selectedModel = models.find((model) => model.id === modelId);
@@ -146,6 +181,7 @@ class PiRpcSession extends EventEmitter {
     }
     this.agentDir = agentDir;
     this.currentModelId = modelId;
+    this.currentCwd = cwd;
 
     const args = [
       "--mode",
@@ -160,7 +196,7 @@ class PiRpcSession extends EventEmitter {
     }
 
     const child = spawn(piBinaryPath(), args, {
-      cwd: resolveAgentCwd(),
+      cwd,
       env: {
         ...process.env,
         PATH: piPathEnv(),
@@ -309,6 +345,7 @@ class PiRpcSession extends EventEmitter {
     return {
       running: Boolean(this.process && !this.process.killed),
       modelId: this.currentModelId,
+      cwd: this.currentCwd,
       agentDir: this.agentDir,
     };
   }
