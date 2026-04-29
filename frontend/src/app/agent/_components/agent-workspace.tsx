@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -9,6 +9,7 @@ import {
   Bot,
   ChevronDown,
   Diff,
+  Folder,
   FolderOpen,
   GitBranch,
   Globe,
@@ -22,6 +23,7 @@ import {
   Settings,
   Square,
   Terminal,
+  Trash2,
 } from "lucide-react";
 
 type WebviewElement = HTMLElement & {
@@ -61,8 +63,42 @@ type StreamPayload =
   | { type: "error"; error: string }
   | { type: "pi"; event: Record<string, unknown> };
 
+type ProjectEntry = {
+  id: string;
+  name: string;
+  path: string;
+  addedAt: string;
+  exists: boolean;
+  hasGit: boolean;
+  branch: string | null;
+};
+
+type DesktopBridge = {
+  openDirectory: () => Promise<ProjectEntry | null>;
+  listProjects: () => Promise<ProjectEntry[]>;
+  addProject: (directoryPath: string) => Promise<ProjectEntry>;
+  removeProject: (id: string) => Promise<{ ok: true }>;
+};
+
 const SESSION_ID = "vllm-studio-agent";
 const DEFAULT_AGENT_CWD = "/Users/sero/projects/vllm-studio";
+const SELECTED_PROJECT_KEY = "vllm-studio.agent.selectedProjectId";
+
+function getDesktopBridge(): DesktopBridge | null {
+  if (typeof window === "undefined") return null;
+  const candidate = (window as unknown as { vllmStudioDesktop?: Partial<DesktopBridge> })
+    .vllmStudioDesktop;
+  if (!candidate) return null;
+  if (
+    typeof candidate.openDirectory !== "function" ||
+    typeof candidate.listProjects !== "function" ||
+    typeof candidate.addProject !== "function" ||
+    typeof candidate.removeProject !== "function"
+  ) {
+    return null;
+  }
+  return candidate as DesktopBridge;
+}
 
 function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -72,11 +108,6 @@ function nowLabel() {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(
     new Date(),
   );
-}
-
-function pathLabel(value: string) {
-  const clean = value.replace(/\/+$/, "");
-  return clean.split("/").filter(Boolean).pop() || clean || "/";
 }
 
 function extractToolText(value: unknown): string {
@@ -110,11 +141,17 @@ export function AgentWorkspace() {
   const [isMultiline, setIsMultiline] = useState(false);
   const [browserUrl, setBrowserUrl] = useState("https://duckduckgo.com");
   const [browserInput, setBrowserInput] = useState("https://duckduckgo.com");
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectPickerInput, setProjectPickerInput] = useState("");
+  const [projectPickerError, setProjectPickerError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const webviewRef = useRef<WebviewElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const isElectron = typeof window !== "undefined" && /electron/i.test(navigator.userAgent);
+  const desktopBridge = useMemo<DesktopBridge | null>(() => getDesktopBridge(), []);
 
   const activeModel = useMemo(
     () => models.find((model) => model.id === selectedModel),
@@ -156,6 +193,165 @@ export function AgentWorkspace() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, status]);
+
+  const loadProjects = useCallback(async (): Promise<ProjectEntry[]> => {
+    if (desktopBridge) {
+      return desktopBridge.listProjects();
+    }
+    const response = await fetch("/api/agent/projects", { cache: "no-store" });
+    const payload = (await response.json()) as { projects?: ProjectEntry[]; error?: string };
+    if (!response.ok) throw new Error(payload.error || "Failed to load projects");
+    return payload.projects ?? [];
+  }, [desktopBridge]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await loadProjects();
+        if (cancelled) return;
+        setProjects(list);
+        const stored =
+          typeof window !== "undefined" ? window.localStorage.getItem(SELECTED_PROJECT_KEY) : null;
+        const initial = (stored && list.find((entry) => entry.id === stored)) || list[0];
+        if (initial) {
+          setSelectedProjectId(initial.id);
+          setAgentCwd(initial.path);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("[agent] failed to load projects", err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadProjects]);
+
+  const persistSelectedProjectId = useCallback((id: string | null) => {
+    if (typeof window === "undefined") return;
+    if (id) {
+      window.localStorage.setItem(SELECTED_PROJECT_KEY, id);
+    } else {
+      window.localStorage.removeItem(SELECTED_PROJECT_KEY);
+    }
+  }, []);
+
+  const selectProject = useCallback(
+    (project: ProjectEntry) => {
+      setSelectedProjectId(project.id);
+      setAgentCwd(project.path);
+      persistSelectedProjectId(project.id);
+    },
+    [persistSelectedProjectId],
+  );
+
+  const addProjectFromPath = useCallback(
+    async (rawPath: string): Promise<ProjectEntry> => {
+      if (desktopBridge) {
+        return desktopBridge.addProject(rawPath);
+      }
+      const response = await fetch("/api/agent/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: rawPath }),
+      });
+      const payload = (await response.json()) as { project?: ProjectEntry; error?: string };
+      if (!response.ok || !payload.project) {
+        throw new Error(payload.error || "Failed to add project");
+      }
+      return payload.project;
+    },
+    [desktopBridge],
+  );
+
+  const handleOpenProject = useCallback(async () => {
+    setProjectPickerError("");
+    if (desktopBridge) {
+      try {
+        const project = await desktopBridge.openDirectory();
+        if (!project) return;
+        const list = await loadProjects();
+        setProjects(list);
+        selectProject(project);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to open directory");
+      }
+      return;
+    }
+    setProjectPickerInput("");
+    setProjectPickerOpen(true);
+  }, [desktopBridge, loadProjects, selectProject]);
+
+  const submitProjectPicker = useCallback(
+    async (event: FormEvent) => {
+      event.preventDefault();
+      const value = projectPickerInput.trim();
+      if (!value) return;
+      try {
+        const project = await addProjectFromPath(value);
+        const list = await loadProjects();
+        setProjects(list);
+        selectProject(project);
+        setProjectPickerOpen(false);
+        setProjectPickerInput("");
+        setProjectPickerError("");
+      } catch (err) {
+        setProjectPickerError(err instanceof Error ? err.message : "Failed to add project");
+      }
+    },
+    [addProjectFromPath, loadProjects, projectPickerInput, selectProject],
+  );
+
+  const removeProjectById = useCallback(
+    async (id: string) => {
+      try {
+        if (desktopBridge) {
+          await desktopBridge.removeProject(id);
+        } else {
+          const response = await fetch(`/api/agent/projects?id=${encodeURIComponent(id)}`, {
+            method: "DELETE",
+          });
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => ({}))) as { error?: string };
+            throw new Error(payload.error || "Failed to remove project");
+          }
+        }
+        const list = await loadProjects();
+        setProjects(list);
+        if (selectedProjectId === id) {
+          const next = list[0] ?? null;
+          if (next) {
+            selectProject(next);
+          } else {
+            setSelectedProjectId(null);
+            persistSelectedProjectId(null);
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to remove project");
+      }
+    },
+    [desktopBridge, loadProjects, persistSelectedProjectId, selectProject, selectedProjectId],
+  );
+
+  const handleCwdInputChange = useCallback(
+    (value: string) => {
+      setAgentCwd(value);
+      const match = projects.find((entry) => entry.path === value.trim().replace(/\/+$/, ""));
+      if (match) {
+        if (selectedProjectId !== match.id) {
+          setSelectedProjectId(match.id);
+          persistSelectedProjectId(match.id);
+        }
+      } else if (selectedProjectId !== null) {
+        setSelectedProjectId(null);
+        persistSelectedProjectId(null);
+      }
+    },
+    [persistSelectedProjectId, projects, selectedProjectId],
+  );
 
   function patchAssistant(id: string, patch: (message: ChatMessage) => ChatMessage) {
     setMessages((current) =>
@@ -448,12 +644,75 @@ export function AgentWorkspace() {
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           <SectionLabel>Project</SectionLabel>
-          <ThreadRow active title={pathLabel(agentCwd)} subtitle={agentCwd} icon={GitBranch} />
-          <label className="mb-3 mt-2 flex items-center gap-2 rounded-md border border-[var(--agent-border)] bg-[var(--agent-bg)] px-2 py-1.5 text-[var(--agent-muted)]">
+          {projects.length === 0 ? (
+            <div className="mb-2 rounded-md border border-dashed border-[var(--agent-border)] bg-[var(--agent-bg)] px-2 py-2 text-[11px] text-[var(--agent-muted)]">
+              No projects yet. Open a directory to get started.
+            </div>
+          ) : (
+            <div className="mb-1 space-y-1">
+              {projects.map((project) => (
+                <ProjectRow
+                  key={project.id}
+                  project={project}
+                  active={project.id === selectedProjectId}
+                  onSelect={() => selectProject(project)}
+                  onRemove={() => void removeProjectById(project.id)}
+                />
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleOpenProject()}
+            className="mb-2 mt-1 flex h-8 w-full items-center justify-center gap-2 rounded-md border border-dashed border-[var(--agent-border)] bg-[var(--agent-bg)] px-2 text-xs text-[var(--agent-muted)] hover:bg-[var(--agent-muted-bg)] hover:text-[var(--agent-fg)]"
+          >
+            <Plus className="size-3.5" /> Open project…
+          </button>
+          {projectPickerOpen ? (
+            <form
+              onSubmit={submitProjectPicker}
+              className="mb-3 space-y-1 rounded-md border border-[var(--agent-border)] bg-[var(--agent-bg)] p-2"
+            >
+              <label className="block text-[10px] uppercase tracking-wide text-[var(--agent-muted)]">
+                Absolute directory path
+              </label>
+              <input
+                value={projectPickerInput}
+                onChange={(event) => setProjectPickerInput(event.target.value)}
+                placeholder="/Users/you/code/my-project"
+                spellCheck={false}
+                autoFocus
+                className="min-w-0 w-full rounded-md border border-[var(--agent-border)] bg-[var(--agent-card)] px-2 py-1 font-mono text-[11px] text-[var(--agent-fg)] outline-none"
+              />
+              {projectPickerError ? (
+                <div className="text-[11px] text-red-600">{projectPickerError}</div>
+              ) : null}
+              <div className="flex items-center justify-end gap-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProjectPickerOpen(false);
+                    setProjectPickerInput("");
+                    setProjectPickerError("");
+                  }}
+                  className="h-7 rounded-md px-2 text-[11px] text-[var(--agent-muted)] hover:bg-[var(--agent-muted-bg)] hover:text-[var(--agent-fg)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="h-7 rounded-md bg-[var(--agent-primary)] px-2 text-[11px] font-medium text-white hover:opacity-95"
+                >
+                  Add
+                </button>
+              </div>
+            </form>
+          ) : null}
+          <label className="mb-3 mt-1 flex items-center gap-2 rounded-md border border-[var(--agent-border)] bg-[var(--agent-bg)] px-2 py-1.5 text-[var(--agent-muted)]">
             <FolderOpen className="size-3.5 shrink-0" />
             <input
               value={agentCwd}
-              onChange={(event) => setAgentCwd(event.target.value)}
+              onChange={(event) => handleCwdInputChange(event.target.value)}
               disabled={running}
               spellCheck={false}
               className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-[var(--agent-fg)] outline-none disabled:opacity-60"
@@ -794,6 +1053,85 @@ function TimelineMessage({ message }: { message: ChatMessage }) {
         ) : null}
       </div>
     </article>
+  );
+}
+
+function ProjectRow({
+  project,
+  active,
+  onSelect,
+  onRemove,
+}: {
+  project: ProjectEntry;
+  active: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onSelect}
+        title={project.path}
+        className={`flex w-full items-start gap-2 rounded-md px-2 py-2 text-left ${
+          active ? "bg-[var(--agent-muted-bg)]" : "hover:bg-[var(--agent-muted-bg)]"
+        } ${project.exists ? "" : "opacity-60"}`}
+      >
+        <Folder className="mt-0.5 size-4 shrink-0 text-[var(--agent-muted)]" />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium">{project.name}</span>
+            {project.hasGit && project.branch ? (
+              <span className="flex items-center gap-1 rounded bg-[var(--agent-bg)] px-1 py-0.5 text-[10px] text-[var(--agent-muted)]">
+                <GitBranch className="size-3" />
+                <span className="max-w-[80px] truncate">{project.branch}</span>
+              </span>
+            ) : null}
+          </span>
+          <span className="block truncate text-[11px] text-[var(--agent-muted)]">
+            {project.path}
+          </span>
+          {!project.exists ? (
+            <span className="mt-0.5 block text-[10px] text-red-500">missing</span>
+          ) : null}
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label="Project actions"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setMenuOpen((value) => !value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              setMenuOpen((value) => !value);
+            }
+          }}
+          className="mt-0.5 rounded p-0.5 text-[var(--agent-muted)] hover:bg-[var(--agent-bg)] hover:text-[var(--agent-fg)]"
+        >
+          <ChevronDown className="size-3.5" />
+        </span>
+      </button>
+      {menuOpen ? (
+        <div className="absolute right-1 top-9 z-10 w-44 overflow-hidden rounded-md border border-[var(--agent-border)] bg-[var(--agent-card)] shadow-md">
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              onRemove();
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-[var(--agent-muted-bg)]"
+          >
+            <Trash2 className="size-3.5" /> Remove from list
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
