@@ -139,7 +139,7 @@ function getUpstreamTimeoutMs(path: string[]): number {
   if (route === "v1/chat/completions" || route === "v1/responses") {
     return CHAT_COMPLETION_UPSTREAM_TIMEOUT_MS;
   }
-  if (route === "config" || route === "compat") {
+  if (route === "config" || route === "compat" || route === "evict") {
     return SYSTEM_UPSTREAM_TIMEOUT_MS;
   }
   return DEFAULT_UPSTREAM_TIMEOUT_MS;

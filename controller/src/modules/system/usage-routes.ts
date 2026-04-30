@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Hono } from "hono";
 import type { AppContext } from "../../types/context";
-import { getUsageFromChatDatabases } from "./usage/chat-database";
+import { getUsageFromChatDatabases, mergeUsagePayloads } from "./usage/chat-database";
+import { getUsageFromPiSessions } from "./usage/pi-sessions";
 import { emptyResponse } from "./usage/usage-utilities";
 
 const usageDatabasePaths = (context: AppContext): string[] => {
@@ -22,8 +23,12 @@ const usageDatabasePaths = (context: AppContext): string[] => {
 export const registerUsageRoutes = (app: Hono, context: AppContext): void => {
   app.get("/usage", async (ctx) => {
     try {
-      const chatUsage = getUsageFromChatDatabases(usageDatabasePaths(context));
-      if (chatUsage) return ctx.json(chatUsage);
+      const usage = mergeUsagePayloads(
+        [getUsageFromChatDatabases(usageDatabasePaths(context)), getUsageFromPiSessions()].filter(
+          (payload): payload is Record<string, unknown> => Boolean(payload)
+        )
+      );
+      if (usage) return ctx.json(usage);
 
       return ctx.json(emptyResponse());
     } catch (error) {
