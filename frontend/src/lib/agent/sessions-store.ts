@@ -56,20 +56,48 @@ async function readSessionSummary(
       continue;
     }
     if (!header && event.type === "session") header = event;
-    if (event.type === "message_end") {
+    // Pi writes per-message events. Older versions used `message_end`;
+    // current versions use `message` with the message object nested under
+    // `event.message`. Accept both shapes, and also tolerate a flat
+    // `user_message` event with `content` directly on the event.
+    if (event.type === "message" || event.type === "message_end") {
       const message = event.message as
-        | { role?: string; content?: Array<{ type?: string; text?: string }> }
+        | { role?: string; content?: Array<{ type?: string; text?: string }> | string }
         | undefined;
       if (message?.role === "user") {
         turnCount += 1;
-        if (!firstUserMessage && Array.isArray(message.content)) {
-          const text = message.content
-            .filter((part) => part?.type === "text" && typeof part.text === "string")
-            .map((part) => part.text)
-            .join(" ")
-            .trim();
+        if (!firstUserMessage) {
+          let text: string | null = null;
+          if (Array.isArray(message.content)) {
+            text = message.content
+              .filter((part) => part?.type === "text" && typeof part.text === "string")
+              .map((part) => part.text as string)
+              .join(" ")
+              .trim();
+          } else if (typeof message.content === "string") {
+            text = message.content.trim();
+          }
           if (text) firstUserMessage = text.slice(0, 120);
         }
+      }
+    } else if (event.type === "user_message") {
+      turnCount += 1;
+      if (!firstUserMessage) {
+        const content = event.content as
+          | string
+          | Array<{ type?: string; text?: string }>
+          | undefined;
+        let text: string | null = null;
+        if (Array.isArray(content)) {
+          text = content
+            .filter((part) => part?.type === "text" && typeof part.text === "string")
+            .map((part) => part.text as string)
+            .join(" ")
+            .trim();
+        } else if (typeof content === "string") {
+          text = content.trim();
+        }
+        if (text) firstUserMessage = text.slice(0, 120);
       }
     }
   }
@@ -79,7 +107,8 @@ async function readSessionSummary(
     id: typeof header.id === "string" ? header.id : "",
     filename,
     cwd: typeof header.cwd === "string" ? header.cwd : "",
-    startedAt: typeof header.timestamp === "string" ? header.timestamp : stats.birthtime.toISOString(),
+    startedAt:
+      typeof header.timestamp === "string" ? header.timestamp : stats.birthtime.toISOString(),
     updatedAt: stats.mtime.toISOString(),
     modelId: typeof header.modelId === "string" ? header.modelId : null,
     provider: typeof header.provider === "string" ? header.provider : null,
