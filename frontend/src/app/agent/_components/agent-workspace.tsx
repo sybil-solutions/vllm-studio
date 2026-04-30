@@ -3,16 +3,19 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  loadAgentProjects,
+  PROJECTS_CHANGED_EVENT,
+  triggerAddProjectFlow,
+} from "@/components/projects-nav-section";
+import {
   ArrowLeft,
   ArrowRight,
   ChevronDown,
   ChevronRight,
   Cpu,
-  Folder,
   GitBranch,
   Plus,
   RotateCcw,
-  Trash2,
   X,
 } from "lucide-react";
 import { ChatPane, makeFreshTab, type SessionTab } from "./chat-pane";
@@ -26,7 +29,6 @@ import {
   type Layout,
   type PaneId,
 } from "./pane-layout";
-import { SessionsSidebar } from "./sessions-sidebar";
 
 type WebviewElement = HTMLElement & {
   goBack: () => void;
@@ -61,38 +63,14 @@ type ProjectEntry = {
   branch: string | null;
 };
 
-type DesktopBridge = {
-  openDirectory: () => Promise<ProjectEntry | null>;
-  listProjects: () => Promise<ProjectEntry[]>;
-  addProject: (directoryPath: string) => Promise<ProjectEntry>;
-  removeProject: (id: string) => Promise<{ ok: true }>;
-};
-
 const DEFAULT_AGENT_CWD = "";
 const SELECTED_PROJECT_KEY = "vllm-studio.agent.selectedProjectId";
-const SESSIONS_COLLAPSED_KEY = "vllm-studio.agent.sessionsCollapsed";
 const BROWSER_TOOL_KEY = "vllm-studio.agent.browserToolEnabled";
 const BROWSER_TOOL_DEFAULT_OFF_MIGRATION_KEY =
-  "vllm-studio.agent.browserToolDefaultOffMigration.v1";
+  "***************************************************";
 const COMPUTER_BROWSER_OPEN_KEY = "vllm-studio.agent.computer.browserOpen";
 const COMPUTER_FILES_OPEN_KEY = "vllm-studio.agent.computer.filesOpen";
 const PANE_LAYOUT_KEY = "vllm-studio.agent.paneLayout";
-
-function getDesktopBridge(): DesktopBridge | null {
-  if (typeof window === "undefined") return null;
-  const candidate = (window as unknown as { vllmStudioDesktop?: Partial<DesktopBridge> })
-    .vllmStudioDesktop;
-  if (!candidate) return null;
-  if (
-    typeof candidate.openDirectory !== "function" ||
-    typeof candidate.listProjects !== "function" ||
-    typeof candidate.addProject !== "function" ||
-    typeof candidate.removeProject !== "function"
-  ) {
-    return null;
-  }
-  return candidate as DesktopBridge;
-}
 
 function newPaneId(): PaneId {
   return `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -118,11 +96,8 @@ export function AgentWorkspace() {
   const [browserUrl, setBrowserUrl] = useState("https://www.google.com");
   const [browserInput, setBrowserInput] = useState("https://www.google.com");
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const [projectPickerInput, setProjectPickerInput] = useState("");
-  const [projectPickerError, setProjectPickerError] = useState("");
-  const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [browserToolEnabled, setBrowserToolEnabled] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(true);
   const [filesOpen, setFilesOpen] = useState(true);
@@ -131,7 +106,7 @@ export function AgentWorkspace() {
   // PaneId and points into panesById, which holds tabs + the per-pane
   // runtime session id used to scope the pi child process and the
   // /api/agent/turn calls. Each tab inside a pane has its own piSessionId
-  // (loaded from the sidebar or assigned by pi after the first turn).
+  // (loaded from URL session params or assigned by pi after the first turn).
   const [layout, setLayout] = useState<Layout>(() => ({ kind: "leaf", paneId: "p-init" }));
   const [panesById, setPanesById] = useState<Map<PaneId, PaneState>>(() => {
     const tab = makeFreshTab();
@@ -151,7 +126,6 @@ export function AgentWorkspace() {
   const webviewRef = useRef<WebviewElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const isElectron = typeof window !== "undefined" && /electron/i.test(navigator.userAgent);
-  const desktopBridge = useMemo<DesktopBridge | null>(() => getDesktopBridge(), []);
   const searchParams = useSearchParams();
   // Track which (project, session) URL params we've already consumed so
   // navigation back/forward doesn't re-trigger session replays.
@@ -162,16 +136,8 @@ export function AgentWorkspace() {
     [models, selectedModel],
   );
 
-  // The focused tab's piSessionId drives the sessions sidebar highlight.
-  const focusedPiSessionId = useMemo(() => {
-    const pane = panesById.get(focusedPaneId);
-    if (!pane) return null;
-    const tab = pane.tabs.find((t) => t.id === pane.activeTabId);
-    return tab?.piSessionId ?? null;
-  }, [panesById, focusedPaneId]);
-
   // Map of paneId → loader callback registered by each ChatPane on mount, so
-  // the workspace can request a session replay (sidebar click or split-drop).
+  // the workspace can request a session replay (URL params or split-drop).
   const paneLoadersRef = useRef<Map<PaneId, (piSessionId: string) => void>>(new Map());
   const registerPaneLoader = useCallback(
     (paneId: PaneId, loader: (piSessionId: string) => void) => {
@@ -338,12 +304,17 @@ export function AgentWorkspace() {
     };
   }, [browserToolEnabled, runBrowserCommand]);
 
-  // Restore preferences across reloads (sessions sidebar collapsed,
-  // browser-tool toggle, right-pane split ratio, multiplex layout shape).
+  // Restore preferences across reloads (browser-tool toggle, right-pane split ratio,
+  // multiplex layout shape).
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const collapsed = window.localStorage.getItem(SESSIONS_COLLAPSED_KEY);
-    if (collapsed === "1") setSessionsCollapsed(true);
+    const sessionsCollapsedCleaned = window.localStorage.getItem(
+      "vllm-studio.agent.sessionsCollapsedCleaned",
+    );
+    if (!sessionsCollapsedCleaned) {
+      window.localStorage.removeItem("vllm-studio.agent.sessionsCollapsed");
+      window.localStorage.setItem("vllm-studio.agent.sessionsCollapsedCleaned", "1");
+    }
     // One-time migration: reset stale ON state so the browser tool defaults
     // to OFF for existing users. New users naturally default to OFF.
     const migrated = window.localStorage.getItem(BROWSER_TOOL_DEFAULT_OFF_MIGRATION_KEY);
@@ -360,7 +331,7 @@ export function AgentWorkspace() {
     // Restore the pane layout shape only (split ratios + leaf placement). Each
     // referenced pane gets a fresh PaneState — we don't persist tab content
     // because pi sessions live in their own files and are picked from the
-    // sidebar after restore.
+    // left sidebar URL navigation after restore.
     try {
       const raw = window.localStorage.getItem(PANE_LAYOUT_KEY);
       if (!raw) return;
@@ -395,11 +366,6 @@ export function AgentWorkspace() {
     }
   }, [layout]);
 
-  const persistSessionsCollapsed = useCallback((value: boolean) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(SESSIONS_COLLAPSED_KEY, value ? "1" : "0");
-  }, []);
-
   const toggleBrowserOpen = useCallback(() => {
     setBrowserOpen((current) => {
       const next = !current;
@@ -430,40 +396,42 @@ export function AgentWorkspace() {
     });
   }, []);
 
-  const loadProjects = useCallback(async (): Promise<ProjectEntry[]> => {
-    if (desktopBridge) {
-      return desktopBridge.listProjects();
-    }
-    const response = await fetch("/api/agent/projects", { cache: "no-store" });
-    const payload = (await response.json()) as { projects?: ProjectEntry[]; error?: string };
-    if (!response.ok) throw new Error(payload.error || "Failed to load projects");
-    return payload.projects ?? [];
-  }, [desktopBridge]);
-
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const refreshProjects = async () => {
       try {
-        const list = await loadProjects();
+        const list = await loadAgentProjects();
         if (cancelled) return;
         setProjects(list);
+        setProjectsLoaded(true);
         const stored =
           typeof window !== "undefined" ? window.localStorage.getItem(SELECTED_PROJECT_KEY) : null;
         const initial = (stored && list.find((entry) => entry.id === stored)) || list[0];
         if (initial) {
           setSelectedProjectId(initial.id);
           setAgentCwd(initial.path);
+        } else {
+          setSelectedProjectId(null);
+          setAgentCwd(DEFAULT_AGENT_CWD);
         }
       } catch (err) {
         if (!cancelled) {
+          setProjectsLoaded(true);
           console.warn("[agent] failed to load projects", err);
         }
       }
-    })();
+    };
+    void refreshProjects();
+    if (typeof window !== "undefined") {
+      window.addEventListener(PROJECTS_CHANGED_EVENT, refreshProjects);
+    }
     return () => {
       cancelled = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener(PROJECTS_CHANGED_EVENT, refreshProjects);
+      }
     };
-  }, [loadProjects]);
+  }, []);
 
   const persistSelectedProjectId = useCallback((id: string | null) => {
     if (typeof window === "undefined") return;
@@ -534,112 +502,6 @@ export function AgentWorkspace() {
     }
   }, [searchParams, projects, selectedProjectId, selectProject, focusedPaneId]);
 
-  const addProjectFromPath = useCallback(
-    async (rawPath: string): Promise<ProjectEntry> => {
-      if (desktopBridge) {
-        return desktopBridge.addProject(rawPath);
-      }
-      const response = await fetch("/api/agent/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: rawPath }),
-      });
-      const payload = (await response.json()) as { project?: ProjectEntry; error?: string };
-      if (!response.ok || !payload.project) {
-        throw new Error(payload.error || "Failed to add project");
-      }
-      return payload.project;
-    },
-    [desktopBridge],
-  );
-
-  const handleOpenProject = useCallback(async () => {
-    setProjectPickerError("");
-    if (desktopBridge) {
-      try {
-        const project = await desktopBridge.openDirectory();
-        if (!project) return;
-        const list = await loadProjects();
-        setProjects(list);
-        selectProject(project);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to open directory");
-      }
-      return;
-    }
-    setProjectPickerInput("");
-    setProjectPickerOpen(true);
-  }, [desktopBridge, loadProjects, selectProject]);
-
-  const submitProjectPicker = useCallback(
-    async (event: FormEvent) => {
-      event.preventDefault();
-      const value = projectPickerInput.trim();
-      if (!value) return;
-      try {
-        const project = await addProjectFromPath(value);
-        const list = await loadProjects();
-        setProjects(list);
-        selectProject(project);
-        setProjectPickerOpen(false);
-        setProjectPickerInput("");
-        setProjectPickerError("");
-      } catch (err) {
-        setProjectPickerError(err instanceof Error ? err.message : "Failed to add project");
-      }
-    },
-    [addProjectFromPath, loadProjects, projectPickerInput, selectProject],
-  );
-
-  const removeProjectById = useCallback(
-    async (id: string) => {
-      try {
-        if (desktopBridge) {
-          await desktopBridge.removeProject(id);
-        } else {
-          const response = await fetch(`/api/agent/projects?id=${encodeURIComponent(id)}`, {
-            method: "DELETE",
-          });
-          if (!response.ok) {
-            const payload = (await response.json().catch(() => ({}))) as { error?: string };
-            throw new Error(payload.error || "Failed to remove project");
-          }
-        }
-        const list = await loadProjects();
-        setProjects(list);
-        if (selectedProjectId === id) {
-          const next = list[0] ?? null;
-          if (next) {
-            selectProject(next);
-          } else {
-            setSelectedProjectId(null);
-            persistSelectedProjectId(null);
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to remove project");
-      }
-    },
-    [desktopBridge, loadProjects, persistSelectedProjectId, selectProject, selectedProjectId],
-  );
-
-  const handleCwdInputChange = useCallback(
-    (value: string) => {
-      setAgentCwd(value);
-      const match = projects.find((entry) => entry.path === value.trim().replace(/\/+$/, ""));
-      if (match) {
-        if (selectedProjectId !== match.id) {
-          setSelectedProjectId(match.id);
-          persistSelectedProjectId(match.id);
-        }
-      } else if (selectedProjectId !== null) {
-        setSelectedProjectId(null);
-        persistSelectedProjectId(null);
-      }
-    },
-    [persistSelectedProjectId, projects, selectedProjectId],
-  );
-
   function normalizeBrowserInput(raw: string): string {
     const value = raw.trim();
     if (!value) return "https://www.google.com";
@@ -706,6 +568,8 @@ export function AgentWorkspace() {
     () => projects.find((entry) => entry.id === selectedProjectId) || null,
     [projects, selectedProjectId],
   );
+  const shouldShowProjectEmptyState =
+    projectsLoaded && !searchParams.get("project") && !selectedProjectId && projects.length === 0;
 
   return (
     <div className="flex h-[calc(100dvh-2.5rem)] min-h-0 w-full flex-col bg-(--bg) text-(--fg) md:h-[100dvh]">
@@ -727,28 +591,6 @@ export function AgentWorkspace() {
         </div>
 
         <div className="flex-1" />
-
-        <ProjectPicker
-          projects={projects}
-          activeId={selectedProjectId}
-          onSelect={selectProject}
-          onOpen={() => void handleOpenProject()}
-          onRemove={(id) => void removeProjectById(id)}
-          pickerOpen={projectPickerOpen}
-          onPickerOpenChange={setProjectPickerOpen}
-          pickerInput={projectPickerInput}
-          onPickerInputChange={setProjectPickerInput}
-          pickerError={projectPickerError}
-          onPickerSubmit={submitProjectPicker}
-          onPickerCancel={() => {
-            setProjectPickerOpen(false);
-            setProjectPickerInput("");
-            setProjectPickerError("");
-          }}
-          cwd={agentCwd}
-          onCwdChange={handleCwdInputChange}
-          running={false}
-        />
 
         <ModelPicker
           models={models}
@@ -788,133 +630,131 @@ export function AgentWorkspace() {
       ) : null}
 
       <div className="flex min-h-0 flex-1">
-        <SessionsSidebar
-          cwd={activeProject?.path ?? null}
-          activeSessionId={focusedPiSessionId}
-          onSelect={(id) => {
-            // Hand the session id to the focused pane's registered loader,
-            // which performs the GET /api/agent/sessions/:id replay into its
-            // active tab.
-            const loader = paneLoadersRef.current.get(focusedPaneId);
-            if (!loader) return;
-            loader(id);
-          }}
-          onNew={newThreadInFocusedPane}
-          collapsed={sessionsCollapsed}
-          onToggleCollapsed={() => {
-            const next = !sessionsCollapsed;
-            setSessionsCollapsed(next);
-            persistSessionsCollapsed(next);
-          }}
-        />
         <section className="flex min-w-0 flex-1 flex-col">
-          {!selectedProjectId && projects.length === 0 ? (
-            <div className="shrink-0 border-b border-(--border) bg-(--surface) px-6 py-2 text-[11px] text-(--dim)">
-              No project selected — agent runs in your home directory. Pick a project from the
-              header to scope it.
+          {shouldShowProjectEmptyState ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+              <div className="max-w-sm text-center">
+                <div className="text-sm font-semibold text-(--fg)">
+                  Add a project to get started
+                </div>
+                <p className="mt-2 text-xs leading-5 text-(--dim)">
+                  Choose a local folder so the agent can scope files and sessions to your work.
+                </p>
+                <button
+                  type="button"
+                  onClick={triggerAddProjectFlow}
+                  className="mt-4 inline-flex h-9 items-center gap-2 rounded border border-(--border) bg-(--surface) px-3 text-sm font-medium text-(--fg) hover:bg-(--bg)"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add a project
+                </button>
+              </div>
             </div>
-          ) : null}
-          <div className="min-h-0 flex-1">
-            <PaneGrid
-              layout={layout}
-              renderPane={(paneId) => {
-                const pane = panesById.get(paneId);
-                if (!pane) return null;
-                const onlyOne = collectLeaves(layout).length === 1;
-                return (
-                  <ChatPane
-                    key={paneId}
-                    paneId={paneId}
-                    runtimeSessionId={pane.runtimeSessionId}
-                    modelId={selectedModel}
-                    modelName={activeModel?.name ?? null}
-                    modelsLoading={loadingModels}
-                    cwd={agentCwd}
-                    projectName={activeProject?.name ?? null}
-                    browserToolEnabled={browserToolEnabled}
-                    onToggleBrowserTool={toggleBrowserTool}
-                    isFocused={focusedPaneId === paneId}
-                    onFocus={() => setFocusedPaneId(paneId)}
-                    tabs={pane.tabs}
-                    activeTabId={pane.activeTabId}
-                    onTabsChange={(nextTabs) => {
-                      setPanesById((current) => {
-                        const cur = current.get(paneId);
-                        if (!cur) return current;
-                        const next = new Map(current);
-                        next.set(paneId, { ...cur, tabs: nextTabs });
-                        return next;
-                      });
-                    }}
-                    onActiveTabChange={(tabId) => {
-                      setPanesById((current) => {
-                        const cur = current.get(paneId);
-                        if (!cur) return current;
-                        const next = new Map(current);
-                        next.set(paneId, { ...cur, activeTabId: tabId });
-                        return next;
-                      });
-                    }}
-                    onClose={
-                      onlyOne
-                        ? undefined
-                        : () => {
-                            setLayout((prev) => removeLeaf(prev, paneId) ?? prev);
-                            setPanesById((current) => {
-                              const next = new Map(current);
-                              next.delete(paneId);
-                              return next;
-                            });
-                            paneLoadersRef.current.delete(paneId);
-                            if (focusedPaneId === paneId) {
-                              const remaining = collectLeaves(layout).filter((id) => id !== paneId);
-                              if (remaining[0]) setFocusedPaneId(remaining[0]);
+          ) : (
+            <div className="min-h-0 flex-1">
+              <PaneGrid
+                layout={layout}
+                renderPane={(paneId) => {
+                  const pane = panesById.get(paneId);
+                  if (!pane) return null;
+                  const onlyOne = collectLeaves(layout).length === 1;
+                  return (
+                    <ChatPane
+                      key={paneId}
+                      paneId={paneId}
+                      runtimeSessionId={pane.runtimeSessionId}
+                      modelId={selectedModel}
+                      modelName={activeModel?.name ?? null}
+                      modelsLoading={loadingModels}
+                      cwd={agentCwd}
+                      projectName={activeProject?.name ?? null}
+                      browserToolEnabled={browserToolEnabled}
+                      onToggleBrowserTool={toggleBrowserTool}
+                      isFocused={focusedPaneId === paneId}
+                      onFocus={() => setFocusedPaneId(paneId)}
+                      tabs={pane.tabs}
+                      activeTabId={pane.activeTabId}
+                      onTabsChange={(nextTabs) => {
+                        setPanesById((current) => {
+                          const cur = current.get(paneId);
+                          if (!cur) return current;
+                          const next = new Map(current);
+                          next.set(paneId, { ...cur, tabs: nextTabs });
+                          return next;
+                        });
+                      }}
+                      onActiveTabChange={(tabId) => {
+                        setPanesById((current) => {
+                          const cur = current.get(paneId);
+                          if (!cur) return current;
+                          const next = new Map(current);
+                          next.set(paneId, { ...cur, activeTabId: tabId });
+                          return next;
+                        });
+                      }}
+                      onClose={
+                        onlyOne
+                          ? undefined
+                          : () => {
+                              setLayout((prev) => removeLeaf(prev, paneId) ?? prev);
+                              setPanesById((current) => {
+                                const next = new Map(current);
+                                next.delete(paneId);
+                                return next;
+                              });
+                              paneLoadersRef.current.delete(paneId);
+                              if (focusedPaneId === paneId) {
+                                const remaining = collectLeaves(layout).filter(
+                                  (id) => id !== paneId,
+                                );
+                                if (remaining[0]) setFocusedPaneId(remaining[0]);
+                              }
                             }
-                          }
-                    }
-                    registerExternalLoader={(loader) => registerPaneLoader(paneId, loader)}
-                  />
-                );
-              }}
-              onSplit={(paneId, direction, side, payload) => {
-                // Create a new pane next to the drop target. If a session
-                // payload is included, pre-load that session into the new
-                // pane's tab on next tick (after registerExternalLoader fires).
-                const id = newPaneId();
-                const runtime = newRuntimeId();
-                const baseTab = makeFreshTab();
-                setPanesById((current) => {
-                  const next = new Map(current);
-                  next.set(id, {
-                    tabs: [baseTab],
-                    activeTabId: baseTab.id,
-                    runtimeSessionId: runtime,
+                      }
+                      registerExternalLoader={(loader) => registerPaneLoader(paneId, loader)}
+                    />
+                  );
+                }}
+                onSplit={(paneId, direction, side, payload) => {
+                  // Create a new pane next to the drop target. If a session
+                  // payload is included, pre-load that session into the new
+                  // pane's tab on next tick (after registerExternalLoader fires).
+                  const id = newPaneId();
+                  const runtime = newRuntimeId();
+                  const baseTab = makeFreshTab();
+                  setPanesById((current) => {
+                    const next = new Map(current);
+                    next.set(id, {
+                      tabs: [baseTab],
+                      activeTabId: baseTab.id,
+                      runtimeSessionId: runtime,
+                    });
+                    return next;
                   });
-                  return next;
-                });
-                setLayout((prev) => splitLeaf(prev, paneId, id, direction, side));
-                setFocusedPaneId(id);
+                  setLayout((prev) => splitLeaf(prev, paneId, id, direction, side));
+                  setFocusedPaneId(id);
 
-                if (payload.piSessionId) {
-                  const target = payload.piSessionId;
-                  // Wait until the new ChatPane has mounted and registered
-                  // its loader before requesting the replay.
-                  const tryLoad = () => {
-                    const loader = paneLoadersRef.current.get(id);
-                    if (loader) {
-                      loader(target);
-                    } else {
-                      setTimeout(tryLoad, 16);
-                    }
-                  };
-                  setTimeout(tryLoad, 0);
-                }
-              }}
-              onResize={(path, ratio) => {
-                setLayout((prev) => setSplitRatio(prev, path, ratio));
-              }}
-            />
-          </div>
+                  if (payload.piSessionId) {
+                    const target = payload.piSessionId;
+                    // Wait until the new ChatPane has mounted and registered
+                    // its loader before requesting the replay.
+                    const tryLoad = () => {
+                      const loader = paneLoadersRef.current.get(id);
+                      if (loader) {
+                        loader(target);
+                      } else {
+                        setTimeout(tryLoad, 16);
+                      }
+                    };
+                    setTimeout(tryLoad, 0);
+                  }
+                }}
+                onResize={(path, ratio) => {
+                  setLayout((prev) => setSplitRatio(prev, path, ratio));
+                }}
+              />
+            </div>
+          )}
         </section>
 
         {rightPanelOpen ? (
@@ -1036,207 +876,6 @@ export function AgentWorkspace() {
           </aside>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function ProjectPicker({
-  projects,
-  activeId,
-  onSelect,
-  onOpen,
-  onRemove,
-  pickerOpen,
-  onPickerOpenChange,
-  pickerInput,
-  onPickerInputChange,
-  pickerError,
-  onPickerSubmit,
-  onPickerCancel,
-  cwd,
-  onCwdChange,
-  running,
-}: {
-  projects: ProjectEntry[];
-  activeId: string | null;
-  onSelect: (project: ProjectEntry) => void;
-  onOpen: () => void;
-  onRemove: (id: string) => void;
-  pickerOpen: boolean;
-  onPickerOpenChange: (value: boolean) => void;
-  pickerInput: string;
-  onPickerInputChange: (value: string) => void;
-  pickerError: string;
-  onPickerSubmit: (event: FormEvent) => void;
-  onPickerCancel: () => void;
-  cwd: string;
-  onCwdChange: (value: string) => void;
-  running: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const active = projects.find((entry) => entry.id === activeId) || null;
-
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(event: MouseEvent) {
-      if (!containerRef.current) return;
-      if (!containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-7 max-w-[260px] items-center gap-1.5 rounded border border-(--border) bg-(--surface) px-2 text-xs text-(--fg) hover:bg-(--bg)"
-        title={active?.path || "No project selected"}
-      >
-        <Folder className="h-3.5 w-3.5 shrink-0 text-(--dim)" />
-        <span className="truncate">{active?.name || "Choose project"}</span>
-        <ChevronDown className="h-3 w-3 shrink-0 text-(--dim)" />
-      </button>
-      {open ? (
-        <div className="absolute right-0 top-9 z-50 w-80 overflow-hidden rounded-md border border-(--border) bg-(--surface) shadow-lg">
-          <div className="max-h-72 overflow-y-auto p-1">
-            {projects.length === 0 ? (
-              <div className="px-3 py-4 text-center text-xs text-(--dim)">
-                No projects yet. Open a directory to get started.
-              </div>
-            ) : (
-              projects.map((project) => (
-                <ProjectRow
-                  key={project.id}
-                  project={project}
-                  active={project.id === activeId}
-                  onSelect={() => {
-                    onSelect(project);
-                    setOpen(false);
-                  }}
-                  onRemove={() => onRemove(project.id)}
-                />
-              ))
-            )}
-          </div>
-          <div className="border-t border-(--border) p-2">
-            {pickerOpen ? (
-              <form onSubmit={onPickerSubmit} className="space-y-1.5">
-                <input
-                  value={pickerInput}
-                  onChange={(event) => onPickerInputChange(event.target.value)}
-                  placeholder="/Users/you/code/my-project"
-                  spellCheck={false}
-                  autoFocus
-                  className="w-full rounded border border-(--border) bg-(--bg) px-2 py-1 font-mono text-[11px] text-(--fg) outline-none"
-                />
-                {pickerError ? <div className="text-[11px] text-(--err)">{pickerError}</div> : null}
-                <div className="flex items-center justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={onPickerCancel}
-                    className="h-6 rounded px-2 text-[11px] text-(--dim) hover:bg-(--bg) hover:text-(--fg)"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="h-6 rounded bg-(--fg) px-2 text-[11px] font-medium text-(--bg)"
-                  >
-                    Add
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  onOpen();
-                  // Keep dropdown open so the inline form (web fallback) remains visible.
-                  if (!isLikelyElectron()) onPickerOpenChange(true);
-                }}
-                className="flex w-full items-center justify-center gap-1.5 rounded border border-dashed border-(--border) px-2 py-1.5 text-xs text-(--dim) hover:bg-(--bg) hover:text-(--fg)"
-              >
-                <Plus className="h-3.5 w-3.5" /> Open project…
-              </button>
-            )}
-          </div>
-          <div className="border-t border-(--border) p-2">
-            <label className="block text-[10px] uppercase tracking-wide text-(--dim)">cwd</label>
-            <input
-              value={cwd}
-              onChange={(event) => onCwdChange(event.target.value)}
-              disabled={running}
-              spellCheck={false}
-              className="mt-1 w-full rounded border border-(--border) bg-(--bg) px-2 py-1 font-mono text-[11px] text-(--fg) outline-none disabled:opacity-60"
-              aria-label="Agent working directory"
-            />
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function isLikelyElectron(): boolean {
-  if (typeof window === "undefined") return false;
-  return /electron/i.test(navigator.userAgent);
-}
-
-function ProjectRow({
-  project,
-  active,
-  onSelect,
-  onRemove,
-}: {
-  project: ProjectEntry;
-  active: boolean;
-  onSelect: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div
-      className={`group flex items-start gap-2 rounded px-2 py-1.5 text-left ${
-        active ? "bg-(--bg)" : "hover:bg-(--bg)"
-      } ${project.exists ? "" : "opacity-60"}`}
-    >
-      <button
-        type="button"
-        onClick={onSelect}
-        title={project.path}
-        className="flex min-w-0 flex-1 items-start gap-2 text-left"
-      >
-        <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--dim)" />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
-            <span className="truncate text-xs font-medium text-(--fg)">{project.name}</span>
-            {project.hasGit && project.branch ? (
-              <span className="inline-flex items-center gap-1 rounded border border-(--border) px-1 font-mono text-[10px] text-(--dim)">
-                <GitBranch className="h-2.5 w-2.5" />
-                <span className="max-w-[80px] truncate">{project.branch}</span>
-              </span>
-            ) : null}
-          </span>
-          <span className="block truncate text-[10px] text-(--dim)">{project.path}</span>
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onRemove();
-        }}
-        className="mt-0.5 rounded p-0.5 text-(--dim) opacity-0 hover:bg-(--surface) hover:text-(--err) group-hover:opacity-100"
-        title="Remove from list"
-        aria-label="Remove project"
-      >
-        <Trash2 className="h-3 w-3" />
-      </button>
     </div>
   );
 }

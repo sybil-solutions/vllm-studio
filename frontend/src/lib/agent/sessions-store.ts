@@ -17,6 +17,10 @@ export type SessionSummary = {
 
 export type SessionEvent = Record<string, unknown> & { type?: string };
 
+type ListSessionsOptions = {
+  since?: Date;
+};
+
 // Pi encodes the cwd by stripping the leading '/' and replacing remaining '/'
 // with '-', then wrapping with '--' on both sides. Example:
 //   /Users/sero/projects/vllm-studio  →  --Users-sero-projects-vllm-studio--
@@ -117,14 +121,19 @@ async function readSessionSummary(
   };
 }
 
-export async function listSessions(cwd: string): Promise<SessionSummary[]> {
+export async function listSessions(
+  cwd: string,
+  options: ListSessionsOptions = {},
+): Promise<SessionSummary[]> {
   const dir = sessionsDirForCwd(cwd);
   if (!existsSync(dir)) return [];
   const entries = readdirSync(dir).filter((name) => name.endsWith(".jsonl"));
   const summaries: SessionSummary[] = [];
   for (const filename of entries) {
     try {
-      const summary = await readSessionSummary(path.join(dir, filename), filename);
+      const filepath = path.join(dir, filename);
+      if (options.since && statSync(filepath).mtime < options.since) continue;
+      const summary = await readSessionSummary(filepath, filename);
       if (summary && summary.id) summaries.push(summary);
     } catch {
       // skip corrupted files
