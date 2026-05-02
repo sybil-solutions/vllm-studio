@@ -17,14 +17,24 @@ export interface JobRecord {
 
 const MAX_LOGS_PER_JOB = 200;
 
+/**
+ *
+ */
 export class JobStore {
   private readonly db: Database;
 
+  /**
+   *
+   * @param dbPath
+   */
   public constructor(dbPath: string) {
     this.db = openSqliteDatabase(dbPath);
     this.migrate();
   }
 
+  /**
+   *
+   */
   private migrate(): void {
     this.db.run(`
       CREATE TABLE IF NOT EXISTS jobs (
@@ -42,17 +52,27 @@ export class JobStore {
     `);
   }
 
+  /**
+   *
+   * @param id
+   * @param type
+   * @param input
+   */
   public create(id: string, type: string, input: Record<string, unknown>): JobRecord {
     const now = new Date().toISOString();
     this.db
       .query(
         `INSERT INTO jobs (id, type, status, progress, input, logs, created_at, updated_at)
-         VALUES (?, ?, 'pending', 0, ?, '[]', ?, ?)`,
+         VALUES (?, ?, 'pending', 0, ?, '[]', ?, ?)`
       )
       .run(id, type, JSON.stringify(input), now, now);
     return this.get(id)!;
   }
 
+  /**
+   *
+   * @param id
+   */
   public get(id: string): JobRecord | null {
     return (this.db.query("SELECT * FROM jobs WHERE id = ?").get(id) as JobRecord) ?? null;
   }
@@ -75,7 +95,7 @@ export class JobStore {
    */
   public update(
     id: string,
-    fields: Partial<Pick<JobRecord, "status" | "progress" | "result" | "error">>,
+    fields: Partial<Pick<JobRecord, "status" | "progress" | "result" | "error">>
   ): void {
     const sets: string[] = ["updated_at = datetime('now')"];
     const vals: unknown[] = [];

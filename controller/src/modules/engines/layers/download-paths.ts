@@ -2,7 +2,10 @@
 import { resolve, sep } from "node:path";
 import type { Config } from "../../../config/env";
 
-/** Sanitizes a user-supplied path, stripping traversal segments. */
+/**
+ * Sanitizes a user-supplied path, stripping traversal segments.
+ * @param value
+ */
 export const sanitizePathSegments = (value: string): string[] => {
   return value
     .split(/[\\/]/)
@@ -10,8 +13,17 @@ export const sanitizePathSegments = (value: string): string[] => {
     .filter((segment) => Boolean(segment) && segment !== "." && segment !== "..");
 };
 
-/** Resolves a model download directory under `config.models_dir`, rejecting path traversal. */
-export const resolveDownloadRoot = (config: Config, modelId: string, destination?: string | null): string => {
+/**
+ * Resolves a model download directory under `config.models_dir`, rejecting path traversal.
+ * @param config
+ * @param modelId
+ * @param destination
+ */
+export const resolveDownloadRoot = (
+  config: Config,
+  modelId: string,
+  destination?: string | null
+): string => {
   const base = resolve(config.models_dir);
   const segments = destination ? sanitizePathSegments(destination) : sanitizePathSegments(modelId);
   const target = resolve(base, ...segments);
@@ -21,4 +33,3 @@ export const resolveDownloadRoot = (config: Config, modelId: string, destination
   }
   return target;
 };
-

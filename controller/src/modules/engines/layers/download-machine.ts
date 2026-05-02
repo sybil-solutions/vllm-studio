@@ -25,7 +25,13 @@ export interface DownloadMachineSnapshot {
 
 // ── Events ────────────────────────────────────────────────────────────────
 export type DownloadMachineEvent =
-  | { type: "START"; downloadId: string; modelId: string; destination: string; files: DownloadFileInfo[] }
+  | {
+      type: "START";
+      downloadId: string;
+      modelId: string;
+      destination: string;
+      files: DownloadFileInfo[];
+    }
   | { type: "PROGRESS"; bytes: number; total: number | null; currentFile: string }
   | { type: "VERIFY_START" }
   | { type: "VERIFY_PASS" }
@@ -45,15 +51,15 @@ export type DownloadMachineEffect =
   | { type: "STORE_PROGRESS"; downloadedBytes: number; totalBytes: number | null }
   | { type: "LOG"; level: string; message: string; meta?: Record<string, unknown> };
 
-type TransitionFn = (
+type TransitionFunction = (
   state: DownloadMachineSnapshot,
-  event: DownloadMachineEvent,
+  event: DownloadMachineEvent
 ) => {
   state: DownloadMachineSnapshot;
   effects: DownloadMachineEffect[];
 };
 
-const transition: TransitionFn = (current, event) => {
+const transition: TransitionFunction = (current, event) => {
   const effects: DownloadMachineEffect[] = [];
 
   switch (current.state) {
@@ -73,7 +79,11 @@ const transition: TransitionFn = (current, event) => {
             currentFile: null,
           },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: event.downloadId, status: "queued" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: event.downloadId, status: "queued" },
+            },
           ],
         };
       }
@@ -86,7 +96,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "canceled", error: null },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "canceled" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "canceled" },
+            },
           ],
         };
       }
@@ -101,7 +115,11 @@ const transition: TransitionFn = (current, event) => {
             currentFile: event.currentFile,
           },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "downloading" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "downloading" },
+            },
           ],
         };
       }
@@ -114,7 +132,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "canceled" },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "canceled" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "canceled" },
+            },
           ],
         };
       }
@@ -122,8 +144,16 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "paused" },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "paused" } },
-            { type: "STORE_PROGRESS", downloadedBytes: current.downloadedBytes, totalBytes: current.totalBytes },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "paused" },
+            },
+            {
+              type: "STORE_PROGRESS",
+              downloadedBytes: current.downloadedBytes,
+              totalBytes: current.totalBytes,
+            },
           ],
         };
       }
@@ -136,7 +166,16 @@ const transition: TransitionFn = (current, event) => {
             currentFile: event.currentFile,
           },
           effects: [
-            { type: "EMIT_EVENT", event: "download_progress", payload: { id: current.downloadId, downloadedBytes: event.bytes, totalBytes: event.total, currentFile: event.currentFile } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_progress",
+              payload: {
+                id: current.downloadId,
+                downloadedBytes: event.bytes,
+                totalBytes: event.total,
+                currentFile: event.currentFile,
+              },
+            },
             { type: "STORE_PROGRESS", downloadedBytes: event.bytes, totalBytes: event.total },
           ],
         };
@@ -145,7 +184,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "error", error: event.reason },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "error", error: event.reason } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "error", error: event.reason },
+            },
           ],
         };
       }
@@ -153,7 +196,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, currentFile: event.path },
           effects: [
-            { type: "EMIT_EVENT", event: "download_progress", payload: { id: current.downloadId, fileComplete: event.path } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_progress",
+              payload: { id: current.downloadId, fileComplete: event.path },
+            },
           ],
         };
       }
@@ -161,7 +208,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "verifying" },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "verifying" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "verifying" },
+            },
           ],
         };
       }
@@ -174,7 +225,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "ready", error: null },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "completed" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "completed" },
+            },
           ],
         };
       }
@@ -182,7 +237,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "error", error: event.reason },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "error", error: event.reason } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "error", error: event.reason },
+            },
           ],
         };
       }
@@ -190,7 +249,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "canceled" },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "canceled" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "canceled" },
+            },
           ],
         };
       }
@@ -203,7 +266,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "queued" },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "queued" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "queued" },
+            },
           ],
         };
       }
@@ -211,7 +278,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "canceled" },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "canceled" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "canceled" },
+            },
           ],
         };
       }
@@ -230,7 +301,11 @@ const transition: TransitionFn = (current, event) => {
         return {
           state: { ...current, state: "queued", error: null },
           effects: [
-            { type: "EMIT_EVENT", event: "download_state", payload: { id: current.downloadId, status: "queued" } },
+            {
+              type: "EMIT_EVENT",
+              event: "download_state",
+              payload: { id: current.downloadId, status: "queued" },
+            },
           ],
         };
       }

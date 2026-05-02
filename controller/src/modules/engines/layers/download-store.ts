@@ -3,14 +3,24 @@ import type { ModelDownload } from "../types";
 import { openSqliteDatabase } from "../../../stores/sqlite";
 import { parseJsonOrNull } from "../../../core/json";
 
+/**
+ *
+ */
 export class DownloadStore {
   private readonly db: ReturnType<typeof openSqliteDatabase>;
 
+  /**
+   *
+   * @param dbPath
+   */
   public constructor(dbPath: string) {
     this.db = openSqliteDatabase(dbPath);
     this.migrate();
   }
 
+  /**
+   *
+   */
   private migrate(): void {
     this.db.run(`
       CREATE TABLE IF NOT EXISTS model_downloads (
@@ -22,6 +32,9 @@ export class DownloadStore {
     `);
   }
 
+  /**
+   *
+   */
   public list(): ModelDownload[] {
     const rows = this.db
       .query("SELECT data FROM model_downloads ORDER BY updated_at DESC")
@@ -39,6 +52,10 @@ export class DownloadStore {
     return downloads;
   }
 
+  /**
+   *
+   * @param id
+   */
   public get(id: string): ModelDownload | null {
     const row = this.db.query("SELECT data FROM model_downloads WHERE id = ?").get(id) as {
       data: string;
@@ -53,6 +70,10 @@ export class DownloadStore {
     return record as unknown as ModelDownload;
   }
 
+  /**
+   *
+   * @param download
+   */
   public save(download: ModelDownload): void {
     const data = JSON.stringify(download);
     this.db
@@ -66,6 +87,10 @@ export class DownloadStore {
       .run(download.id, data);
   }
 
+  /**
+   *
+   * @param id
+   */
   public delete(id: string): boolean {
     const result = this.db.query("DELETE FROM model_downloads WHERE id = ?").run(id);
     return result.changes > 0;

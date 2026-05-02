@@ -9,7 +9,13 @@ do
   fi
 
   if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-    range="$local_sha"
+    default_ref="$(git symbolic-ref --quiet --short "refs/remotes/$remote/HEAD" 2>/dev/null || printf '%s/main' "$remote")"
+    base_sha="$(git merge-base "$default_ref" "$local_sha" 2>/dev/null || true)"
+    if [ -n "$base_sha" ]; then
+      range="$base_sha..$local_sha"
+    else
+      range="$local_sha"
+    fi
   else
     range="$remote_sha..$local_sha"
   fi

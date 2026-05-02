@@ -19,9 +19,46 @@ async function isDirectory(candidate: string): Promise<boolean> {
   }
 }
 
+function isLoopbackHost(host: string | null): boolean {
+  const value = host ?? "";
+  const hostname = value.startsWith("[")
+    ? value.slice(1, value.indexOf("]"))
+    : value.split(":")[0]?.toLowerCase();
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function configuredRoots(): string[] {
+  const raw = process.env.VLLM_STUDIO_DIRECTORY_BROWSER_ROOTS;
+  if (!raw) return [];
+  return raw
+    .split(path.delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => path.resolve(entry));
+}
+
+function isWithinRoot(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
+  );
+}
+
 export async function GET(request: NextRequest) {
+  const roots = configuredRoots();
+  const remoteBrowserEnabled = process.env.VLLM_STUDIO_ENABLE_REMOTE_DIRECTORY_BROWSER === "1";
+  if (!isLoopbackHost(request.headers.get("host")) && !(remoteBrowserEnabled && roots.length > 0)) {
+    return Response.json(
+      { error: "Directory browsing is only available locally" },
+      { status: 403 },
+    );
+  }
+
   const requestedPath = request.nextUrl.searchParams.get("path")?.trim();
   const directoryPath = path.resolve(requestedPath || os.homedir());
+  if (roots.length > 0 && !roots.some((root) => isWithinRoot(directoryPath, root))) {
+    return Response.json({ error: "Path is outside the allowed directories" }, { status: 403 });
+  }
 
   if (!(await isDirectory(directoryPath))) {
     return Response.json({ error: "Path is not a directory" }, { status: 400 });

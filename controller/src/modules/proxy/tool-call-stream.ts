@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createToolCallId, parseToolCallsFromContent, type ToolCall } from "./tool-call-parser";
+import { parseToolCallsFromContent, type ToolCall } from "./tool-call-parser";
 
 export interface StreamUsage {
   prompt_tokens: number;

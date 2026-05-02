@@ -23,10 +23,24 @@ const usageDatabasePaths = (context: AppContext): string[] => {
 export const registerUsageRoutes = (app: Hono, context: AppContext): void => {
   app.get("/usage", async (ctx) => {
     try {
+      // Collect known vLLM Studio model names from the recipe store so we
+      // can exclude pi-session data from non-vLLM models (e.g. OpenAI).
+      const knownModels = new Set<string>();
+      for (const recipe of context.stores.recipeStore.list()) {
+        if (recipe.served_model_name) knownModels.add(recipe.served_model_name);
+        knownModels.add(recipe.id);
+        if (recipe.name) knownModels.add(recipe.name);
+      }
+
       const usage = mergeUsagePayloads(
-        [getUsageFromChatDatabases(usageDatabasePaths(context)), getUsageFromPiSessions()].filter(
-          (payload): payload is Record<string, unknown> => Boolean(payload)
-        )
+        [
+          getUsageFromChatDatabases(usageDatabasePaths(context)),
+          getUsageFromPiSessions(
+            undefined,
+            undefined,
+            knownModels.size > 0 ? knownModels : undefined
+          ),
+        ].filter((payload): payload is Record<string, unknown> => Boolean(payload))
       );
       if (usage) return ctx.json(usage);
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="${FACTORY_PROJECT_DIR:-/Users/sero/projects/vllm-studio}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${FACTORY_PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
 MARKER="$PROJECT_DIR/.factory/.needs-desktop-rebuild"
 
 should_mark_file() {

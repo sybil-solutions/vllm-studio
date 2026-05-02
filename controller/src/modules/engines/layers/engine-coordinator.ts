@@ -10,14 +10,31 @@ import type { Logger } from "../../../core/logger";
 import type { ProcessManager } from "./process-manager";
 import type { RecipeStore } from "../../models/recipes/recipe-store";
 import { LIFECYCLE_READY_TIMEOUT_MS } from "../configs";
-import type { EngineService, RuntimeType, UpgradeResult, RuntimeInfo, DownloadRequest, HfModel, SetActiveRecipeResult, SetActiveRecipeOptions } from "../services/engine-service";
+import type {
+  EngineService,
+  RuntimeType,
+  UpgradeResult,
+  RuntimeInfo,
+  DownloadRequest,
+  HfModel,
+  SetActiveRecipeResult,
+  SetActiveRecipeOptions,
+} from "../services/engine-service";
 import type { ModelDownload } from "../../shared/recipe-types";
 
 import type { DownloadManager } from "./download-manager";
 import { getVllmRuntimeInfo, upgradeVllmRuntime, getVllmConfigHelp } from "./vllm-runtime";
 import { getLlamacppConfigHelp } from "./llamacpp-runtime";
-import { getLlamacppRuntimeInfo, getSglangRuntimeInfo, getExllamav3RuntimeInfo } from "./runtime-info";
-import { upgradeSglangRuntime, upgradeLlamacppRuntime, runPlatformUpgrade } from "./runtime-upgrade";
+import {
+  getLlamacppRuntimeInfo,
+  getSglangRuntimeInfo,
+  getExllamav3RuntimeInfo,
+} from "./runtime-info";
+import {
+  upgradeSglangRuntime,
+  upgradeLlamacppRuntime,
+  runPlatformUpgrade,
+} from "./runtime-upgrade";
 import { fetchHuggingFaceModelInfo } from "./huggingface-api";
 
 interface CoordinatorDeps {
@@ -30,10 +47,17 @@ interface CoordinatorDeps {
   abortRunsForModel?: (modelName: string) => number;
 }
 
+/**
+ *
+ */
 export class EngineCoordinator implements EngineService {
   private readonly switchLock = new AsyncLock();
   private currentRecipe: Recipe | null = null;
 
+  /**
+   *
+   * @param deps
+   */
   constructor(private readonly deps: CoordinatorDeps) {}
 
   // ── Lifecycle ──
@@ -65,7 +89,9 @@ export class EngineCoordinator implements EngineService {
       );
       return { ok: false, error: "Launch cancelled" };
     };
-    const abortIfNeeded = async (targetRecipe: Recipe | null): Promise<SetActiveRecipeResult | null> => {
+    const abortIfNeeded = async (
+      targetRecipe: Recipe | null
+    ): Promise<SetActiveRecipeResult | null> => {
       if (!options.signal?.aborted) return null;
       if (!targetRecipe) return null;
       return publishCancelled(targetRecipe);
@@ -167,6 +193,17 @@ export class EngineCoordinator implements EngineService {
     }
   }
 
+  /**
+   *
+   * @param options
+   * @param options.recipe
+   * @param options.pid
+   * @param options.logFilePath
+   * @param options.cancel
+   * @param options.timeoutMs
+   * @param options.fatalPatterns
+   * @param options.onProgress
+   */
   private async waitForReady(options: {
     recipe: Recipe;
     pid: number | null;
@@ -185,9 +222,7 @@ export class EngineCoordinator implements EngineService {
       }
 
       if (options.pid && !pidExists(options.pid)) {
-        const errorTail = options.logFilePath
-          ? readFileTailBytes(options.logFilePath, 500)
-          : "";
+        const errorTail = options.logFilePath ? readFileTailBytes(options.logFilePath, 500) : "";
         return {
           ready: false,
           message: `Model ${options.recipe.id} crashed during startup: ${errorTail.slice(-200)}`,
@@ -201,9 +236,7 @@ export class EngineCoordinator implements EngineService {
           const lines = logTail.split("\n");
           const index = lines.findIndex((line) => line.includes(pattern));
           const snippet =
-            index >= 0
-              ? lines.slice(Math.max(0, index - 1), index + 3).join("\n")
-              : pattern;
+            index >= 0 ? lines.slice(Math.max(0, index - 1), index + 3).join("\n") : pattern;
           return { ready: false, message: `Fatal error: ${snippet.slice(0, 300)}` };
         }
       }
@@ -233,6 +266,10 @@ export class EngineCoordinator implements EngineService {
     };
   }
 
+  /**
+   *
+   * @param current
+   */
   private findRecipeForProcess(current: ProcessInfo): Recipe | null {
     for (const candidate of this.deps.recipeStore.list()) {
       if (isRecipeRunning(candidate, current, { allowEitherPathContains: true })) {
@@ -242,10 +279,14 @@ export class EngineCoordinator implements EngineService {
     return null;
   }
 
+  /**
+   *
+   * @param recipe
+   */
   private abortRunsForRecipe(recipe: Recipe): void {
     if (!this.deps.abortRunsForModel) return;
-    const modelCandidates = [recipe.served_model_name, recipe.id].filter(
-      (value): value is string => Boolean(value && value.trim())
+    const modelCandidates = [recipe.served_model_name, recipe.id].filter((value): value is string =>
+      Boolean(value && value.trim())
     );
 
     let totalAborted = 0;
@@ -266,18 +307,29 @@ export class EngineCoordinator implements EngineService {
     }
   }
 
+  /**
+   *
+   * @param recipe
+   * @param options
+   * @param options.force_evict
+   * @param options.publish_events
+   */
   async ensureActive(
     recipe: Recipe,
     options: { force_evict?: boolean; publish_events?: boolean } = {}
   ): Promise<{ switched: boolean; error: string | null }> {
-    const existing = await this.deps.processManager.findInferenceProcess(this.deps.config.inference_port);
+    const existing = await this.deps.processManager.findInferenceProcess(
+      this.deps.config.inference_port
+    );
     if (existing && isRecipeRunning(recipe, existing)) {
       return { switched: false, error: null };
     }
 
     const release = await this.switchLock.acquire();
     try {
-      const latest = await this.deps.processManager.findInferenceProcess(this.deps.config.inference_port);
+      const latest = await this.deps.processManager.findInferenceProcess(
+        this.deps.config.inference_port
+      );
       if (latest && isRecipeRunning(recipe, latest)) {
         return { switched: false, error: null };
       }
@@ -286,7 +338,7 @@ export class EngineCoordinator implements EngineService {
       const observedProcess = latest ?? existing;
       const fromRecipe = observedProcess ? this.findRecipeForProcess(observedProcess) : null;
       const fromModel = fromRecipe
-        ? fromRecipe.served_model_name ?? fromRecipe.id
+        ? (fromRecipe.served_model_name ?? fromRecipe.id)
         : observedProcess
           ? observedProcess.model_path
           : null;
@@ -372,42 +424,77 @@ export class EngineCoordinator implements EngineService {
     }
   }
 
+  /**
+   *
+   */
   getCurrentRecipe(): Recipe | null {
     return this.currentRecipe;
   }
 
+  /**
+   *
+   */
   async getCurrentProcess(): Promise<ProcessInfo | null> {
     return this.deps.processManager.findInferenceProcess(this.deps.config.inference_port);
   }
 
   // ── Downloads ──
 
+  /**
+   *
+   * @param request
+   */
   async startDownload(request: DownloadRequest): Promise<ModelDownload> {
     return await this.deps.downloadManager.start(request);
   }
 
+  /**
+   *
+   * @param downloadId
+   */
   pauseDownload(downloadId: string): ModelDownload {
     return this.deps.downloadManager.pause(downloadId);
   }
 
+  /**
+   *
+   * @param downloadId
+   * @param hfToken
+   */
   resumeDownload(downloadId: string, hfToken?: string | null): ModelDownload {
     return this.deps.downloadManager.resume(downloadId, hfToken ?? null);
   }
 
+  /**
+   *
+   * @param downloadId
+   */
   cancelDownload(downloadId: string): ModelDownload {
     return this.deps.downloadManager.cancel(downloadId);
   }
 
+  /**
+   *
+   */
   listDownloads(): ModelDownload[] {
     return this.deps.downloadManager.list();
   }
 
+  /**
+   *
+   * @param downloadId
+   */
   getDownload(downloadId: string): ModelDownload | null {
     return this.deps.downloadManager.get(downloadId);
   }
 
   // ── HuggingFace ──
 
+  /**
+   *
+   * @param query
+   * @param hfToken
+   */
   async searchHuggingFace(query: string, hfToken?: string | null): Promise<HfModel[]> {
     const info = await fetchHuggingFaceModelInfo(query, undefined, hfToken ?? undefined);
     return [
@@ -420,6 +507,9 @@ export class EngineCoordinator implements EngineService {
 
   // ── Runtimes ──
 
+  /**
+   *
+   */
   listRuntimes(): Record<string, RuntimeInfo> {
     const llamacppInfo = getLlamacppRuntimeInfo(this.deps.config);
     const exllamav3Info = getExllamav3RuntimeInfo(this.deps.config);
@@ -451,6 +541,9 @@ export class EngineCoordinator implements EngineService {
     };
   }
 
+  /**
+   *
+   */
   async getVllmRuntimeInfoAsync(): Promise<RuntimeInfo> {
     const info = await getVllmRuntimeInfo();
     return {
@@ -462,6 +555,9 @@ export class EngineCoordinator implements EngineService {
     };
   }
 
+  /**
+   *
+   */
   async getSglangRuntimeInfoAsync(): Promise<RuntimeInfo> {
     const current = await this.deps.processManager.findInferenceProcess(
       this.deps.config.inference_port
@@ -475,6 +571,13 @@ export class EngineCoordinator implements EngineService {
     };
   }
 
+  /**
+   *
+   * @param runtime
+   * @param options
+   * @param options.version
+   * @param options.args
+   */
   async upgradeRuntime(
     runtime: RuntimeType,
     options?: { version?: string; args?: string[] }
@@ -553,6 +656,14 @@ export class EngineCoordinator implements EngineService {
         );
         return result;
       }
+      case "exllamav3":
+        return {
+          success: false,
+          version: null,
+          output: null,
+          error: "Runtime upgrades are not supported for exllamav3",
+          used_command: null,
+        };
       default:
         return {
           success: false,
@@ -564,6 +675,10 @@ export class EngineCoordinator implements EngineService {
     }
   }
 
+  /**
+   *
+   * @param runtime
+   */
   async getRuntimeHelp(
     runtime: "vllm" | "llamacpp"
   ): Promise<{ config: string | null; error: string | null }> {
