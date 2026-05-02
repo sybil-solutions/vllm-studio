@@ -2,8 +2,8 @@ import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import readline from "node:readline";
+import { SessionManager as PiSessionManagerImpl } from "@mariozechner/pi-coding-agent";
 
 export type SessionSummary = {
   id: string;
@@ -48,19 +48,7 @@ function piSessionsRoot(): string {
 }
 
 async function loadPiSessionManager(): Promise<PiSessionManager> {
-  const modulePath = path.join(
-    process.cwd(),
-    "node_modules",
-    "@mariozechner",
-    "pi-coding-agent",
-    "dist",
-    "core",
-    "session-manager.js",
-  );
-  const piModule = (await import(pathToFileURL(modulePath).href)) as {
-    SessionManager: PiSessionManager;
-  };
-  return piModule.SessionManager;
+  return PiSessionManagerImpl as unknown as PiSessionManager;
 }
 
 export function sessionsDirForCwd(cwd: string): string {

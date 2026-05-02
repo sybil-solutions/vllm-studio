@@ -17,6 +17,7 @@ import {
   TrashIcon,
 } from "@/components/icons";
 import { Button, UiModal, UiModalHeader } from "@/components/ui-kit";
+import { safeJson } from "@/lib/agent/safe-json";
 
 type ProjectEntry = {
   id: string;
@@ -362,8 +363,11 @@ function ProjectDirectoryPickerModal({
             Cancel
           </Button>
           <Button
-            onClick={() => currentPath && onSelect(currentPath)}
-            disabled={!currentPath || loading}
+            onClick={() => {
+              const selectedPath = draftPath.trim() || currentPath;
+              if (selectedPath) onSelect(selectedPath);
+            }}
+            disabled={!(draftPath.trim() || currentPath) || loading}
           >
             Select this folder
           </Button>
@@ -535,7 +539,7 @@ export function ProjectsNavSection({ expanded }: { expanded: boolean }) {
               `/api/agent/sessions?cwd=${encodeURIComponent(project.path)}&since=30d`,
               { cache: "no-store" },
             );
-            const payload = (await response.json()) as { sessions?: SessionSummary[] };
+            const payload = await safeJson<{ sessions?: SessionSummary[] }>(response);
             return (payload.sessions ?? [])
               .filter((session) => prefs[session.id]?.pinned && !prefs[session.id]?.hidden)
               .map((session) => ({ ...session, project }));
@@ -587,7 +591,9 @@ export function ProjectsNavSection({ expanded }: { expanded: boolean }) {
                   { method: "DELETE" },
                 );
                 if (!response.ok) {
-                  const payload = (await response.json().catch(() => ({}))) as { error?: string };
+                  const payload = (await safeJson<{ error?: string }>(response).catch(
+                    () => ({}),
+                  )) as { error?: string };
                   throw new Error(payload.error || "Failed to delete session");
                 }
                 removeSessionPref(sessionId);
@@ -606,7 +612,9 @@ export function ProjectsNavSection({ expanded }: { expanded: boolean }) {
                   { method: "DELETE" },
                 );
                 if (!response.ok) {
-                  const payload = (await response.json().catch(() => ({}))) as { error?: string };
+                  const payload = (await safeJson<{ error?: string }>(response).catch(
+                    () => ({}),
+                  )) as { error?: string };
                   throw new Error(payload.error || "Failed to delete session");
                 }
                 removeSessionPref(sessionId);
@@ -762,7 +770,7 @@ function ProjectSessions({
           cache: "no-store",
         },
       );
-      const payload = (await response.json()) as { sessions?: SessionSummary[] };
+      const payload = await safeJson<{ sessions?: SessionSummary[] }>(response);
       setSessions(payload.sessions ?? []);
     } catch {
       setSessions([]);
@@ -778,7 +786,9 @@ function ProjectSessions({
         { method: "DELETE" },
       );
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        const payload = (await safeJson<{ error?: string }>(response).catch(() => ({}))) as {
+          error?: string;
+        };
         throw new Error(payload.error || "Failed to delete session");
       }
       removeSessionPref(sessionId);

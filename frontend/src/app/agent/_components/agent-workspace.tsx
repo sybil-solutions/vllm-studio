@@ -15,8 +15,15 @@ import {
 } from "@/components/projects-nav-section";
 import { sanitizeEmbeddedBrowserUrl } from "@/lib/sanitize-embedded-browser-url";
 import { ChevronDownIcon, CloseIcon, GitBranchIcon, PlusIcon } from "@/components/icons";
+import { safeJson } from "@/lib/agent/safe-json";
 import { AgentBrowser, type AgentBrowserHandle, type WebviewElement } from "./agent-browser";
-import { ChatPane, makeFreshTab, SessionTabsBar, type SessionTab } from "./chat-pane";
+import {
+  ChatPane,
+  makeFreshTab,
+  SessionTabsBar,
+  type ChatPaneHandle,
+  type SessionTab,
+} from "./chat-pane";
 import { FilesystemPanel } from "./filesystem-panel";
 import { GitDiffPanel } from "./git-diff-panel";
 import { PaneGrid, type SessionDropPayload } from "./pane-grid";
@@ -133,10 +140,6 @@ type PaneState = {
   tabs: SessionTab[];
   activeTabId: string;
   runtimeSessionId: string;
-  // Optional pi session UUID to replay into the active tab on the next
-  // render of the corresponding ChatPane. ChatPane consumes-and-clears it
-  // via onInitialSessionConsumed so subsequent re-renders don't replay.
-  initialSessionId?: string | null;
 };
 
 export function AgentWorkspace() {
@@ -182,26 +185,36 @@ export function AgentWorkspace() {
   const getWebview = (): WebviewElement | null => browserRef.current?.webview ?? null;
   const getIframe = (): HTMLIFrameElement | null => browserRef.current?.iframe ?? null;
   const searchParams = useSearchParams();
-  // Track which (project, session) URL params we've already consumed so
-  // navigation back/forward doesn't re-trigger session replays.
-  const handledNavRef = useRef<string>("");
+
+  // Imperative handles registered by each ChatPane. The workspace calls
+  // handle.loadAndReplay(piSessionId) directly when the user opens a past
+  // session — no useEffect-driven prop chain, no replay races.
+  const paneHandlesRef = useRef<Map<PaneId, ChatPaneHandle>>(new Map());
+  const pendingSessionReplaysRef = useRef<Map<PaneId, string>>(new Map());
+  const queueSessionReplay = useCallback((paneId: PaneId, sessionId: string) => {
+    pendingSessionReplaysRef.current.set(paneId, sessionId);
+    window.setTimeout(() => {
+      const pendingSessionId = pendingSessionReplaysRef.current.get(paneId);
+      const handle = paneHandlesRef.current.get(paneId);
+      if (!pendingSessionId || !handle) return;
+      pendingSessionReplaysRef.current.delete(paneId);
+      void handle.loadAndReplay(pendingSessionId);
+    }, 0);
+  }, []);
+  const registerPaneHandle = useCallback(
+    (paneId: PaneId, handle: ChatPaneHandle | null) => {
+      if (handle) paneHandlesRef.current.set(paneId, handle);
+      else paneHandlesRef.current.delete(paneId);
+      const pendingSessionId = pendingSessionReplaysRef.current.get(paneId);
+      if (handle && pendingSessionId) queueSessionReplay(paneId, pendingSessionId);
+    },
+    [queueSessionReplay],
+  );
 
   const activeModel = useMemo(
     () => models.find((model) => model.id === selectedModel),
     [models, selectedModel],
   );
-
-  // Mark a pane's pending initialSessionId as consumed so we never replay
-  // a session twice. The actual loading happens inside ChatPane.
-  const consumeInitialSessionId = useCallback((paneId: PaneId) => {
-    setPanesById((current) => {
-      const cur = current.get(paneId);
-      if (!cur || !cur.initialSessionId) return current;
-      const next = new Map(current);
-      next.set(paneId, { ...cur, initialSessionId: null });
-      return next;
-    });
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -210,7 +223,7 @@ export function AgentWorkspace() {
       setError("");
       try {
         const response = await fetch("/api/agent/models", { cache: "no-store" });
-        const payload = (await response.json()) as { models?: AgentModel[]; error?: string };
+        const payload = await safeJson<{ models?: AgentModel[]; error?: string }>(response);
         if (!response.ok) throw new Error(payload.error || "Failed to load models");
         if (cancelled) return;
         const nextModels = payload.models ?? [];
@@ -556,10 +569,75 @@ export function AgentWorkspace() {
     [persistSelectedProjectId],
   );
 
-  // Consume `?project=...&session=...` URL params from the new top-level
-  // sidebar nav. When the linked project is already loaded, switch to it; if
-  // a session id is provided, hand it to the focused pane's loader once
-  // registered. handledNavRef guards against re-replay on re-renders.
+  // Imperative session-management primitives. Every code path that opens a
+  // new tab or replays a past session goes through these — no useEffect
+  // chain, no `initialSessionId` field on PaneState. Read top-down to audit.
+
+  // Idempotent "open a fresh chat tab in the focused pane". If the pane
+  // already has an empty starter (no piSessionId, no messages, no input)
+  // we focus that tab instead of stacking yet another empty one.
+  const openNewSessionInFocusedPane = useCallback(() => {
+    setPanesById((current) => {
+      const cur = current.get(focusedPaneId);
+      if (!cur) return current;
+      const existing = cur.tabs.find(
+        (tab) => !tab.piSessionId && tab.messages.length === 0 && !tab.input,
+      );
+      const next = new Map(current);
+      if (existing) {
+        next.set(focusedPaneId, { ...cur, activeTabId: existing.id });
+        return next;
+      }
+      const tab = makeFreshTab();
+      next.set(focusedPaneId, { ...cur, tabs: [...cur.tabs, tab], activeTabId: tab.id });
+      return next;
+    });
+  }, [focusedPaneId]);
+
+  // Replay a past pi session into the focused pane via the pane's
+  // imperative handle. No race: the handle was registered when the pane
+  // mounted; if it isn't ready yet the call is a no-op and the next click
+  // will retry.
+  const replaySessionInFocusedPane = useCallback(
+    (piSessionId: string) => {
+      queueSessionReplay(focusedPaneId, piSessionId);
+    },
+    [focusedPaneId, queueSessionReplay],
+  );
+
+  // Open a past session in a side-by-side pane. Splits the layout if there
+  // isn't already a second pane, then queues the replay against that pane —
+  // the queue drains as soon as the new ChatPane registers its handle.
+  const replaySessionInSplitPane = useCallback(
+    (piSessionId: string) => {
+      const leaves = collectLeaves(layout);
+      if (leaves.length >= 2) {
+        const targetPaneId = leaves.find((id) => id !== focusedPaneId) ?? focusedPaneId;
+        setFocusedPaneId(targetPaneId);
+        queueSessionReplay(targetPaneId, piSessionId);
+        return;
+      }
+      const id = newPaneId();
+      const baseTab = makeFreshTab();
+      setPanesById((current) => {
+        const next = new Map(current);
+        next.set(id, {
+          tabs: [baseTab],
+          activeTabId: baseTab.id,
+          runtimeSessionId: newRuntimeId(),
+        });
+        return next;
+      });
+      setLayout((prev) => splitLeaf(prev, focusedPaneId, id, "vertical", "b"));
+      setFocusedPaneId(id);
+      queueSessionReplay(id, piSessionId);
+    },
+    [focusedPaneId, layout, queueSessionReplay],
+  );
+
+  // Single source of truth for URL nav. Re-run only when the URL string
+  // changes; the ref guard makes it idempotent.
+  const handledNavRef = useRef<string>("");
   useEffect(() => {
     if (!searchParams) return;
     const projectParam = searchParams.get("project");
@@ -573,68 +651,30 @@ export function AgentWorkspace() {
     if (projectParam) {
       const target = projects.find((entry) => entry.id === projectParam);
       if (!target) return; // wait for projects to load
-      if (selectedProjectId !== target.id) {
-        selectProject(target);
-        if (newParam === "1" && !sessionParam) return;
-      }
+      if (selectedProjectId !== target.id) selectProject(target);
     }
     handledNavRef.current = key;
 
     if (newParam === "1" && !sessionParam) {
-      const tab = makeFreshTab();
-      setPanesById((current) => {
-        const cur = current.get(focusedPaneId);
-        if (!cur) return current;
-        const next = new Map(current);
-        next.set(focusedPaneId, { ...cur, tabs: [...cur.tabs, tab], activeTabId: tab.id });
-        return next;
-      });
+      openNewSessionInFocusedPane();
       return;
     }
-
     if (sessionParam && splitParam === "1") {
-      const leaves = collectLeaves(layout);
-      if (leaves.length < 2) {
-        const id = newPaneId();
-        const baseTab = makeFreshTab();
-        setPanesById((current) => {
-          const next = new Map(current);
-          next.set(id, {
-            tabs: [baseTab],
-            activeTabId: baseTab.id,
-            runtimeSessionId: newRuntimeId(),
-            initialSessionId: sessionParam,
-          });
-          return next;
-        });
-        setLayout((prev) => splitLeaf(prev, focusedPaneId, id, "vertical", "b"));
-        setFocusedPaneId(id);
-      } else {
-        const targetPaneId = leaves.find((id) => id !== focusedPaneId) ?? focusedPaneId;
-        setFocusedPaneId(targetPaneId);
-        setPanesById((current) => {
-          const cur = current.get(targetPaneId);
-          if (!cur) return current;
-          const next = new Map(current);
-          next.set(targetPaneId, { ...cur, initialSessionId: sessionParam });
-          return next;
-        });
-      }
+      replaySessionInSplitPane(sessionParam);
       return;
     }
-
     if (sessionParam) {
-      // Stamp the session id onto the focused pane state. ChatPane will pick
-      // it up on its next render and replay it without any timer-based race.
-      setPanesById((current) => {
-        const cur = current.get(focusedPaneId);
-        if (!cur) return current;
-        const next = new Map(current);
-        next.set(focusedPaneId, { ...cur, initialSessionId: sessionParam });
-        return next;
-      });
+      replaySessionInFocusedPane(sessionParam);
     }
-  }, [searchParams, projects, selectedProjectId, selectProject, focusedPaneId, layout]);
+  }, [
+    searchParams,
+    projects,
+    selectedProjectId,
+    selectProject,
+    openNewSessionInFocusedPane,
+    replaySessionInFocusedPane,
+    replaySessionInSplitPane,
+  ]);
 
   function normalizeBrowserInput(raw: string): string {
     const value = raw.trim();
@@ -714,95 +754,170 @@ export function AgentWorkspace() {
   const shouldShowProjectEmptyState =
     projectsLoaded && !searchParams.get("project") && !selectedProjectId && projects.length === 0;
 
+  // Broadcast the set of *real* in-flight sessions (i.e. tabs that have
+  // either been assigned a pi UUID or already contain user messages) to the
+  // navbar. Empty starter tabs are intentionally excluded so the navbar
+  // doesn't list them as "sessions".
   useEffect(() => {
     if (typeof window === "undefined" || !activeProject) return;
     const sessions = [...panesById.entries()].flatMap(([paneId, pane]) =>
-      pane.tabs.map((tab) => ({
-        projectId: activeProject.id,
-        cwd: activeProject.path,
-        paneId,
-        tabId: tab.id,
-        piSessionId: tab.piSessionId,
-        title: tab.title,
-        status: tab.status,
-        updatedAt: new Date().toISOString(),
-      })),
+      pane.tabs
+        .filter((tab) => Boolean(tab.piSessionId) || tab.messages.length > 0)
+        .map((tab) => ({
+          projectId: activeProject.id,
+          cwd: activeProject.path,
+          paneId,
+          tabId: tab.id,
+          piSessionId: tab.piSessionId,
+          title: tab.title,
+          status: tab.status,
+          updatedAt: new Date().toISOString(),
+        })),
     );
     window.dispatchEvent(new CustomEvent(ACTIVE_AGENT_SESSIONS_EVENT, { detail: { sessions } }));
   }, [activeProject, panesById]);
 
-  const openSessionPayloadInPane = useCallback((paneId: PaneId, payload: SessionDropPayload) => {
-    setPanesById((current) => {
-      const target = current.get(paneId);
-      if (!target) return current;
-      const next = new Map(current);
-      if (payload.piSessionId) {
-        const tab = makeFreshTab();
-        next.set(paneId, {
-          ...target,
-          tabs: [...target.tabs, tab],
-          activeTabId: tab.id,
-          initialSessionId: payload.piSessionId,
-        });
+  const openSessionPayloadInPane = useCallback(
+    (paneId: PaneId, payload: SessionDropPayload) => {
+      let needsReplay = false;
+      setPanesById((current) => {
+        const target = current.get(paneId);
+        if (!target) return current;
+        const next = new Map(current);
+        if (payload.piSessionId) {
+          const tab = makeFreshTab();
+          next.set(paneId, {
+            ...target,
+            tabs: [...target.tabs, tab],
+            activeTabId: tab.id,
+          });
+          needsReplay = true;
+          return next;
+        }
+        if (payload.paneId && payload.tabId) {
+          const source = current.get(payload.paneId);
+          const sourceTab = source?.tabs.find((tab) => tab.id === payload.tabId);
+          if (!sourceTab) return current;
+          const fresh = makeFreshTab();
+          const tab = {
+            ...sourceTab,
+            id: fresh.id,
+            runtimeSessionId: fresh.runtimeSessionId,
+          };
+          next.set(paneId, { ...target, tabs: [...target.tabs, tab], activeTabId: tab.id });
+        }
         return next;
+      });
+      setFocusedPaneId(paneId);
+      if (needsReplay && payload.piSessionId) {
+        queueSessionReplay(paneId, payload.piSessionId);
       }
-      if (payload.paneId && payload.tabId) {
-        const source = current.get(payload.paneId);
-        const sourceTab = source?.tabs.find((tab) => tab.id === payload.tabId);
-        if (!sourceTab) return current;
-        const fresh = makeFreshTab();
-        const tab = {
-          ...sourceTab,
-          id: fresh.id,
-          runtimeSessionId: fresh.runtimeSessionId,
-        };
-        next.set(paneId, { ...target, tabs: [...target.tabs, tab], activeTabId: tab.id });
-      }
+    },
+    [queueSessionReplay],
+  );
+
+  // Imperative tab actions used by both URL nav and DOM-event listeners.
+  const renameTab = useCallback((paneId: PaneId, tabId: string, title: string) => {
+    setPanesById((current) => {
+      const pane = current.get(paneId);
+      if (!pane) return current;
+      const next = new Map(current);
+      next.set(paneId, {
+        ...pane,
+        tabs: pane.tabs.map((tab) => (tab.id === tabId ? { ...tab, title } : tab)),
+      });
       return next;
     });
-    setFocusedPaneId(paneId);
   }, []);
 
+  const focusTab = useCallback((paneId: PaneId, tabId: string) => {
+    setFocusedPaneId(paneId);
+    setPanesById((current) => {
+      const pane = current.get(paneId);
+      if (!pane) return current;
+      const next = new Map(current);
+      next.set(paneId, { ...pane, activeTabId: tabId });
+      return next;
+    });
+  }, []);
+
+  const splitTabIntoNewPane = useCallback(
+    (sourcePaneId: PaneId, sourceTabId: string) => {
+      const leaves = collectLeaves(layout);
+      const source = panesById.get(sourcePaneId);
+      const sourceTab = source?.tabs.find((tab) => tab.id === sourceTabId);
+      const fresh = makeFreshTab();
+      const tab = sourceTab
+        ? { ...sourceTab, id: fresh.id, runtimeSessionId: fresh.runtimeSessionId }
+        : fresh;
+      if (leaves.length >= 2) {
+        const targetPaneId = leaves.find((leafId) => leafId !== focusedPaneId) ?? focusedPaneId;
+        setPanesById((current) => {
+          const target = current.get(targetPaneId);
+          if (!target) return current;
+          const next = new Map(current);
+          next.set(targetPaneId, {
+            ...target,
+            tabs: [...target.tabs, tab],
+            activeTabId: tab.id,
+          });
+          return next;
+        });
+        setFocusedPaneId(targetPaneId);
+        return;
+      }
+      const id = newPaneId();
+      setPanesById((current) => {
+        const next = new Map(current);
+        next.set(id, { tabs: [tab], activeTabId: tab.id, runtimeSessionId: newRuntimeId() });
+        return next;
+      });
+      setLayout((prev) => splitLeaf(prev, focusedPaneId, id, "vertical", "b"));
+      setFocusedPaneId(id);
+    },
+    [focusedPaneId, layout, panesById],
+  );
+
+  // Bridge from window events (dispatched by the navbar) to the imperative
+  // helpers above. We use a ref so listeners stay mount-only — this is the
+  // only effect for the navbar event API and its handler is trivially
+  // auditable in one spot.
+  const navHandlersRef = useRef({
+    openNewSessionInFocusedPane,
+    renameTab,
+    focusTab,
+    splitTabIntoNewPane,
+    selectProject,
+    selectedProjectId,
+    projects,
+  });
+  navHandlersRef.current = {
+    openNewSessionInFocusedPane,
+    renameTab,
+    focusTab,
+    splitTabIntoNewPane,
+    selectProject,
+    selectedProjectId,
+    projects,
+  };
   useEffect(() => {
-    const openFreshTab = (projectId?: string) => {
-      if (projectId) {
-        const target = projects.find((entry) => entry.id === projectId);
-        if (target && selectedProjectId !== target.id) {
-          selectProject(target);
+    const onNewSession = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId?: string }>).detail;
+      const h = navHandlersRef.current;
+      if (detail?.projectId) {
+        const target = h.projects.find((entry) => entry.id === detail.projectId);
+        if (target && h.selectedProjectId !== target.id) {
+          h.selectProject(target);
           return;
         }
       }
-      const tab = makeFreshTab();
-      setPanesById((current) => {
-        const cur = current.get(focusedPaneId) ?? current.values().next().value;
-        if (!cur) return current;
-        const paneId = current.has(focusedPaneId) ? focusedPaneId : [...current.keys()][0];
-        const next = new Map(current);
-        next.set(paneId, { ...cur, tabs: [...cur.tabs, tab], activeTabId: tab.id });
-        return next;
-      });
-    };
-
-    const onNewSession = (event: Event) => {
-      const detail = (event as CustomEvent<{ projectId?: string }>).detail;
-      openFreshTab(detail?.projectId);
+      h.openNewSessionInFocusedPane();
     };
     const onRename = (event: Event) => {
       const detail = (event as CustomEvent<{ paneId?: PaneId; tabId?: string; title?: string }>)
         .detail;
       if (!detail?.paneId || !detail.tabId || !detail.title) return;
-      setPanesById((current) => {
-        const pane = current.get(detail.paneId as PaneId);
-        if (!pane) return current;
-        const next = new Map(current);
-        next.set(detail.paneId as PaneId, {
-          ...pane,
-          tabs: pane.tabs.map((tab) =>
-            tab.id === detail.tabId ? { ...tab, title: detail.title as string } : tab,
-          ),
-        });
-        return next;
-      });
+      navHandlersRef.current.renameTab(detail.paneId, detail.tabId, detail.title);
     };
     const onOpen = (event: Event) => {
       const detail = (
@@ -810,49 +925,11 @@ export function AgentWorkspace() {
       ).detail;
       if (!detail?.paneId || !detail.tabId) return;
       if (detail.mode === "split") {
-        const leaves = collectLeaves(layout);
-        const id = newPaneId();
-        const source = panesById.get(detail.paneId);
-        const sourceTab = source?.tabs.find((tab) => tab.id === detail.tabId);
-        const fresh = makeFreshTab();
-        const tab = sourceTab
-          ? { ...sourceTab, id: fresh.id, runtimeSessionId: fresh.runtimeSessionId }
-          : fresh;
-        if (leaves.length >= 2) {
-          const targetPaneId = leaves.find((leafId) => leafId !== focusedPaneId) ?? focusedPaneId;
-          setPanesById((current) => {
-            const target = current.get(targetPaneId);
-            if (!target) return current;
-            const next = new Map(current);
-            next.set(targetPaneId, {
-              ...target,
-              tabs: [...target.tabs, tab],
-              activeTabId: tab.id,
-            });
-            return next;
-          });
-          setFocusedPaneId(targetPaneId);
-          return;
-        }
-        setPanesById((current) => {
-          const next = new Map(current);
-          next.set(id, { tabs: [tab], activeTabId: tab.id, runtimeSessionId: newRuntimeId() });
-          return next;
-        });
-        setLayout((prev) => splitLeaf(prev, focusedPaneId, id, "vertical", "b"));
-        setFocusedPaneId(id);
+        navHandlersRef.current.splitTabIntoNewPane(detail.paneId, detail.tabId);
         return;
       }
-      setFocusedPaneId(detail.paneId);
-      setPanesById((current) => {
-        const pane = current.get(detail.paneId as PaneId);
-        if (!pane) return current;
-        const next = new Map(current);
-        next.set(detail.paneId as PaneId, { ...pane, activeTabId: detail.tabId as string });
-        return next;
-      });
+      navHandlersRef.current.focusTab(detail.paneId, detail.tabId);
     };
-
     window.addEventListener(NEW_AGENT_SESSION_EVENT, onNewSession);
     window.addEventListener(ACTIVE_AGENT_SESSION_RENAME_EVENT, onRename);
     window.addEventListener(ACTIVE_AGENT_SESSION_OPEN_EVENT, onOpen);
@@ -861,7 +938,7 @@ export function AgentWorkspace() {
       window.removeEventListener(ACTIVE_AGENT_SESSION_RENAME_EVENT, onRename);
       window.removeEventListener(ACTIVE_AGENT_SESSION_OPEN_EVENT, onOpen);
     };
-  }, [focusedPaneId, layout, panesById, projects, selectProject, selectedProjectId]);
+  }, []);
 
   return (
     <div className="agent-workspace flex h-full min-h-0 w-full flex-col bg-(--bg) text-(--fg) md:h-[100dvh]">
@@ -871,7 +948,29 @@ export function AgentWorkspace() {
           {activeProject ? (
             <span className="hidden items-center gap-1 truncate text-xs text-(--dim) sm:inline-flex">
               <span className="opacity-60">/</span>
-              <span className="truncate">{activeProject.name}</span>
+              {projects.length > 0 ? (
+                <select
+                  value={selectedProjectId ?? ""}
+                  onChange={(event) => {
+                    const project = projects.find((entry) => entry.id === event.target.value);
+                    if (project) selectProject(project);
+                  }}
+                  disabled={!focusedTabIsNew}
+                  className="max-w-[260px] truncate rounded border border-transparent bg-transparent px-1 py-0.5 font-mono text-[11px] text-(--dim) outline-none hover:border-(--border) hover:bg-(--surface) hover:text-(--fg) disabled:opacity-100"
+                  title={
+                    focusedTabIsNew ? "Change directory for this new session" : activeProject.path
+                  }
+                  aria-label="Session directory"
+                >
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.path}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="truncate font-mono text-[11px]">{activeProject.path}</span>
+              )}
               {activeProject.hasGit && activeProject.branch ? (
                 <span className="ml-1 inline-flex items-center gap-1 rounded border border-(--border) px-1 py-0.5 font-mono text-[10px]">
                   <GitBranchIcon className="h-3 w-3" />
@@ -932,25 +1031,6 @@ export function AgentWorkspace() {
           onSelect={setSelectedModel}
           loading={loadingModels}
         />
-
-        {focusedTabIsNew && projects.length > 0 ? (
-          <select
-            value={selectedProjectId ?? ""}
-            onChange={(event) => {
-              const project = projects.find((entry) => entry.id === event.target.value);
-              if (project) selectProject(project);
-            }}
-            className="hidden h-7 max-w-[220px] rounded border border-(--border) bg-(--surface) px-2 font-mono text-[11px] text-(--fg) outline-none hover:bg-(--bg) md:block"
-            title="Change directory for this new session"
-            aria-label="New session directory"
-          >
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.path}
-              </option>
-            ))}
-          </select>
-        ) : null}
 
         <button
           type="button"
@@ -1061,16 +1141,12 @@ export function AgentWorkspace() {
                               }
                             }
                       }
-                      initialSessionId={pane.initialSessionId ?? null}
-                      onInitialSessionConsumed={() => consumeInitialSessionId(paneId)}
+                      onRegisterHandle={(handle) => registerPaneHandle(paneId, handle)}
                     />
                   );
                 }}
                 onSplit={(paneId, direction, side, payload) => {
-                  // Create a new pane next to the drop target. If a session
-                  // payload is included, stamp it as the new pane's
-                  // initialSessionId so its ChatPane replays the session on
-                  // first render — no loader-registration race.
+                  // Create a new pane next to the drop target.
                   const id = newPaneId();
                   if (collectLeaves(layout).length >= 2) return;
                   const runtime = newRuntimeId();
@@ -1081,7 +1157,6 @@ export function AgentWorkspace() {
                       tabs: [baseTab],
                       activeTabId: baseTab.id,
                       runtimeSessionId: runtime,
-                      initialSessionId: payload.piSessionId ?? null,
                     });
                     if (!payload.piSessionId && payload.paneId && payload.tabId) {
                       const source = current.get(payload.paneId);
@@ -1104,6 +1179,7 @@ export function AgentWorkspace() {
                   });
                   setLayout((prev) => splitLeaf(prev, paneId, id, direction, side));
                   setFocusedPaneId(id);
+                  if (payload.piSessionId) queueSessionReplay(id, payload.piSessionId);
                 }}
                 onOpenTab={openSessionPayloadInPane}
                 onResize={(path, ratio) => {

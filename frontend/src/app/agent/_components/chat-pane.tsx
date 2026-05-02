@@ -10,7 +10,16 @@ import {
   SendIcon,
   StopIcon,
 } from "@/components/icons";
+import { safeJson } from "@/lib/agent/safe-json";
 import { AssistantMarkdown } from "./assistant-markdown";
+
+// Imperative handle exposed by ChatPane so the workspace can replay a past
+// pi session into the focused pane without going through useEffect-driven
+// prop plumbing. The workspace calls this directly from event/click handlers
+// so the control flow is auditable in one place.
+export type ChatPaneHandle = {
+  loadAndReplay: (piSessionId: string) => Promise<void>;
+};
 
 export type ToolBlock = {
   kind: "tool";
@@ -108,13 +117,11 @@ type Props = {
   activeTabId: string;
   onTabsChange: (tabs: SessionTab[] | ((tabs: SessionTab[]) => SessionTab[])) => void;
   onClose?: () => void;
-  // When non-null, the pane should replay this pi session into the active tab
-  // on its next render. After replay starts, ChatPane calls
-  // onInitialSessionConsumed so the parent clears the field and we never
-  // replay twice. This replaces the older loader-registration pattern (which
-  // raced against component mount).
-  initialSessionId?: string | null;
-  onInitialSessionConsumed?: () => void;
+  // Workspace hands ChatPane a setter so it can register/unregister an
+  // imperative handle. There is no useEffect-driven `initialSessionId` field
+  // anymore — the workspace calls handle.loadAndReplay() directly when the
+  // user clicks a session in the navbar. One source of truth, no race.
+  onRegisterHandle?: (handle: ChatPaneHandle | null) => void;
 };
 
 function newId(prefix: string) {
@@ -568,8 +575,7 @@ export function ChatPane({
   tabs,
   activeTabId,
   onTabsChange,
-  initialSessionId,
-  onInitialSessionConsumed,
+  onRegisterHandle,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -1056,22 +1062,23 @@ export function ChatPane({
     updateTab(tabId, (tab) => ({ ...tab, status: "idle" }));
   }, [activeTab, runtimeSessionId, updateTab]);
 
-  // Replay a past pi session into the active tab.
+  // Replay a past pi session into the currently active tab. Looks up the
+  // active tab by id at call time so concurrent updates don't race.
   const loadAndReplay = useCallback(
     async (piSessionId: string) => {
       if (!cwd) return;
-      if (!activeTab) return;
-      const tabId = activeTab.id;
+      const tabId = activeTabId;
+      if (!tabId) return;
       updateTab(tabId, (tab) => ({ ...tab, status: "loading", error: "" }));
       try {
         const response = await fetch(
           `/api/agent/sessions/${encodeURIComponent(piSessionId)}?cwd=${encodeURIComponent(cwd)}`,
           { cache: "no-store" },
         );
-        const payload = (await response.json()) as {
+        const payload = await safeJson<{
           events?: Record<string, unknown>[];
           error?: string;
-        };
+        }>(response);
         if (!response.ok) throw new Error(payload.error || "Failed to load session");
 
         const { messages, title } = replaySessionEvents(payload.events ?? []);
@@ -1097,18 +1104,23 @@ export function ChatPane({
         }));
       }
     },
-    [cwd, activeTab, updateTab],
+    [cwd, activeTabId, updateTab],
   );
 
-  // Replay the pending initialSessionId (set by parent for split-drop or
-  // sidebar navigation). Each id is consumed exactly once via
-  // onInitialSessionConsumed.
+  // Register a stable imperative handle so the workspace can call
+  // loadAndReplay directly from event handlers. This replaces the previous
+  // useEffect that watched an `initialSessionId` prop and chained side
+  // effects on every re-render.
+  const handleRef = useRef<ChatPaneHandle>({ loadAndReplay });
+  handleRef.current = { loadAndReplay };
   useEffect(() => {
-    if (!initialSessionId) return;
-    if (!cwd) return;
-    void loadAndReplay(initialSessionId);
-    onInitialSessionConsumed?.();
-  }, [initialSessionId, cwd, loadAndReplay, onInitialSessionConsumed]);
+    if (!onRegisterHandle) return;
+    const handle: ChatPaneHandle = {
+      loadAndReplay: (id) => handleRef.current.loadAndReplay(id),
+    };
+    onRegisterHandle(handle);
+    return () => onRegisterHandle(null);
+  }, [onRegisterHandle]);
 
   return (
     <section
