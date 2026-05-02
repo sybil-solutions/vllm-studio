@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Config } from "../../../config/env";
 import { asRecipeId } from "../../../types/brand";
 import type { Recipe } from "../../models/types";
@@ -29,6 +32,13 @@ const baseRecipe: Recipe = {
   extra_args: {},
   max_thinking_tokens: null,
   thinking_mode: "conservative",
+};
+
+const fakeExecutable = (name: string): string => {
+  const path = join(mkdtempSync(join(tmpdir(), "backend-builder-")), name);
+  writeFileSync(path, "#!/bin/sh\nexit 0\n");
+  chmodSync(path, 0o755);
+  return path;
 };
 
 describe("backend builder command overrides", () => {
@@ -75,5 +85,63 @@ describe("backend builder command overrides", () => {
       "/models/custom model",
       "--enable-metrics",
     ]);
+  });
+
+  it("rejects shell interpreters for exllamav3 commands", () => {
+    expect(() =>
+      buildBackendCommand(
+        {
+          ...baseRecipe,
+          backend: "exllamav3",
+          extra_args: { exllama_command: "sh -c echo-pwned" },
+        },
+        {} as Config,
+      ),
+    ).toThrow("Invalid exllama_command");
+  });
+
+  it("accepts resolved ExLLaMA executables", () => {
+    const executable = fakeExecutable("exllama-server");
+    const command = buildBackendCommand(
+      {
+        ...baseRecipe,
+        backend: "exllamav3",
+        extra_args: { exllama_command: `"${executable}"` },
+      },
+      {} as Config,
+    );
+
+    expect(command[0]).toBe(executable);
+    expect(command).toContain("--model");
+    expect(command).toContain("/models/test");
+  });
+
+  it("rejects non llama-server llama.cpp overrides", () => {
+    expect(() =>
+      buildBackendCommand(
+        {
+          ...baseRecipe,
+          backend: "llamacpp",
+          extra_args: { llama_bin: "/bin/sh" },
+        },
+        {} as Config,
+      ),
+    ).toThrow("Invalid llama_bin");
+  });
+
+  it("accepts resolved llama-server overrides", () => {
+    const executable = fakeExecutable("llama-server");
+    const command = buildBackendCommand(
+      {
+        ...baseRecipe,
+        backend: "llamacpp",
+        extra_args: { llama_bin: executable },
+      },
+      {} as Config,
+    );
+
+    expect(command[0]).toBe(executable);
+    expect(command).toContain("--model");
+    expect(command).toContain("/models/test");
   });
 });

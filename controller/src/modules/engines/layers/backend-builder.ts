@@ -1,6 +1,6 @@
 // CRITICAL
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import type { Recipe } from "../../models/types";
 import type { Config } from "../../../config/env";
 import { resolveBinary } from "../../../core/command";
@@ -397,6 +397,25 @@ const splitCommand = (command: string): string[] => {
   return matches.map((token) => token.replace(/^"|"$/g, ""));
 };
 
+const executableBaseName = (value: string): string => {
+  return value.split(/[\\/]/).filter(Boolean).at(-1)?.toLowerCase() ?? value.toLowerCase();
+};
+
+const isAllowedExllamaBinary = (value: string): boolean => {
+  return executableBaseName(value).includes("exllama");
+};
+
+const isAllowedLlamaServerBinary = (value: string): boolean => {
+  const name = executableBaseName(value);
+  return name === "llama-server" || name === "llama-server.exe";
+};
+
+const rejectPathTraversal = (value: string, label: string): void => {
+  if (value.split(/[\\/]+/).includes("..")) {
+    throw new Error(`Invalid ${label}: path traversal is not allowed`);
+  }
+};
+
 /**
  * Detect if a command already includes a flag.
  * @param command - Command tokens.
@@ -449,6 +468,16 @@ export const buildExllamav3Command = (recipe: Recipe, config: Config): string[] 
   if (command.length === 0) {
     return null;
   }
+  const executable = command[0] ?? "";
+  rejectPathTraversal(executable, "exllama_command");
+  if (!isAllowedExllamaBinary(executable)) {
+    throw new Error("Invalid exllama_command: command must be an ExLLaMA executable");
+  }
+  const resolvedExecutable = resolveBinary(executable);
+  if (!resolvedExecutable) {
+    throw new Error(`Invalid exllama_command: executable "${executable}" was not found`);
+  }
+  command[0] = resolvedExecutable;
   const commandWithDefaults = appendRuntimeCoreArguments([...command], recipe);
   if (
     !hasCommandFlag(commandWithDefaults, "--model") &&
@@ -502,14 +531,15 @@ export const buildBackendCommand = (recipe: Recipe, config: Config): string[] =>
 const resolveLlamaBinary = (recipe: Recipe, config: Config): string => {
   const override = getExtraArgument(recipe.extra_args, "llama_bin") ?? config.llama_bin;
   if (typeof override === "string" && override.trim()) {
-    if (override.includes("/") && existsSync(override)) {
-      return resolve(override);
+    rejectPathTraversal(override, "llama_bin");
+    if (!isAllowedLlamaServerBinary(override)) {
+      throw new Error("Invalid llama_bin: only llama-server executables are allowed");
     }
     const resolved = resolveBinary(override);
     if (resolved) {
       return resolved;
     }
-    return override;
+    throw new Error(`Invalid llama_bin: executable "${override}" was not found`);
   }
   return resolveBinary("llama-server") ?? "llama-server";
 };
