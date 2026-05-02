@@ -29,7 +29,7 @@ function isLoopbackHost(host: string | null): boolean {
 
 function configuredRoots(): string[] {
   const raw = process.env.VLLM_STUDIO_DIRECTORY_BROWSER_ROOTS;
-  if (!raw) return [];
+  if (!raw) return [path.resolve(os.homedir())];
   return raw
     .split(path.delimiter)
     .map((entry) => entry.trim())
@@ -44,6 +44,12 @@ function isWithinRoot(candidate: string, root: string): boolean {
   );
 }
 
+function resolveAllowedPath(input: string | null, roots: string[]): string | null {
+  const fallbackRoot = roots[0] ?? path.resolve(os.homedir());
+  const candidate = path.resolve(input?.trim() || fallbackRoot);
+  return roots.some((root) => isWithinRoot(candidate, root)) ? candidate : null;
+}
+
 export async function GET(request: NextRequest) {
   const roots = configuredRoots();
   const remoteBrowserEnabled = process.env.VLLM_STUDIO_ENABLE_REMOTE_DIRECTORY_BROWSER === "1";
@@ -54,9 +60,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const requestedPath = request.nextUrl.searchParams.get("path")?.trim();
-  const directoryPath = path.resolve(requestedPath || os.homedir());
-  if (roots.length > 0 && !roots.some((root) => isWithinRoot(directoryPath, root))) {
+  const directoryPath = resolveAllowedPath(request.nextUrl.searchParams.get("path"), roots);
+  if (!directoryPath) {
     return Response.json({ error: "Path is outside the allowed directories" }, { status: 403 });
   }
 

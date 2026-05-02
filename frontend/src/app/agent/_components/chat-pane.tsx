@@ -124,8 +124,20 @@ type Props = {
   onRegisterHandle?: (handle: ChatPaneHandle | null) => void;
 };
 
+function randomIdSegment(length: number): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi?.randomUUID) {
+    return cryptoApi.randomUUID().replace(/-/g, "").slice(0, length);
+  }
+  const bytes = new Uint8Array(Math.ceil(length / 2));
+  if (cryptoApi?.getRandomValues) {
+    cryptoApi.getRandomValues(bytes);
+  }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, length);
+}
+
 function newId(prefix: string) {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}-${Date.now().toString(36)}-${randomIdSegment(8)}`;
 }
 
 function nowLabel() {

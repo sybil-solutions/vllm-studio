@@ -31,7 +31,12 @@ const buildModelFilter = (
   return { clause: ` AND model IN (${placeholders})`, params };
 };
 
-const num = (value: unknown): number => {
+/**
+ * Convert SQLite aggregate values into finite numbers.
+ * @param value - Raw SQLite aggregate value.
+ * @returns Finite number or zero.
+ */
+const toFiniteNumber = (value: unknown): number => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 };
@@ -43,11 +48,18 @@ const num = (value: unknown): number => {
 export class InferenceRequestStore {
   private readonly db: Database;
 
+  /**
+   * Create an inference request store.
+   * @param dbPath - SQLite database path.
+   */
   public constructor(dbPath: string) {
     this.db = openSqliteDatabase(dbPath);
     this.migrate();
   }
 
+  /**
+   * Create required database tables and indexes.
+   */
   private migrate(): void {
     this.db.run(`
       CREATE TABLE IF NOT EXISTS inference_requests (
@@ -77,6 +89,10 @@ export class InferenceRequestStore {
     );
   }
 
+  /**
+   * Persist one completed inference request.
+   * @param record - Request usage and timing record.
+   */
   public record(record: InferenceRequestRecord): void {
     const promptTokens = Math.max(0, Math.round(record.prompt_tokens));
     const completionTokens = Math.max(0, Math.round(record.completion_tokens));
@@ -116,6 +132,8 @@ export class InferenceRequestStore {
    * Aggregate stats over all rows whose `model` is in `knownModels`. If
    * the set is empty/undefined, no rows match (returns null) — caller is
    * expected to skip in that case.
+   * @param knownModels - Recipe-managed model names to include.
+   * @returns Aggregated usage payload or null when no rows match.
    */
   public aggregate(knownModels: ReadonlySet<string>): Record<string, unknown> | null {
     if (!knownModels || knownModels.size === 0) return null;
@@ -137,14 +155,14 @@ export class InferenceRequestStore {
       )
       .get(...params) as NumberRow | null;
 
-    const totalRequests = num(totalsRow?.["total_requests"]);
+    const totalRequests = toFiniteNumber(totalsRow?.["total_requests"]);
     if (totalRequests === 0) return null;
 
-    const promptTokens = num(totalsRow?.["prompt_tokens"]);
-    const completionTokens = num(totalsRow?.["completion_tokens"]);
+    const promptTokens = toFiniteNumber(totalsRow?.["prompt_tokens"]);
+    const completionTokens = toFiniteNumber(totalsRow?.["completion_tokens"]);
     const totalTokens = promptTokens + completionTokens;
-    const cacheHits = num(totalsRow?.["cache_read"]);
-    const cacheMisses = num(totalsRow?.["cache_write"]);
+    const cacheHits = toFiniteNumber(totalsRow?.["cache_read"]);
+    const cacheMisses = toFiniteNumber(totalsRow?.["cache_write"]);
 
     const successRow = this.db
       .query<NumberRow, string[]>(
@@ -156,7 +174,7 @@ export class InferenceRequestStore {
          WHERE 1=1${filter.clause}`
       )
       .get(...params) as NumberRow | null;
-    const successful = num(successRow?.["ok"]);
+    const successful = toFiniteNumber(successRow?.["ok"]);
 
     const byModel = this.db
       .query<Record<string, unknown>, string[]>(
@@ -292,11 +310,11 @@ export class InferenceRequestStore {
         successful_requests: successful,
         failed_requests: totalRequests - successful,
         success_rate: totalRequests ? (successful / totalRequests) * 100 : 0,
-        unique_sessions: num(totalsRow?.["unique_sessions"]),
+        unique_sessions: toFiniteNumber(totalsRow?.["unique_sessions"]),
         unique_users: 0,
       },
       latency: {
-        avg_ms: num(successRow?.["avg_dur"]),
+        avg_ms: toFiniteNumber(successRow?.["avg_dur"]),
         p50_ms: 0,
         p95_ms: 0,
         p99_ms: 0,
@@ -304,7 +322,7 @@ export class InferenceRequestStore {
         max_ms: 0,
       },
       ttft: {
-        avg_ms: num(successRow?.["avg_ttft"]),
+        avg_ms: toFiniteNumber(successRow?.["avg_ttft"]),
         p50_ms: 0,
         p95_ms: 0,
         p99_ms: 0,
@@ -317,7 +335,7 @@ export class InferenceRequestStore {
           (max, row) =>
             Math.max(
               max,
-              num(row["requests"]) ? Math.round(num(row["total_tokens"]) / num(row["requests"])) : 0
+              toFiniteNumber(row["requests"]) ? Math.round(toFiniteNumber(row["total_tokens"]) / toFiniteNumber(row["requests"])) : 0
             ),
           0
         ),
@@ -333,95 +351,95 @@ export class InferenceRequestStore {
       },
       week_over_week: {
         this_week: {
-          requests: num(week?.["this_week_requests"]),
-          tokens: num(week?.["this_week_tokens"]),
-          successful: num(week?.["this_week_ok"]),
+          requests: toFiniteNumber(week?.["this_week_requests"]),
+          tokens: toFiniteNumber(week?.["this_week_tokens"]),
+          successful: toFiniteNumber(week?.["this_week_ok"]),
         },
         last_week: {
-          requests: num(week?.["last_week_requests"]),
-          tokens: num(week?.["last_week_tokens"]),
-          successful: num(week?.["last_week_ok"]),
+          requests: toFiniteNumber(week?.["last_week_requests"]),
+          tokens: toFiniteNumber(week?.["last_week_tokens"]),
+          successful: toFiniteNumber(week?.["last_week_ok"]),
         },
         change_pct: {
           requests: calcChangePct(
-            num(week?.["this_week_requests"]),
-            num(week?.["last_week_requests"])
+            toFiniteNumber(week?.["this_week_requests"]),
+            toFiniteNumber(week?.["last_week_requests"])
           ),
           tokens: calcChangePct(
-            num(week?.["this_week_tokens"]),
-            num(week?.["last_week_tokens"])
+            toFiniteNumber(week?.["this_week_tokens"]),
+            toFiniteNumber(week?.["last_week_tokens"])
           ),
         },
       },
       recent_activity: {
-        last_hour_requests: num(recent?.["last_hour"]),
-        last_24h_requests: num(recent?.["last_24h"]),
-        prev_24h_requests: num(recent?.["prev_24h"]),
-        last_24h_tokens: num(recent?.["last_24h_tokens"]),
-        change_24h_pct: calcChangePct(num(recent?.["last_24h"]), num(recent?.["prev_24h"])),
+        last_hour_requests: toFiniteNumber(recent?.["last_hour"]),
+        last_24h_requests: toFiniteNumber(recent?.["last_24h"]),
+        prev_24h_requests: toFiniteNumber(recent?.["prev_24h"]),
+        last_24h_tokens: toFiniteNumber(recent?.["last_24h_tokens"]),
+        change_24h_pct: calcChangePct(toFiniteNumber(recent?.["last_24h"]), toFiniteNumber(recent?.["prev_24h"])),
       },
       peak_days: peakDays.map((row) => ({
         date: row["date"],
-        requests: num(row["requests"]),
-        tokens: num(row["tokens"]),
+        requests: toFiniteNumber(row["requests"]),
+        tokens: toFiniteNumber(row["tokens"]),
       })),
       peak_hours: peakHours.map((row) => ({
-        hour: num(row["hour"]),
-        requests: num(row["requests"]),
+        hour: toFiniteNumber(row["hour"]),
+        requests: toFiniteNumber(row["requests"]),
       })),
       by_model: byModel.map((row) => {
-        const requests = num(row["requests"]);
-        const ok = num(row["successful"]);
+        const requests = toFiniteNumber(row["requests"]);
+        const ok = toFiniteNumber(row["successful"]);
         return {
           model: String(row["model"] ?? "unknown"),
           requests,
           successful: ok,
           success_rate: requests ? (ok / requests) * 100 : 0,
-          total_tokens: num(row["total_tokens"]),
-          prompt_tokens: num(row["prompt_tokens"]),
-          completion_tokens: num(row["completion_tokens"]),
-          avg_tokens: requests ? Math.round(num(row["total_tokens"]) / requests) : 0,
-          avg_latency_ms: num(row["avg_latency_ms"]),
+          total_tokens: toFiniteNumber(row["total_tokens"]),
+          prompt_tokens: toFiniteNumber(row["prompt_tokens"]),
+          completion_tokens: toFiniteNumber(row["completion_tokens"]),
+          avg_tokens: requests ? Math.round(toFiniteNumber(row["total_tokens"]) / requests) : 0,
+          avg_latency_ms: toFiniteNumber(row["avg_latency_ms"]),
           p50_latency_ms: 0,
-          avg_ttft_ms: num(row["avg_ttft_ms"]),
+          avg_ttft_ms: toFiniteNumber(row["avg_ttft_ms"]),
           tokens_per_sec: null,
           prefill_tps: null,
           generation_tps: null,
         };
       }),
       daily: daily.map((row) => {
-        const requests = num(row["requests"]);
-        const ok = num(row["successful"]);
+        const requests = toFiniteNumber(row["requests"]);
+        const ok = toFiniteNumber(row["successful"]);
         return {
           date: row["date"],
           requests,
           successful: ok,
           success_rate: requests ? (ok / requests) * 100 : 0,
-          total_tokens: num(row["total_tokens"]),
-          prompt_tokens: num(row["prompt_tokens"]),
-          completion_tokens: num(row["completion_tokens"]),
-          avg_latency_ms: num(row["avg_latency_ms"]),
+          total_tokens: toFiniteNumber(row["total_tokens"]),
+          prompt_tokens: toFiniteNumber(row["prompt_tokens"]),
+          completion_tokens: toFiniteNumber(row["completion_tokens"]),
+          avg_latency_ms: toFiniteNumber(row["avg_latency_ms"]),
         };
       }),
       daily_by_model: dailyByModel.map((row) => {
-        const requests = num(row["requests"]);
-        const ok = num(row["successful"]);
+        const requests = toFiniteNumber(row["requests"]);
+        const ok = toFiniteNumber(row["successful"]);
         return {
           date: row["date"],
           model: String(row["model"] ?? "unknown"),
           requests,
           successful: ok,
           success_rate: requests ? (ok / requests) * 100 : 0,
-          total_tokens: num(row["total_tokens"]),
-          prompt_tokens: num(row["prompt_tokens"]),
-          completion_tokens: num(row["completion_tokens"]),
+          total_tokens: toFiniteNumber(row["total_tokens"]),
+          prompt_tokens: toFiniteNumber(row["prompt_tokens"]),
+          completion_tokens: toFiniteNumber(row["completion_tokens"]),
         };
       }),
       hourly_pattern: hourly.map((row) => ({
-        hour: num(row["hour"]),
-        requests: num(row["requests"]),
-        successful: num(row["successful"]),
-        tokens: num(row["tokens"]),
+        hour: toFiniteNumber(row["hour"]),
+        requests: toFiniteNumber(row["requests"]),
+        successful: toFiniteNumber(row["successful"]),
+        tokens: toFiniteNumber(row["tokens"]),
       })),
     };
   }

@@ -128,12 +128,28 @@ const PANE_LAYOUT_KEY = "vllm-studio.agent.paneLayout";
 
 type ComputerTab = "browser" | "files" | "diff";
 
+function randomIdSegment(length: number): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi?.randomUUID) {
+    return cryptoApi.randomUUID().replace(/-/g, "").slice(0, length);
+  }
+  const bytes = new Uint8Array(Math.ceil(length / 2));
+  if (cryptoApi?.getRandomValues) {
+    cryptoApi.getRandomValues(bytes);
+  }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, length);
+}
+
+function isSafeBrowserSelector(selector: string): boolean {
+  return selector.length > 0 && selector.length <= 240 && !/[`;{}]/.test(selector);
+}
+
 function newPaneId(): PaneId {
-  return `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  return `p-${Date.now().toString(36)}-${randomIdSegment(6)}`;
 }
 
 function newRuntimeId(): string {
-  return `rt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  return `rt-${Date.now().toString(36)}-${randomIdSegment(6)}`;
 }
 
 type PaneState = {
@@ -172,7 +188,7 @@ export function AgentWorkspace() {
         {
           tabs: [tab],
           activeTabId: tab.id,
-          runtimeSessionId: `rt-${Math.random().toString(36).slice(2, 9)}`,
+          runtimeSessionId: `rt-${randomIdSegment(9)}`,
         },
       ],
     ]);
@@ -297,6 +313,9 @@ export function AgentWorkspace() {
             case "click": {
               const selector = String(payload.selector || "");
               if (!selector) return { ok: false, error: "selector required" };
+              if (!isSafeBrowserSelector(selector)) {
+                return { ok: false, error: "unsupported selector" };
+              }
               const script = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return { found: false }; (el).click(); return { found: true }; })()`;
               const result = (await withBrowserTimeout(
                 webview.executeJavaScript(script, true),
@@ -309,7 +328,10 @@ export function AgentWorkspace() {
               };
             }
             case "scroll": {
-              const deltaY = Number(payload.deltaY ?? 0);
+              const rawDeltaY = Number(payload.deltaY ?? 0);
+              const deltaY = Number.isFinite(rawDeltaY)
+                ? Math.max(-10_000, Math.min(10_000, Math.trunc(rawDeltaY)))
+                : 0;
               await withBrowserTimeout(
                 webview.executeJavaScript(`window.scrollBy(0, ${deltaY})`),
                 "Browser scroll",
@@ -328,6 +350,10 @@ export function AgentWorkspace() {
             case "fill": {
               const selector = String(payload.selector || "");
               const value = String(payload.value ?? "");
+              if (!selector) return { ok: false, error: "selector required" };
+              if (!isSafeBrowserSelector(selector)) {
+                return { ok: false, error: "unsupported selector" };
+              }
               const script = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return { found: false }; el.focus(); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return { found: true }; })()`;
               const result = (await withBrowserTimeout(
                 webview.executeJavaScript(script, true),
