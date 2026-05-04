@@ -3,12 +3,17 @@ import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../../../config/env";
-import { getRuntimeTargets, selectRuntimeTarget } from "./runtime-targets";
+import {
+  clearRuntimeTargetsForTests,
+  getRuntimeTargets,
+  selectRuntimeTarget,
+} from "./runtime-targets";
 
 const originalEnvironment = { ...process.env };
 const temporaryRoots: string[] = [];
 
 afterEach(() => {
+  clearRuntimeTargetsForTests();
   process.env = { ...originalEnvironment };
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
@@ -90,7 +95,7 @@ exit 1
 `
     );
     process.env["PATH"] = `${dockerBin}:${originalEnvironment["PATH"] ?? ""}`;
-    delete process.env["VLLM_STUDIO_RUNTIME_SKIP_DOCKER"];
+    process.env["VLLM_STUDIO_RUNTIME_SKIP_DOCKER"] = "0";
     process.env["VLLM_STUDIO_VLLM_PYTHONS"] = python;
 
     const targets = (await getRuntimeTargets(configFor(root))).filter(

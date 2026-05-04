@@ -60,7 +60,11 @@ const reducer = (state: LaunchStateSnapshot, event: LaunchStateEvent): LaunchSta
       if (event.recipeId === null) {
         return { ...state, phase: "idle", recipeId: null };
       }
-      return { ...state, phase: state.phase === "idle" ? "launching" : "preempting", recipeId: event.recipeId };
+      return {
+        ...state,
+        phase: state.phase === "idle" ? "launching" : "preempting",
+        recipeId: event.recipeId,
+      };
     }
     case "start":
       return { phase: "launching", recipeId: event.recipeId };
@@ -78,21 +82,17 @@ const reducer = (state: LaunchStateSnapshot, event: LaunchStateEvent): LaunchSta
  * @returns LaunchState instance.
  */
 export const createLaunchState = (): LaunchState => {
-  const machine: StateMachineContainer<
-    LaunchStateSnapshot,
-    LaunchStateEvent,
-    undefined,
-    never
-  > = createStateMachine<LaunchStateSnapshot, LaunchStateEvent, undefined, never>({
-    initialState: {
-      phase: "idle",
-      recipeId: null,
-    } as LaunchStateSnapshot,
-    transition: (state, _, event) => ({
-      state: reducer(state, event),
-      effects: [],
-    }),
-  });
+  const machine: StateMachineContainer<LaunchStateSnapshot, LaunchStateEvent, undefined, never> =
+    createStateMachine<LaunchStateSnapshot, LaunchStateEvent, undefined, never>({
+      initialState: {
+        phase: "idle",
+        recipeId: null,
+      } as LaunchStateSnapshot,
+      transition: (state, _, event) => ({
+        state: reducer(state, event),
+        effects: [],
+      }),
+    });
 
   return {
     getLaunchingRecipeId: (): string | null => machine.state.recipeId,

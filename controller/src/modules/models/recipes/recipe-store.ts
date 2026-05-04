@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { parseRecipe } from "./recipe-serializer";
 import type { Recipe } from "../types";
 import { openSqliteDatabase } from "../../../stores/sqlite";
-import { resolveVllmRecipePythonPath } from "../../engines/layers/vllm-python-path";
+import { resolveVllmRecipePythonPath } from "../../engines/runtimes/vllm-python-path";
 
 /**
  *

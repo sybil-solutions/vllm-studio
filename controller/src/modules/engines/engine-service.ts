@@ -1,6 +1,6 @@
 // Types needed by EngineService are defined below
-import type { Recipe, ProcessInfo } from "../../models/types";
-import type { ModelDownload } from "../../shared/recipe-types";
+import type { Recipe, ProcessInfo } from "../models/types";
+import type { ModelDownload } from "../shared/recipe-types";
 
 export type { Recipe, ProcessInfo };
 export type { ModelDownload };
@@ -74,7 +74,10 @@ export interface SetActiveRecipeOptions {
  */
 export interface EngineService {
   // Lifecycle
-  setActiveRecipe(recipe: Recipe | null, options?: SetActiveRecipeOptions): Promise<SetActiveRecipeResult>;
+  setActiveRecipe(
+    recipe: Recipe | null,
+    options?: SetActiveRecipeOptions
+  ): Promise<SetActiveRecipeResult>;
   ensureActive(recipe: Recipe, options?: EnsureActiveOptions): Promise<EnsureActiveResult>;
 
   // State queries
@@ -94,6 +97,11 @@ export interface EngineService {
 
   // Runtimes
   listRuntimes(): Record<string, RuntimeInfo>;
-  upgradeRuntime(runtime: RuntimeType, options?: { version?: string; args?: string[] }): Promise<UpgradeResult>;
-  getRuntimeHelp(runtime: "vllm" | "llamacpp"): Promise<{ config: string | null; error: string | null }>;
+  upgradeRuntime(
+    runtime: RuntimeType,
+    options?: { version?: string; args?: string[] }
+  ): Promise<UpgradeResult>;
+  getRuntimeHelp(
+    runtime: "vllm" | "llamacpp"
+  ): Promise<{ config: string | null; error: string | null }>;
 }

@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import type { Recipe } from "../../models/types";
 import type { Config } from "../../../config/env";
 import { resolveBinary } from "../../../core/command";
-import { resolveVllmRecipePythonPath } from "./vllm-python-path";
+import { resolveVllmRecipePythonPath } from "../runtimes/vllm-python-path";
 
 /**
  * Normalize JSON-like arguments for CLI flags.
@@ -230,7 +230,7 @@ const splitLaunchCommand = (command: string): string[] => {
   const normalized = normalizeLaunchCommand(command);
   const result: string[] = [];
   let current = "";
-  let quote: "'" | "\"" | null = null;
+  let quote: "'" | '"' | null = null;
   let escaping = false;
 
   for (const character of normalized) {
@@ -251,7 +251,7 @@ const splitLaunchCommand = (command: string): string[] => {
       }
       continue;
     }
-    if (character === "'" || character === "\"") {
+    if (character === "'" || character === '"') {
       quote = character;
       continue;
     }

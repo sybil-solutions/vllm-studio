@@ -8,9 +8,9 @@ import { Event } from "../system/event-manager";
 import { CONTROLLER_EVENTS } from "../../contracts/controller-events";
 import { fetchInference } from "../../services/inference/inference-client";
 import { isRecipeRunning } from "../models/recipes/recipe-matching";
-import { getVllmConfigHelp } from "./layers/vllm-runtime";
-import { getLlamacppConfigHelp } from "./layers/llamacpp-runtime";
-import { getExllamav3RuntimeInfo, getCudaInfo } from "./layers/runtime-info";
+import { getVllmConfigHelp } from "./runtimes/vllm-runtime";
+import { getLlamacppConfigHelp } from "./runtimes/llamacpp-runtime";
+import { getExllamav3RuntimeInfo, getCudaInfo } from "./runtimes/runtime-info";
 import { getRocmInfo, resolveRocmSmiTool } from "../system/platform/rocm-info";
 import {
   getDefaultRuntimeTarget,
@@ -18,13 +18,13 @@ import {
   getRuntimeTargets,
   runtimeTargetToBackendInfo,
   selectRuntimeTarget,
-} from "./layers/runtime-targets";
+} from "./runtimes/runtime-targets";
 import {
   cancelEngineJob,
   createEngineJob,
   getEngineJob,
   listEngineJobs,
-} from "./layers/engine-jobs";
+} from "./runtimes/engine-jobs";
 
 const resolveHfToken = (
   ctx: { req: { header: (name: string) => string | undefined } },

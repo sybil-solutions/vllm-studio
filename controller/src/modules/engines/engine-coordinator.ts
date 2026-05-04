@@ -1,15 +1,15 @@
-import { AsyncLock, delay } from "../../../core/async";
-import { primaryLogPathFor, readFileTailBytes } from "../../../core/log-files";
-import { Event, type EventManager } from "../../system/event-manager";
-import { CONTROLLER_EVENTS } from "../../../contracts/controller-events";
-import { pidExists } from "./process-utilities";
-import { isRecipeRunning } from "../../models/recipes/recipe-matching";
-import type { ProcessInfo, Recipe } from "../../models/types";
-import type { Config } from "../../../config/env";
-import type { Logger } from "../../../core/logger";
-import type { ProcessManager } from "./process-manager";
-import type { RecipeStore } from "../../models/recipes/recipe-store";
-import { LIFECYCLE_READY_TIMEOUT_MS } from "../configs";
+import { AsyncLock, delay } from "../../core/async";
+import { primaryLogPathFor, readFileTailBytes } from "../../core/log-files";
+import { Event, type EventManager } from "../system/event-manager";
+import { CONTROLLER_EVENTS } from "../../contracts/controller-events";
+import { pidExists } from "./process/process-utilities";
+import { isRecipeRunning } from "../models/recipes/recipe-matching";
+import type { ProcessInfo, Recipe } from "../models/types";
+import type { Config } from "../../config/env";
+import type { Logger } from "../../core/logger";
+import type { ProcessManager } from "./process/process-manager";
+import type { RecipeStore } from "../models/recipes/recipe-store";
+import { LIFECYCLE_READY_TIMEOUT_MS } from "./configs";
 import type {
   EngineService,
   RuntimeType,
@@ -19,23 +19,23 @@ import type {
   HfModel,
   SetActiveRecipeResult,
   SetActiveRecipeOptions,
-} from "../services/engine-service";
-import type { ModelDownload } from "../../shared/recipe-types";
+} from "./engine-service";
+import type { ModelDownload } from "../shared/recipe-types";
 
-import type { DownloadManager } from "./download-manager";
-import { getVllmRuntimeInfo, upgradeVllmRuntime, getVllmConfigHelp } from "./vllm-runtime";
-import { getLlamacppConfigHelp } from "./llamacpp-runtime";
+import type { DownloadManager } from "./downloads/download-manager";
+import { getVllmRuntimeInfo, upgradeVllmRuntime, getVllmConfigHelp } from "./runtimes/vllm-runtime";
+import { getLlamacppConfigHelp } from "./runtimes/llamacpp-runtime";
 import {
   getLlamacppRuntimeInfo,
   getSglangRuntimeInfo,
   getExllamav3RuntimeInfo,
-} from "./runtime-info";
+} from "./runtimes/runtime-info";
 import {
   upgradeSglangRuntime,
   upgradeLlamacppRuntime,
   runPlatformUpgrade,
-} from "./runtime-upgrade";
-import { fetchHuggingFaceModelInfo } from "./huggingface-api";
+} from "./runtimes/runtime-upgrade";
+import { fetchHuggingFaceModelInfo } from "./downloads/huggingface-api";
 
 interface CoordinatorDeps {
   config: Config;
@@ -297,7 +297,7 @@ export class EngineCoordinator implements EngineService {
       }
 
       try {
-        const { fetchLocal } = await import("../../../http/local-fetch");
+        const { fetchLocal } = await import("../../http/local-fetch");
         const response = await fetchLocal(this.deps.config.inference_port, "/health", {
           timeoutMs: 5000,
         });

@@ -9,9 +9,9 @@ import { HttpStatus } from "../../core/errors";
 import type { Logger } from "../../core/logger";
 import type { AppContext } from "../../types/context";
 import type { ProcessInfo, Recipe, LaunchResult } from "../models/types";
-import { EngineCoordinator } from "./layers/engine-coordinator";
-import { clearEngineJobsForTests } from "./layers/engine-jobs";
-import type { ProcessManager } from "./layers/process-manager";
+import { EngineCoordinator } from "./engine-coordinator";
+import { clearEngineJobsForTests } from "./runtimes/engine-jobs";
+import type { ProcessManager } from "./process/process-manager";
 import { registerEngineRoutes } from "./routes";
 
 const servers: Array<ReturnType<typeof Bun.serve>> = [];

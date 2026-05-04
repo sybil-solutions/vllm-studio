@@ -5,7 +5,7 @@ import { loadPersistedConfig, savePersistedConfig } from "../../../config/persis
 import { resolveBinary, runCommand } from "../../../core/command";
 import type { ProcessInfo } from "../../models/types";
 import type { EngineBackend, RuntimeBackendInfo, RuntimeTarget } from "../../shared/system-types";
-import { detectBackend, listProcesses } from "./process-utilities";
+import { detectBackend, listProcesses } from "../process/process-utilities";
 import { isUpgradeCommandConfigured, LLAMACPP_UPGRADE_ENV } from "./upgrade-config";
 import { resolveVllmPythonPath } from "./vllm-python-path";
 
@@ -19,6 +19,10 @@ let targetsCache: {
   configDataDirectory: string;
   value: RuntimeTarget[];
 } | null = null;
+
+export const clearRuntimeTargetsForTests = (): void => {
+  targetsCache = null;
+};
 
 const PYTHON_VERSION_PROBES: Record<"vllm" | "sglang", string> = {
   vllm: "import json, sys\ntry:\n import vllm\n print(json.dumps({'version': vllm.__version__, 'python': sys.executable}))\nexcept Exception as e:\n print(json.dumps({'version': None, 'python': sys.executable, 'error': str(e)}))",

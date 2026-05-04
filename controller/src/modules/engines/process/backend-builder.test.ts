@@ -51,7 +51,7 @@ describe("backend builder command overrides", () => {
             "python -m sglang.launch_server --model-path /models/custom --grammar-backend xgrammar",
         },
       },
-      {} as Config,
+      {} as Config
     );
 
     expect(command).toEqual([
@@ -74,7 +74,7 @@ describe("backend builder command overrides", () => {
             "python -m sglang.launch_server \\\n+  --model-path '/models/custom model' \\\n+  --enable-metrics",
         },
       },
-      {} as Config,
+      {} as Config
     );
 
     expect(command).toEqual([
@@ -95,8 +95,8 @@ describe("backend builder command overrides", () => {
           backend: "exllamav3",
           extra_args: { exllama_command: "sh -c echo-pwned" },
         },
-        {} as Config,
-      ),
+        {} as Config
+      )
     ).toThrow("Invalid exllama_command");
   });
 
@@ -108,7 +108,7 @@ describe("backend builder command overrides", () => {
         backend: "exllamav3",
         extra_args: { exllama_command: `"${executable}"` },
       },
-      {} as Config,
+      {} as Config
     );
 
     expect(command[0]).toBe(executable);
@@ -124,8 +124,8 @@ describe("backend builder command overrides", () => {
           backend: "llamacpp",
           extra_args: { llama_bin: "/bin/sh" },
         },
-        {} as Config,
-      ),
+        {} as Config
+      )
     ).toThrow("Invalid llama_bin");
   });
 
@@ -137,7 +137,7 @@ describe("backend builder command overrides", () => {
         backend: "llamacpp",
         extra_args: { llama_bin: executable },
       },
-      {} as Config,
+      {} as Config
     );
 
     expect(command[0]).toBe(executable);

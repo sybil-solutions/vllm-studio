@@ -1,7 +1,15 @@
 // CRITICAL — copied from lifecycle/runtime/runtime-info.ts
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import type { ProcessInfo, RuntimeBackendInfo, RuntimeCudaInfo, RuntimePlatformInfo, RuntimePlatformKind, RuntimeTorchBuildInfo, SystemRuntimeInfo } from "../../models/types";
+import type {
+  ProcessInfo,
+  RuntimeBackendInfo,
+  RuntimeCudaInfo,
+  RuntimePlatformInfo,
+  RuntimePlatformKind,
+  RuntimeTorchBuildInfo,
+  SystemRuntimeInfo,
+} from "../../models/types";
 import type { Config } from "../../../config/env";
 import { resolveBinary, runCommand } from "../../../core/command";
 import { getGpuInfo } from "../../system/platform/gpu";
@@ -11,7 +19,11 @@ import { getRocmInfo, resolveRocmSmiTool } from "../../system/platform/rocm-info
 import { resolveNvidiaSmiBinary } from "../../system/platform/smi-tools";
 import { getTorchBuildInfo } from "../../system/platform/torch-info";
 import { resolveVllmPythonPath } from "./vllm-python-path";
-import { isUpgradeCommandConfigured, CUDA_UPGRADE_ENV, LLAMACPP_UPGRADE_ENV } from "./upgrade-config";
+import {
+  isUpgradeCommandConfigured,
+  CUDA_UPGRADE_ENV,
+  LLAMACPP_UPGRADE_ENV,
+} from "./upgrade-config";
 
 const SYSTEM_RUNTIME_CACHE_TTL_MS = 30_000;
 let systemRuntimeCache: { expiresAt: number; value: SystemRuntimeInfo } | null = null;
@@ -19,7 +31,7 @@ let systemRuntimeInFlight: Promise<SystemRuntimeInfo> | null = null;
 
 export const getSystemRuntimeInfo = async (
   config: Config,
-  runningProcess?: ProcessInfo | null,
+  runningProcess?: ProcessInfo | null
 ): Promise<SystemRuntimeInfo> => {
   const now = Date.now();
   if (systemRuntimeCache && systemRuntimeCache.expiresAt > now) {
@@ -32,16 +44,20 @@ export const getSystemRuntimeInfo = async (
       systemRuntimeCache = { expiresAt: Date.now() + SYSTEM_RUNTIME_CACHE_TTL_MS, value };
       return value;
     })
-    .finally(() => { systemRuntimeInFlight = null; });
+    .finally(() => {
+      systemRuntimeInFlight = null;
+    });
   return systemRuntimeInFlight;
 };
 
 const computeSystemRuntimeInfo = async (
   config: Config,
-  runningProcess?: ProcessInfo | null,
+  runningProcess?: ProcessInfo | null
 ): Promise<SystemRuntimeInfo> => {
   const gpus = getGpuInfo();
-  const types = Array.from(new Set(gpus.map((gpu) => gpu.name).filter((name) => name && name !== "Unknown")));
+  const types = Array.from(
+    new Set(gpus.map((gpu) => gpu.name).filter((name) => name && name !== "Unknown"))
+  );
   const [vllmInfo, sglangInfo] = await Promise.all([
     getVllmRuntimeInfo(),
     Promise.resolve(getSglangRuntimeInfo(config, runningProcess)),
@@ -64,7 +80,10 @@ const computeSystemRuntimeInfo = async (
   return {
     platform,
     gpu_monitoring: gpuMonitoring,
-    cuda: kind === "cuda" ? getCudaInfo() : { driver_version: null, cuda_version: null, upgrade_command_available: false },
+    cuda:
+      kind === "cuda"
+        ? getCudaInfo()
+        : { driver_version: null, cuda_version: null, upgrade_command_available: false },
     gpus: { count: gpus.length, types },
     backends: {
       vllm: {
@@ -114,7 +133,9 @@ const looksLikePythonExecutable = (value: string): boolean => {
   return /^python(?:\d+(?:\.\d+)?)?$/.test(base) || base.includes("python");
 };
 
-const getRunningSglangPythonCandidates = (runningProcess?: Pick<ProcessInfo, "pid" | "backend"> | null): string[] => {
+const getRunningSglangPythonCandidates = (
+  runningProcess?: Pick<ProcessInfo, "pid" | "backend"> | null
+): string[] => {
   if (!runningProcess || runningProcess.backend !== "sglang") return [];
   const result = runCommand("ps", ["-p", String(runningProcess.pid), "-o", "args="]);
   if (result.status !== 0 || !result.stdout) return [];
@@ -138,7 +159,7 @@ const SGLANG_IMPORT_PROBE =
 
 export const getSglangRuntimeInfo = (
   config: Config,
-  runningProcess?: Pick<ProcessInfo, "pid" | "backend"> | null,
+  runningProcess?: Pick<ProcessInfo, "pid" | "backend"> | null
 ): RuntimeBackendInfo => {
   const candidates: string[] = getRunningSglangPythonCandidates(runningProcess);
   if (config.sglang_python) candidates.push(config.sglang_python);
@@ -152,13 +173,27 @@ export const getSglangRuntimeInfo = (
     const result = runCommand(python, ["-c", SGLANG_IMPORT_PROBE]);
     if (result.status !== 0) continue;
     let parsed: { version?: string | null; python?: string | null } | null = null;
-    try { parsed = JSON.parse(result.stdout) as { version?: string | null; python?: string | null }; } catch { continue; }
+    try {
+      parsed = JSON.parse(result.stdout) as { version?: string | null; python?: string | null };
+    } catch {
+      continue;
+    }
     if (parsed?.version) {
-      return { installed: true, version: parsed.version, python_path: parsed.python ?? python, upgrade_command_available: true };
+      return {
+        installed: true,
+        version: parsed.version,
+        python_path: parsed.python ?? python,
+        upgrade_command_available: true,
+      };
     }
   }
   const fallback = unique.find((p) => runCommand(p, ["-V"]).status === 0) ?? null;
-  return { installed: false, version: null, python_path: fallback ?? config.sglang_python ?? null, upgrade_command_available: Boolean(fallback) };
+  return {
+    installed: false,
+    version: null,
+    python_path: fallback ?? config.sglang_python ?? null,
+    upgrade_command_available: Boolean(fallback),
+  };
 };
 
 const parseLlamaVersion = (output: string): string | null => {
@@ -180,31 +215,51 @@ const resolveExllamav3Binary = (config: Config): string | null => {
 
 export const getExllamav3RuntimeInfo = (config: Config): RuntimeBackendInfo => {
   const binary = resolveExllamav3Binary(config);
-  if (!binary) return { installed: false, version: null, binary_path: null, upgrade_command_available: false };
+  if (!binary)
+    return { installed: false, version: null, binary_path: null, upgrade_command_available: false };
   const versionResult = runCommand(binary, ["--version"]);
   let version = parseLlamaVersion(versionResult.stdout) ?? parseLlamaVersion(versionResult.stderr);
   let installed = versionResult.status === 0;
   if (!installed) {
     const helpResult = runCommand(binary, ["--help"]);
     installed = helpResult.status === 0;
-    version = version ?? parseLlamaVersion(helpResult.stdout) ?? parseLlamaVersion(helpResult.stderr);
+    version =
+      version ?? parseLlamaVersion(helpResult.stdout) ?? parseLlamaVersion(helpResult.stderr);
   }
   return { installed, version, binary_path: binary, upgrade_command_available: false };
 };
 
 export const getLlamacppRuntimeInfo = (config: Config): RuntimeBackendInfo => {
   const configured = config.llama_bin || "llama-server";
-  const resolved = resolveBinary(configured) ?? (existsSync(configured) ? resolve(configured) : null);
+  const resolved =
+    resolveBinary(configured) ?? (existsSync(configured) ? resolve(configured) : null);
   const binary = resolved ?? configured;
   const versionResult = runCommand(binary, ["--version"]);
   if (versionResult.status !== 0) {
     const helpResult = runCommand(binary, ["--help"]);
-    if (helpResult.status !== 0) return { installed: false, version: null, binary_path: resolved, upgrade_command_available: isUpgradeCommandConfigured(LLAMACPP_UPGRADE_ENV) };
+    if (helpResult.status !== 0)
+      return {
+        installed: false,
+        version: null,
+        binary_path: resolved,
+        upgrade_command_available: isUpgradeCommandConfigured(LLAMACPP_UPGRADE_ENV),
+      };
     const version = parseLlamaVersion(helpResult.stdout) ?? parseLlamaVersion(helpResult.stderr);
-    return { installed: Boolean(version), version, binary_path: resolved, upgrade_command_available: isUpgradeCommandConfigured(LLAMACPP_UPGRADE_ENV) };
+    return {
+      installed: Boolean(version),
+      version,
+      binary_path: resolved,
+      upgrade_command_available: isUpgradeCommandConfigured(LLAMACPP_UPGRADE_ENV),
+    };
   }
-  const version = parseLlamaVersion(versionResult.stdout) ?? parseLlamaVersion(versionResult.stderr);
-  return { installed: Boolean(version), version, binary_path: resolved, upgrade_command_available: isUpgradeCommandConfigured(LLAMACPP_UPGRADE_ENV) };
+  const version =
+    parseLlamaVersion(versionResult.stdout) ?? parseLlamaVersion(versionResult.stderr);
+  return {
+    installed: Boolean(version),
+    version,
+    binary_path: resolved,
+    upgrade_command_available: isUpgradeCommandConfigured(LLAMACPP_UPGRADE_ENV),
+  };
 };
 
 const extractCudaVersion = (output: string): string | null => {
@@ -223,7 +278,10 @@ export const getCudaInfo = (): RuntimeCudaInfo => {
   const nvidiaSmi = process.env["NVIDIA_SMI_PATH"] || "nvidia-smi";
   let driverVersion: string | null = null;
   let cudaVersion: string | null = null;
-  const driverResult = runCommand(nvidiaSmi, ["--query-gpu=driver_version", "--format=csv,noheader,nounits"]);
+  const driverResult = runCommand(nvidiaSmi, [
+    "--query-gpu=driver_version",
+    "--format=csv,noheader,nounits",
+  ]);
   if (driverResult.status === 0 && driverResult.stdout) {
     driverVersion = driverResult.stdout.split("\n")[0]?.trim() || null;
   }
@@ -237,5 +295,9 @@ export const getCudaInfo = (): RuntimeCudaInfo => {
       cudaVersion = extractNvccVersion(nvccResult.stdout) ?? extractNvccVersion(nvccResult.stderr);
     }
   }
-  return { driver_version: driverVersion, cuda_version: cudaVersion, upgrade_command_available: isUpgradeCommandConfigured(CUDA_UPGRADE_ENV) };
+  return {
+    driver_version: driverVersion,
+    cuda_version: cudaVersion,
+    upgrade_command_available: isUpgradeCommandConfigured(CUDA_UPGRADE_ENV),
+  };
 };

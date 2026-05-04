@@ -2,11 +2,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "../../../config/env";
-import type { Logger } from "../../../core/logger";
-import type { Recipe, ProcessInfo, LaunchResult } from "../../models/types";
+import type { Config } from "../../config/env";
+import type { Logger } from "../../core/logger";
+import type { Recipe, ProcessInfo, LaunchResult } from "../models/types";
 import { EngineCoordinator } from "./engine-coordinator";
-import type { ProcessManager } from "./process-manager";
+import type { ProcessManager } from "./process/process-manager";
 
 const servers: Array<ReturnType<typeof Bun.serve>> = [];
 

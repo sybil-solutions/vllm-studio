@@ -209,7 +209,8 @@ export const buildEnvironment = (recipe: Recipe): Record<string, string> => {
     readExtraArgument("CUDA_VISIBLE_DEVICES") ??
     readExtraArgument("cuda_visible_devices") ??
     readExtraArgument("cuda-visible-devices");
-  const hipVisibleDevices = readExtraArgument("hip_visible_devices") ?? readExtraArgument("HIP_VISIBLE_DEVICES");
+  const hipVisibleDevices =
+    readExtraArgument("hip_visible_devices") ?? readExtraArgument("HIP_VISIBLE_DEVICES");
   const rocrVisibleDevices =
     readExtraArgument("rocr_visible_devices") ?? readExtraArgument("ROCR_VISIBLE_DEVICES");
 

@@ -14,4 +14,3 @@ export const matchesAny = (value: string, patterns: string[]): boolean => {
   }
   return patterns.some((pattern) => compileGlob(pattern).test(value));
 };
-
