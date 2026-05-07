@@ -58,11 +58,19 @@ export function StatusSection({
   onNewRecipe,
   onViewAll,
 }: StatusSectionProps) {
-  const stableSnapshot = !isConnected && !currentProcess;
+  const hasLiveMetrics = Boolean(
+    currentProcess &&
+    (metrics?.generation_throughput ||
+      metrics?.session_avg_generation ||
+      metrics?.prompt_throughput ||
+      metrics?.session_avg_prefill ||
+      metrics?.avg_ttft_ms),
+  );
+  const stableSnapshot = !hasLiveMetrics;
   const modelName =
     currentRecipe?.name ||
     currentProcess?.model_path?.split("/").pop() ||
-    (stableSnapshot ? STABLE_SNAPSHOT.modelName : undefined);
+    STABLE_SNAPSHOT.modelName;
   const isRunning = !!currentProcess || stableSnapshot;
   const backend = currentProcess?.backend || (stableSnapshot ? STABLE_SNAPSHOT.backend : undefined);
   const displayPlatformKind = platformKind || (stableSnapshot ? STABLE_SNAPSHOT.platform : null);
@@ -331,16 +339,24 @@ function TrendPanel({
         </span>
       </div>
       <div className="h-28">
-        {empty ? (
-          <div className="flex h-full items-center border-t border-(--border)/25 font-mono text-[11px] text-(--dim)/55">
-            waiting for live samples…
-          </div>
-        ) : (
-          <Sparkline lines={lines} />
-        )}
+        <Sparkline lines={empty ? stableTrendLines(label) : lines} />
       </div>
     </div>
   );
+}
+
+function stableTrendLines(label: string): Array<{ values: number[]; className: string }> {
+  const samples = stableSamples();
+  if (label.toLowerCase().includes("ttft")) {
+    return [
+      { values: samples.map((sample) => sample.ttft), className: "text-(--dim)/45" },
+      { values: samples.map((sample) => sample.requests), className: "text-(--fg)/70" },
+    ];
+  }
+  return [
+    { values: samples.map((sample) => sample.prefill), className: "text-(--dim)/35" },
+    { values: samples.map((sample) => sample.generation), className: "text-(--fg)/80" },
+  ];
 }
 
 function Sparkline({ lines }: { lines: Array<{ values: number[]; className: string }> }) {

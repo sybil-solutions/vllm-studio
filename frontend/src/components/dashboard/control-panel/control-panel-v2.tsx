@@ -55,7 +55,7 @@ function ActivityStrip({
     },
     { ready: 0, other: 0, errors: 0 },
   ) ?? { ready: 0, other: 0, errors: 0 };
-  const stableSnapshot = !isConnected && !currentProcess;
+  const stableSnapshot = !currentProcess || !metrics;
   const context = currentRecipe?.max_model_len
     ? formatCompact(currentRecipe.max_model_len)
     : stableSnapshot
