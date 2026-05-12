@@ -25,7 +25,6 @@ import {
   replayCursorAfterRuntimeHydration,
   replaySessionEvents,
   runtimeStatusAcceptsControl,
-  runtimeStatusLooksActive,
   sessionTitleFromPrompt,
   statusAfterControlPhase,
   stringifyToolArgs,
@@ -46,6 +45,12 @@ import {
 import type { Session, SessionId, SessionStatus } from "@/lib/agent/sessions/types";
 import type { ToolSelection } from "@/lib/agent/tools/types";
 import * as api from "./api";
+import {
+  resolveResumeRuntimeTarget,
+  resolveRuntimeSessionId,
+  runtimeCanHydrateCanonicalSession,
+  runtimeIsActiveForPiSession,
+} from "./engine-helpers";
 
 const EMPTY_PLUGINS: ComposerPluginRef[] = [];
 const EMPTY_SKILLS: ComposerSkillRef[] = [];
@@ -557,12 +562,7 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
           tabsRef.current.find((tab) => tab.id === sessionId)?.piSessionId ??
           selected.piSessionId ??
           null;
-        const runtimeStillActive = runtimeStatus
-          ? runtimeStatusLooksActive(runtimeStatus) &&
-            (!runtimeStatus.piSessionId ||
-              !currentPiSessionId ||
-              runtimeStatus.piSessionId === currentPiSessionId)
-          : false;
+        const runtimeStillActive = runtimeIsActiveForPiSession(runtimeStatus, currentPiSessionId);
         updateSession(sessionId, (session) => ({
           ...session,
           status: runtimeStillActive ? "running" : "idle",
@@ -616,7 +616,7 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
   const abortTurn = useCallback(
     async (sessionId: SessionId) => {
       const session = tabsRef.current.find((tab) => tab.id === sessionId);
-      const runtime = session?.runtimeSessionId || runtimeSessionId;
+      const runtime = resolveRuntimeSessionId(session, runtimeSessionId);
       await api.abortSession(runtime);
       updateSession(sessionId, (s) => ({ ...s, status: "idle" }));
     },
@@ -629,12 +629,12 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
       updateSession(sessionId, (session) => ({ ...session, status: "loading", error: "" }));
       try {
         const { events } = await api.loadCanonicalSession(piSessionId, cwd);
-        const runtimeId =
-          tabsRef.current.find((tab) => tab.id === sessionId)?.runtimeSessionId || runtimeSessionId;
+        const runtimeId = resolveRuntimeSessionId(
+          tabsRef.current.find((tab) => tab.id === sessionId),
+          runtimeSessionId,
+        );
         const runtimeStatus = await api.loadRuntimeStatus(runtimeId);
-        const runtimeActive =
-          runtimeStatus?.active === true &&
-          (!runtimeStatus.piSessionId || runtimeStatus.piSessionId === piSessionId);
+        const runtimeActive = runtimeCanHydrateCanonicalSession(runtimeStatus, piSessionId);
         const replayEvents = mergeCanonicalAndRuntimeEvents(
           events,
           runtimeActive ? runtimeStatus?.events : [],
@@ -703,22 +703,21 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
   // session's status flips to running/starting and we *don't* own the local
   // stream (e.g. after a refresh, or when a different pane joins a running
   // session).
-  const resumeRuntimeId =
-    tabsRef.current.find((tab) => tab.id === activeTabId)?.status === "running" ||
-    tabsRef.current.find((tab) => tab.id === activeTabId)?.status === "starting"
-      ? activeTabId
-      : null;
-  const resumeRuntimeSessionId = resumeRuntimeId
-    ? tabsRef.current.find((tab) => tab.id === resumeRuntimeId)?.runtimeSessionId ||
-      runtimeSessionId
-    : null;
+  const resumeRuntimeTarget = resolveResumeRuntimeTarget(
+    tabsRef.current,
+    activeTabId,
+    runtimeSessionId,
+  );
+  const resumeRuntimeId = resumeRuntimeTarget?.sessionId ?? null;
+  const resumeRuntimeSessionId = resumeRuntimeTarget?.runtimeSessionId ?? null;
+  const resumeAfter = resumeRuntimeTarget?.after ?? 0;
 
   useEffect(() => {
     if (!resumeRuntimeId || !resumeRuntimeSessionId) return;
     if (localStreamRef.current.has(resumeRuntimeId)) return;
     const sessionId = resumeRuntimeId;
     const runtime = resumeRuntimeSessionId;
-    const after = tabsRef.current.find((tab) => tab.id === sessionId)?.lastEventSeq ?? 0;
+    const after = resumeAfter;
 
     let closed = false;
     const ensureAssistantId = (): string => {
@@ -824,7 +823,14 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
       closed = true;
       sub.close();
     };
-  }, [applyPiEvent, onPiSessionIdChange, resumeRuntimeId, resumeRuntimeSessionId, updateSession]);
+  }, [
+    applyPiEvent,
+    onPiSessionIdChange,
+    resumeAfter,
+    resumeRuntimeId,
+    resumeRuntimeSessionId,
+    updateSession,
+  ]);
 
   return useMemo<SessionEngine>(
     () => ({
