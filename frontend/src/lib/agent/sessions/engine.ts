@@ -1,17 +1,7 @@
-// useSessionEngine — owns the network/state side of running an agent session.
-// ChatPane only handles composer UX (input, attachments, focus); everything
-// from "send a turn" downward — SSE plumbing, pi-event accumulation, queue
-// drain, runtime status polling, replay — lives here.
-//
-// The hook deliberately mirrors the chat-pane internals it replaces. Callers
-// pass session state (`tabs`, `activeTabId`) and a write callback (`updateTab`);
-// the hook returns the action functions.
-
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { isAgentEndEvent } from "@/lib/agent/pi-events";
 import {
   type ChatMessage,
-  drainQueueAfterAgentEnd,
   mergeCanonicalAndRuntimeEvents,
   newId,
   nowLabel,
@@ -40,6 +30,8 @@ import {
   runtimeIsActiveForPiSession,
 } from "./engine-helpers";
 import { applyPiEventToSession } from "./pi-event-applier";
+import { drainQueuedTurnAfterAgentEnd } from "./queue-drain";
+import { subscribeResumeRuntimeSession } from "./runtime-resume";
 
 const EMPTY_PLUGINS: ComposerPluginRef[] = [];
 const EMPTY_SKILLS: ComposerSkillRef[] = [];
@@ -348,24 +340,7 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
 
       // Drain the per-session queue once the agent finished its turn.
       if (agentEnded) {
-        const queued = (tabsRef.current.find((tab) => tab.id === sessionId)?.queue ?? []).slice();
-        const { next, remaining } = drainQueueAfterAgentEnd(queued);
-        if (next) {
-          updateSession(sessionId, (session) => ({ ...session, queue: remaining }));
-          setTimeout(
-            () =>
-              void submitPromptRef.current({
-                text: next.text,
-                prompt: next.text,
-                displayText: next.text,
-                userText: next.text,
-                targetSessionId: sessionId,
-              }),
-            0,
-          );
-        } else if (queued.length > 0) {
-          updateSession(sessionId, (session) => ({ ...session, queue: remaining }));
-        }
+        drainQueuedTurnAfterAgentEnd({ submitPromptRef, tabsRef, updateSession }, sessionId);
       }
     },
     [
@@ -486,114 +461,19 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
   useEffect(() => {
     if (!resumeRuntimeId || !resumeRuntimeSessionId) return;
     if (localStreamRef.current.has(resumeRuntimeId)) return;
-    const sessionId = resumeRuntimeId;
-    const runtime = resumeRuntimeSessionId;
-    const after = resumeAfter;
 
-    let closed = false;
-    const ensureAssistantId = (): string => {
-      const current = tabsRef.current.find((tab) => tab.id === sessionId);
-      const existing =
-        (current?.activeAssistantId &&
-          current.messages.some((message) => message.id === current.activeAssistantId) &&
-          current.activeAssistantId) ||
-        [...(current?.messages ?? [])].reverse().find((message) => message.role === "assistant")
-          ?.id;
-      if (existing) {
-        updateSession(sessionId, (session) => ({ ...session, activeAssistantId: existing }));
-        return existing;
-      }
-      const assistantId = newId("assistant");
-      updateSession(sessionId, (session) => ({
-        ...session,
-        activeAssistantId: assistantId,
-        messages: [
-          ...session.messages,
-          { id: assistantId, role: "assistant", text: "", blocks: [], timestamp: nowLabel() },
-        ],
-      }));
-      return assistantId;
-    };
-
-    const sub = api.subscribeRuntimeEvents(runtime, after, {
-      onPayload: (payload) => {
-        if (closed) return;
-        if (payload.type === "status") {
-          updateSession(sessionId, (session) => ({
-            ...session,
-            piSessionId: payload.session?.piSessionId || session.piSessionId,
-            status: payload.phase === "done" || payload.phase === "idle" ? "idle" : "running",
-            activeAssistantId:
-              payload.phase === "done" || payload.phase === "idle"
-                ? undefined
-                : session.activeAssistantId,
-          }));
-          return;
-        }
-        if (payload.type === "pi") {
-          const eventId = piSessionIdFromEvent(payload.event);
-          const assistantId = ensureAssistantId();
-          const agentEnded = isAgentEndEvent(payload.event);
-          updateSession(sessionId, (session) => ({
-            ...session,
-            piSessionId: eventId || session.piSessionId,
-            lastEventSeq: typeof payload.seq === "number" ? payload.seq : session.lastEventSeq,
-            status: agentEnded ? "idle" : "running",
-            activeAssistantId: agentEnded ? undefined : assistantId,
-          }));
-          if (eventId) onPiSessionIdChange?.(eventId);
-          applyPiEvent(sessionId, assistantId, payload.event);
-          if (agentEnded) {
-            const queued = (
-              tabsRef.current.find((tab) => tab.id === sessionId)?.queue ?? []
-            ).slice();
-            const { next, remaining } = drainQueueAfterAgentEnd(queued);
-            if (next) {
-              updateSession(sessionId, (session) => ({ ...session, queue: remaining }));
-              setTimeout(
-                () =>
-                  void submitPromptRef.current({
-                    text: next.text,
-                    prompt: next.text,
-                    displayText: next.text,
-                    userText: next.text,
-                    targetSessionId: sessionId,
-                  }),
-                0,
-              );
-            } else if (queued.length > 0) {
-              updateSession(sessionId, (session) => ({ ...session, queue: remaining }));
-            }
-          }
-        }
-      },
-      onError: () => {
-        if (closed) return;
-        // Probe runtime status — if the session genuinely went away, downgrade
-        // to idle. Transient drops fall through to EventSource's auto-retry.
-        void api.loadRuntimeStatus(runtime).then((status) => {
-          if (closed) return;
-          if (status?.active) {
-            updateSession(sessionId, (session) => ({
-              ...session,
-              piSessionId: status.piSessionId || session.piSessionId,
-              status: "running",
-            }));
-            return;
-          }
-          sub.close();
-          updateSession(sessionId, (session) =>
-            session.status === "running" || session.status === "starting"
-              ? { ...session, status: "idle", activeAssistantId: undefined }
-              : session,
-          );
-        });
-      },
+    const sub = subscribeResumeRuntimeSession({
+      after: resumeAfter,
+      api,
+      applyPiEvent,
+      onPiSessionIdChange,
+      runtime: resumeRuntimeSessionId,
+      sessionId: resumeRuntimeId,
+      submitPromptRef,
+      tabsRef,
+      updateSession,
     });
-    return () => {
-      closed = true;
-      sub.close();
-    };
+    return sub.close;
   }, [
     applyPiEvent,
     onPiSessionIdChange,
