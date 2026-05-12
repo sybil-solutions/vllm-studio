@@ -14,7 +14,7 @@ const config = {
   ],
   // Some tooling is used implicitly (CSS/postcss pipeline, git hooks), which knip can't reliably
   // infer from source imports. Keep this list small and intentional.
-  ignoreDependencies: ["tailwindcss", "postcss", "husky", "enhanced-resolve"],
+  ignoreDependencies: ["tailwindcss", "postcss", "husky"],
   ignoreExportsUsedInFile: true,
 };
 
