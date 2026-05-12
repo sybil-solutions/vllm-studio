@@ -12,36 +12,214 @@ import {
 } from "./helpers";
 import type { AssistantBlock, ChatMessage, TextBlock } from "./types";
 
-function blocksFromMessageContent(content: string | Array<Record<string, unknown>> | undefined) {
-  if (typeof content === "string") {
-    return content ? [{ kind: "text" as const, id: newId("text"), text: content }] : [];
+type ReplayPiMessage = {
+  role?: string;
+  content?: string | Array<Record<string, unknown>>;
+  toolCallId?: string;
+  toolName?: string;
+  isError?: boolean;
+};
+
+type ReplayState = {
+  messages: ChatMessage[];
+  pendingAssistantId: string | null;
+  title: string | null;
+  startedAt: string | null;
+};
+
+const isRecordArray = (value: unknown): value is Array<Record<string, unknown>> =>
+  Array.isArray(value);
+
+const toolArgs = (part: Record<string, unknown>): Record<string, unknown> | undefined =>
+  part.arguments && typeof part.arguments === "object"
+    ? (part.arguments as Record<string, unknown>)
+    : undefined;
+
+function blockFromContentPart(part: Record<string, unknown>): AssistantBlock | null {
+  if (part.type === "text" && typeof part.text === "string") {
+    return { kind: "text", id: newId("text"), text: part.text };
   }
-  if (!Array.isArray(content)) return [];
-  const blocks: AssistantBlock[] = [];
-  for (const part of content) {
-    if (part?.type === "text" && typeof part.text === "string") {
-      blocks.push({ kind: "text", id: newId("text"), text: part.text });
-    } else if (part?.type === "thinking" && typeof part.thinking === "string") {
-      blocks.push({ kind: "thinking", id: newId("thinking"), text: part.thinking });
-    } else if (part?.type === "toolCall") {
-      const argsText = JSON.stringify(part.arguments ?? {}, null, 2);
-      const args =
-        part.arguments && typeof part.arguments === "object"
-          ? (part.arguments as Record<string, unknown>)
-          : undefined;
-      blocks.push({
-        kind: "tool",
-        id: typeof part.id === "string" ? part.id : newId("tool"),
-        name: typeof part.name === "string" ? part.name : "tool",
-        status: "running",
-        argsText,
-        args,
-        text: argsText,
-      });
-    }
+  if (part.type === "thinking" && typeof part.thinking === "string") {
+    return { kind: "thinking", id: newId("thinking"), text: part.thinking };
   }
-  return blocks;
+  if (part.type !== "toolCall") return null;
+
+  const args = toolArgs(part);
+  const argsText = JSON.stringify(part.arguments ?? {}, null, 2);
+  return {
+    kind: "tool",
+    id: typeof part.id === "string" ? part.id : newId("tool"),
+    name: typeof part.name === "string" ? part.name : "tool",
+    status: "running",
+    argsText,
+    args,
+    text: argsText,
+  };
 }
+
+function blocksFromMessageContent(
+  content: string | Array<Record<string, unknown>> | undefined,
+): AssistantBlock[] {
+  if (typeof content === "string") {
+    return content ? [{ kind: "text", id: newId("text"), text: content }] : [];
+  }
+  if (!isRecordArray(content)) return [];
+  return content.flatMap((part) => {
+    const block = blockFromContentPart(part);
+    return block ? [block] : [];
+  });
+}
+
+const messageTextFromBlocks = (blocks: AssistantBlock[]): string =>
+  blocks
+    .filter((block): block is TextBlock => block.kind === "text")
+    .map((block) => block.text)
+    .join("\n");
+
+const replayMessageFromEvent = (event: Record<string, unknown>): ReplayPiMessage | null => {
+  if (event.type !== "message" && event.type !== "message_end") return null;
+  const message = event.message;
+  return message && typeof message === "object" && !Array.isArray(message)
+    ? (message as ReplayPiMessage)
+    : null;
+};
+
+const eventToolCallId = (event: Record<string, unknown>, message: ReplayPiMessage): string =>
+  message.toolCallId || String(event.toolCallId || "");
+
+const patchMessage = (
+  state: ReplayState,
+  messageId: string,
+  patch: (message: ChatMessage) => ChatMessage,
+): void => {
+  const index = state.messages.findIndex((message) => message.id === messageId);
+  if (index !== -1) state.messages[index] = patch(state.messages[index]);
+};
+
+const ensureAssistantMessage = (state: ReplayState): string => {
+  if (state.pendingAssistantId) return state.pendingAssistantId;
+  const id = newId("assistant");
+  state.messages.push({ id, role: "assistant", text: "", blocks: [], timestamp: nowLabel() });
+  state.pendingAssistantId = id;
+  return id;
+};
+
+const assistantWithTool = (state: ReplayState, toolCallId: string): string | null => {
+  for (let index = state.messages.length - 1; index >= 0; index -= 1) {
+    const message = state.messages[index];
+    const hasTool = (message.blocks ?? []).some(
+      (block) => block.kind === "tool" && block.id === toolCallId,
+    );
+    if (message.role === "assistant" && hasTool) return message.id;
+  }
+  return null;
+};
+
+const pendingAssistantCanReceive = (
+  state: ReplayState,
+  eventType: unknown,
+  incomingBlocks: AssistantBlock[],
+): boolean => {
+  if (!state.pendingAssistantId) return false;
+  const pending = state.messages.find((message) => message.id === state.pendingAssistantId);
+  const pendingHasTools = (pending?.blocks ?? []).some((block) => block.kind === "tool");
+  const incomingHasTools = incomingBlocks.some((block) => block.kind === "tool");
+  return eventType === "message_end" || (!pendingHasTools && !incomingHasTools);
+};
+
+const appendUserMessage = (state: ReplayState, message: ReplayPiMessage): boolean => {
+  if (message.role !== "user") return false;
+
+  state.pendingAssistantId = null;
+  const text = visibleUserTextFromPi(messageText(message.content));
+  if (!text) return true;
+  state.title ??= sessionTitleFromPrompt(text);
+  state.messages.push({ id: newId("user"), role: "user", text, timestamp: nowLabel() });
+  return true;
+};
+
+const appendAssistantMessage = (
+  state: ReplayState,
+  eventType: unknown,
+  message: ReplayPiMessage,
+): boolean => {
+  if (message.role !== "assistant") return false;
+
+  const blocks = blocksFromMessageContent(message.content);
+  const text = messageTextFromBlocks(blocks);
+  if (pendingAssistantCanReceive(state, eventType, blocks) && state.pendingAssistantId) {
+    patchMessage(state, state.pendingAssistantId, (current) => ({ ...current, text, blocks }));
+    state.pendingAssistantId = null;
+    return true;
+  }
+
+  state.pendingAssistantId = null;
+  state.messages.push({
+    id: newId("assistant"),
+    role: "assistant",
+    text,
+    blocks,
+    timestamp: nowLabel(),
+  });
+  return true;
+};
+
+const appendToolResult = (
+  state: ReplayState,
+  event: Record<string, unknown>,
+  message: ReplayPiMessage,
+): boolean => {
+  if (message.role !== "toolResult") return false;
+
+  const id = eventToolCallId(event, message);
+  if (!id) return true;
+  const resultText = messageText(message.content);
+  const assistantId = assistantWithTool(state, id) ?? ensureAssistantMessage(state);
+  patchMessage(state, assistantId, (current) => ({
+    ...current,
+    blocks: upsertTool(
+      current.blocks ?? [],
+      id,
+      (existing) => ({
+        ...existing,
+        status: message.isError ? "error" : "done",
+        text: resultText || existing.text,
+      }),
+      () => ({
+        kind: "tool",
+        id,
+        name: message.toolName || "tool",
+        status: message.isError ? "error" : "done",
+        text: resultText,
+      }),
+    ),
+  }));
+  return true;
+};
+
+const applyReplayMessage = (state: ReplayState, event: Record<string, unknown>): boolean => {
+  const message = replayMessageFromEvent(event);
+  if (!message) return false;
+  return (
+    appendUserMessage(state, message) ||
+    appendAssistantMessage(state, event.type, message) ||
+    appendToolResult(state, event, message)
+  );
+};
+
+const applyAssistantPiEvent = (state: ReplayState, event: Record<string, unknown>): void => {
+  if (!assistantPiEventAffectsBlocks(event)) return;
+  const assistantId = ensureAssistantMessage(state);
+  patchMessage(state, assistantId, (message) => {
+    const blocks = applyAssistantPiEventToBlocks(message.blocks ?? [], event);
+    return blocks ? { ...message, blocks } : message;
+  });
+};
+
+const applySessionStart = (state: ReplayState, event: Record<string, unknown>): void => {
+  if (state.startedAt || event.type !== "session" || typeof event.timestamp !== "string") return;
+  state.startedAt = event.timestamp;
+};
 
 // ----- full session replay -----
 
@@ -50,126 +228,18 @@ export function replaySessionEvents(events: Record<string, unknown>[]): {
   title: string | null;
   startedAt: string | null;
 } {
-  const replayed: ChatMessage[] = [];
-  let pendingAssistantId: string | null = null;
-  let title: string | null = null;
-  let startedAt: string | null = null;
-
-  const ensureAssistant = () => {
-    if (pendingAssistantId) return pendingAssistantId;
-    const id = newId("assistant");
-    replayed.push({ id, role: "assistant", text: "", blocks: [], timestamp: nowLabel() });
-    pendingAssistantId = id;
-    return id;
-  };
-  const localPatch = (assistantId: string, patch: (msg: ChatMessage) => ChatMessage) => {
-    const idx = replayed.findIndex((m) => m.id === assistantId);
-    if (idx !== -1) replayed[idx] = patch(replayed[idx]);
-  };
-  const assistantWithTool = (toolCallId: string) => {
-    for (let idx = replayed.length - 1; idx >= 0; idx -= 1) {
-      const message = replayed[idx];
-      if (
-        message.role === "assistant" &&
-        (message.blocks ?? []).some((block) => block.kind === "tool" && block.id === toolCallId)
-      ) {
-        return message.id;
-      }
-    }
-    return null;
+  const state: ReplayState = {
+    messages: [],
+    pendingAssistantId: null,
+    title: null,
+    startedAt: null,
   };
 
   for (const event of events) {
-    const type = event.type;
-    if (type === "session" && !startedAt && typeof event.timestamp === "string") {
-      startedAt = event.timestamp;
-    }
-    if (type === "message" || type === "message_end") {
-      const msg = event.message as
-        | {
-            role?: string;
-            content?: string | Array<Record<string, unknown>>;
-            toolCallId?: string;
-            toolName?: string;
-            isError?: boolean;
-          }
-        | undefined;
-      if (msg?.role === "user") {
-        pendingAssistantId = null;
-        const text = visibleUserTextFromPi(messageText(msg.content));
-        if (text) {
-          if (!title) title = sessionTitleFromPrompt(text);
-          replayed.push({ id: newId("user"), role: "user", text, timestamp: nowLabel() });
-        }
-        continue;
-      }
-      if (msg?.role === "assistant") {
-        const blocks = blocksFromMessageContent(msg.content);
-        const text = blocks
-          .filter((block): block is TextBlock => block.kind === "text")
-          .map((block) => block.text)
-          .join("\n");
-        if (pendingAssistantId) {
-          const pending = replayed.find((message) => message.id === pendingAssistantId);
-          const pendingHasTools = (pending?.blocks ?? []).some((block) => block.kind === "tool");
-          const incomingHasTools = blocks.some((block) => block.kind === "tool");
-          if (type === "message_end" || (!pendingHasTools && !incomingHasTools)) {
-            localPatch(pendingAssistantId, (message) => ({
-              ...message,
-              text,
-              blocks,
-            }));
-            pendingAssistantId = null;
-            continue;
-          }
-        }
-        pendingAssistantId = null;
-        replayed.push({
-          id: newId("assistant"),
-          role: "assistant",
-          text,
-          blocks,
-          timestamp: nowLabel(),
-        });
-        continue;
-      }
-      if (msg?.role === "toolResult") {
-        const id = msg.toolCallId || String(event.toolCallId || "");
-        if (id) {
-          const resultText = messageText(msg.content);
-          const assistantId = assistantWithTool(id) ?? ensureAssistant();
-          localPatch(assistantId, (message) => ({
-            ...message,
-            blocks: upsertTool(
-              message.blocks ?? [],
-              id,
-              (existing) => ({
-                ...existing,
-                status: msg.isError ? "error" : "done",
-                text: resultText || existing.text,
-              }),
-              () => ({
-                kind: "tool",
-                id,
-                name: msg.toolName || "tool",
-                status: msg.isError ? "error" : "done",
-                text: resultText,
-              }),
-            ),
-          }));
-        }
-        continue;
-      }
-    }
-
-    if (!assistantPiEventAffectsBlocks(event)) continue;
-
-    const assistantId = ensureAssistant();
-    localPatch(assistantId, (msg) => {
-      const blocks = applyAssistantPiEventToBlocks(msg.blocks ?? [], event);
-      return blocks ? { ...msg, blocks } : msg;
-    });
+    applySessionStart(state, event);
+    if (applyReplayMessage(state, event)) continue;
+    applyAssistantPiEvent(state, event);
   }
 
-  return { messages: replayed, title, startedAt };
+  return { messages: state.messages, title: state.title, startedAt: state.startedAt };
 }
