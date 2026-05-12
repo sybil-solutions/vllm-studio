@@ -1,8 +1,7 @@
 // CRITICAL
 "use client";
 
-import type { PeakMetrics } from "@/lib/types";
-import type { SortDirection, SortField } from "@/lib/types";
+import type { PeakMetrics, SortDirection, SortField } from "@/lib/types";
 import { Fragment } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { formatNumber, formatDurationOrUnavailable } from "@/lib/formatters";

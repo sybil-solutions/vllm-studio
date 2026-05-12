@@ -1,6 +1,5 @@
 import type { HuggingFaceModel, ModelRecommendation } from "@/lib/types";
-import type { QuantFormat } from "@/lib/vram-estimator";
-import { estimateModelSizeMb } from "@/lib/vram-estimator";
+import { estimateModelSizeMb, type QuantFormat } from "@/lib/vram-estimator";
 
 export function modelRecencyMs(model: HuggingFaceModel): number {
   const raw = model.lastModified ?? model.createdAt;
@@ -21,7 +20,8 @@ export function quantFromTags(tags: string[]): QuantFormat {
   if (t.includes("iq2")) return "iq2";
   if (t.includes("fp8")) return "fp8";
   if (t.includes("int8")) return "int8";
-  if (t.includes("int4") || t.includes("awq") || t.includes("gptq") || t.includes("w4a16")) return "int4";
+  if (t.includes("int4") || t.includes("awq") || t.includes("gptq") || t.includes("w4a16"))
+    return "int4";
   if (t.includes("gguf")) return "q4_k_m";
   if (t.includes("bf16")) return "bf16";
   return "bf16";

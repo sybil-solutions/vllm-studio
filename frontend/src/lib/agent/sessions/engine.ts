@@ -12,6 +12,7 @@ import { isAgentEndEvent } from "@/lib/agent/pi-events";
 import {
   appendDelta,
   appendEventBlock,
+  type ChatMessage,
   compactionTextFromEvent,
   drainQueueAfterAgentEnd,
   extractToolText,
@@ -30,6 +31,8 @@ import {
   stringifyToolArgs,
   toolCallDeltaFromUpdate,
   toolCallSnapshotFromUpdate,
+  type TokenStats,
+  type ToolBlock,
   upsertTool,
   usageFromEvent,
   visibleUserTextFromPi,
@@ -40,7 +43,6 @@ import {
   type ComposerPluginRef,
   type ComposerSkillRef,
 } from "@/lib/agent/composer-context";
-import type { ChatMessage, TokenStats, ToolBlock } from "@/lib/agent/session";
 import type { Session, SessionId, SessionStatus } from "@/lib/agent/sessions/types";
 import type { ToolSelection } from "@/lib/agent/tools/types";
 import * as api from "./api";
@@ -428,8 +430,7 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
               updateSession(sessionId, (session) => ({
                 ...session,
                 piSessionId: eventId || session.piSessionId,
-                lastEventSeq:
-                  typeof payload.seq === "number" ? payload.seq : session.lastEventSeq,
+                lastEventSeq: typeof payload.seq === "number" ? payload.seq : session.lastEventSeq,
                 status: agentEnded ? "idle" : session.status,
                 activeAssistantId: agentEnded ? undefined : assistantId,
               }));
@@ -629,8 +630,7 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
       try {
         const { events } = await api.loadCanonicalSession(piSessionId, cwd);
         const runtimeId =
-          tabsRef.current.find((tab) => tab.id === sessionId)?.runtimeSessionId ||
-          runtimeSessionId;
+          tabsRef.current.find((tab) => tab.id === sessionId)?.runtimeSessionId || runtimeSessionId;
         const runtimeStatus = await api.loadRuntimeStatus(runtimeId);
         const runtimeActive =
           runtimeStatus?.active === true &&
@@ -767,8 +767,7 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
           updateSession(sessionId, (session) => ({
             ...session,
             piSessionId: eventId || session.piSessionId,
-            lastEventSeq:
-              typeof payload.seq === "number" ? payload.seq : session.lastEventSeq,
+            lastEventSeq: typeof payload.seq === "number" ? payload.seq : session.lastEventSeq,
             status: agentEnded ? "idle" : "running",
             activeAssistantId: agentEnded ? undefined : assistantId,
           }));

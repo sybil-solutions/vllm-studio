@@ -75,7 +75,7 @@ function makeDeps(storage = memoryStorage()) {
   return { deps, events, queueReplay, storage };
 }
 
-function hydratedProjectState(state: WorkspaceState, _selected: ProjectEntry): WorkspaceState {
+function hydratedProjectState(state: WorkspaceState): WorkspaceState {
   return {
     ...state,
     selectedModel: "model-1",
@@ -105,8 +105,7 @@ describe("runWorkspaceEffect", () => {
 
   it("dispatches a sessions refresh when a tab gains a pi session id", () => {
     const { deps, events } = makeDeps();
-    const selected = project();
-    const state = hydratedProjectState(createInitialState(), selected);
+    const state = hydratedProjectState(createInitialState());
     const replayAction: WorkspaceAction = {
       type: "replaySession",
       piSessionId: "pi-1",
@@ -139,7 +138,7 @@ describe("runWorkspaceEffect", () => {
   it("broadcasts active sessions only when the computed payload changes", () => {
     const { deps, events } = makeDeps();
     const selected = project();
-    const state = hydratedProjectState(createInitialState(), selected);
+    const state = hydratedProjectState(createInitialState());
     const replayAction: WorkspaceAction = {
       type: "replaySession",
       piSessionId: "pi-1",
