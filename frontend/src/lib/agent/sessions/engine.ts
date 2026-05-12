@@ -96,9 +96,7 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
   } = deps;
 
   const tabsRef = useRef(tabs);
-  useEffect(() => {
-    tabsRef.current = tabs;
-  }, [tabs]);
+  tabsRef.current = tabs;
   const selectionForRef = useRef(selectionFor);
   selectionForRef.current = selectionFor;
 
@@ -355,9 +353,7 @@ export function useSessionEngine(deps: UseSessionEngineDeps): SessionEngine {
     ],
   );
 
-  useEffect(() => {
-    submitPromptRef.current = submitPrompt;
-  }, [submitPrompt]);
+  submitPromptRef.current = submitPrompt;
 
   const abortTurn = useCallback(
     async (sessionId: SessionId) => {
