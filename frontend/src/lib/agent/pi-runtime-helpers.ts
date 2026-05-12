@@ -28,6 +28,33 @@ export type RuntimeStartOptions = {
   skills?: RuntimeSkillRef[];
 };
 
+type RuntimeLaunchModel = {
+  reasoning?: boolean;
+};
+
+type RuntimeMcpConfig = {
+  pluginName: string;
+  configPath: string;
+};
+
+export type RuntimeLaunchPlanInput = {
+  agentDir: string;
+  modelId: string;
+  options: RuntimeStartOptions;
+  pathEnv: string;
+  piSessionId: string | null;
+  processEnv: NodeJS.ProcessEnv;
+  providerId: string;
+  selectedModel: RuntimeLaunchModel;
+};
+
+export type RuntimeLaunchPlan = {
+  args: string[];
+  env: NodeJS.ProcessEnv;
+  mcpConfigs: RuntimeMcpConfig[];
+  plugins: RuntimePluginRef[];
+};
+
 export function normalizeBackendUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
 }
@@ -232,9 +259,7 @@ export function isPathInside(candidate: string, root: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-export function pluginMcpConfigs(
-  plugins: RuntimePluginRef[],
-): Array<{ pluginName: string; configPath: string }> {
+export function pluginMcpConfigs(plugins: RuntimePluginRef[]): RuntimeMcpConfig[] {
   const seen = new Set<string>();
   return plugins.flatMap((plugin) => {
     const configPath =
@@ -254,4 +279,73 @@ export function pluginMcpConfigs(
 export function deriveFrontendBase(): string {
   const port = process.env.PORT || "3000";
   return `http://127.0.0.1:${port}`;
+}
+
+function shouldLoadBrowserTool(options: RuntimeStartOptions, plugins: RuntimePluginRef[]): boolean {
+  return (
+    options.browserToolEnabled === true ||
+    plugins.some(
+      (plugin) =>
+        pluginNameMatches(plugin, "browser-use") || pluginNameMatches(plugin, "computer-use"),
+    )
+  );
+}
+
+function skillArgs(plugins: RuntimePluginRef[], skills: RuntimeSkillRef[]): string[] {
+  return uniqueExistingPaths([...pluginSkillPaths(plugins), ...selectedSkillPaths(skills)]).flatMap(
+    (skillPath) => ["--skill", skillPath],
+  );
+}
+
+function extensionArgs(
+  options: RuntimeStartOptions,
+  plugins: RuntimePluginRef[],
+  mcpConfigs: RuntimeMcpConfig[],
+): string[] {
+  const args: string[] = [];
+  const timeoutExtensionPath = resolveTimeoutExtensionPath();
+  if (timeoutExtensionPath) args.push("--extension", timeoutExtensionPath);
+  if (mcpConfigs.length) {
+    const mcpExtensionPath = resolveMcpExtensionPath();
+    if (mcpExtensionPath) args.push("--extension", mcpExtensionPath);
+  }
+  if (shouldLoadBrowserTool(options, plugins)) {
+    const browserExtensionPath = resolveBrowserExtensionPath();
+    if (browserExtensionPath) args.push("--extension", browserExtensionPath);
+  }
+  return args;
+}
+
+// Convert runtime selection state into the exact Pi RPC process contract. This
+// is the launch seam: callers no longer need to know arg ordering, extension
+// rules, skill path de-duping, or environment variable names.
+export function buildPiLaunchPlan(input: RuntimeLaunchPlanInput): RuntimeLaunchPlan {
+  const plugins = input.options.plugins ?? [];
+  const skills = input.options.skills ?? [];
+  const mcpConfigs = pluginMcpConfigs(plugins);
+  const args = [
+    "--mode",
+    "rpc",
+    "--provider",
+    input.providerId,
+    "--model",
+    `${input.providerId}/${input.modelId}`,
+  ];
+  if (input.selectedModel.reasoning) args.push("--thinking", "high");
+  if (input.piSessionId) args.push("--session", input.piSessionId);
+  args.push(...skillArgs(plugins, skills), ...extensionArgs(input.options, plugins, mcpConfigs));
+
+  return {
+    args,
+    env: {
+      ...input.processEnv,
+      PATH: input.pathEnv,
+      PI_CODING_AGENT_DIR: input.agentDir,
+      PI_SKIP_VERSION_CHECK: "1",
+      VLLM_STUDIO_FRONTEND_BASE: input.processEnv.VLLM_STUDIO_FRONTEND_BASE ?? deriveFrontendBase(),
+      VLLM_STUDIO_MCP_PLUGIN_CONFIGS: JSON.stringify(mcpConfigs),
+    },
+    mcpConfigs,
+    plugins,
+  };
 }

@@ -8,19 +8,11 @@ import { normalizeOpenAIModels, modelsToPiModels, type AgentModel } from "./mode
 import { isAgentEndEvent } from "./pi-events";
 import { piPathEnv, resolvePiLaunchCommand } from "./pi-binary";
 import {
-  deriveFrontendBase,
+  buildPiLaunchPlan,
   normalizeBackendUrl,
   pluginFingerprint,
-  pluginMcpConfigs,
-  pluginNameMatches,
-  pluginSkillPaths,
   resolveAgentCwd,
-  resolveBrowserExtensionPath,
   resolveComputerUseApp,
-  resolveMcpExtensionPath,
-  resolveTimeoutExtensionPath,
-  selectedSkillPaths,
-  uniqueExistingPaths,
   type RuntimePluginRef,
   type RuntimeStartOptions,
 } from "./pi-runtime-helpers";
@@ -182,63 +174,22 @@ class PiRpcSession extends EventEmitter {
     this.currentCwd = cwd;
     this.currentPiSessionId = piSessionId;
     this.currentPluginFingerprint = pluginFingerprint(options);
-    const plugins = options.plugins ?? [];
-    const skills = options.skills ?? [];
-    const shouldLoadBrowserTool =
-      options.browserToolEnabled === true ||
-      plugins.some(
-        (plugin) =>
-          pluginNameMatches(plugin, "browser-use") || pluginNameMatches(plugin, "computer-use"),
-      );
-
-    const args = [
-      "--mode",
-      "rpc",
-      "--provider",
-      PROVIDER_ID,
-      "--model",
-      `${PROVIDER_ID}/${modelId}`,
-    ];
-    if (selectedModel.reasoning) {
-      args.push("--thinking", "high");
-    }
-    if (piSessionId) {
-      // Resume a specific pi session by UUID. Pi accepts a partial UUID and
-      // resolves it within the current cwd's session directory.
-      args.push("--session", piSessionId);
-    }
-    for (const skillPath of uniqueExistingPaths([
-      ...pluginSkillPaths(plugins),
-      ...selectedSkillPaths(skills),
-    ])) {
-      args.push("--skill", skillPath);
-    }
-    const mcpConfigs = pluginMcpConfigs(plugins);
-    const timeoutExtensionPath = resolveTimeoutExtensionPath();
-    if (timeoutExtensionPath) args.push("--extension", timeoutExtensionPath);
-    if (mcpConfigs.length) {
-      const mcpExtensionPath = resolveMcpExtensionPath();
-      if (mcpExtensionPath) args.push("--extension", mcpExtensionPath);
-    }
-    if (shouldLoadBrowserTool) {
-      const extensionPath = resolveBrowserExtensionPath();
-      if (extensionPath) args.push("--extension", extensionPath);
-    }
-    launchComputerUseApp(plugins);
+    const launchPlan = buildPiLaunchPlan({
+      agentDir,
+      modelId,
+      options,
+      pathEnv: piPathEnv(),
+      piSessionId,
+      processEnv: process.env,
+      providerId: PROVIDER_ID,
+      selectedModel,
+    });
+    launchComputerUseApp(launchPlan.plugins);
 
     const launch = resolvePiLaunchCommand();
-    const child = spawn(launch.command, [...launch.argsPrefix, ...args], {
+    const child = spawn(launch.command, [...launch.argsPrefix, ...launchPlan.args], {
       cwd,
-      env: {
-        ...process.env,
-        PATH: piPathEnv(),
-        PI_CODING_AGENT_DIR: agentDir,
-        PI_SKIP_VERSION_CHECK: "1",
-        // The browser extension uses this base URL to call back into the
-        // frontend's /api/agent/browser/* endpoints.
-        VLLM_STUDIO_FRONTEND_BASE: process.env.VLLM_STUDIO_FRONTEND_BASE ?? deriveFrontendBase(),
-        VLLM_STUDIO_MCP_PLUGIN_CONFIGS: JSON.stringify(mcpConfigs),
-      },
+      env: launchPlan.env,
       stdio: ["pipe", "pipe", "pipe"],
     });
 

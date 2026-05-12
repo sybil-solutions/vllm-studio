@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { __resetDataDirCacheForTests } from "@/lib/data-dir";
 import {
+  buildPiLaunchPlan,
   deriveFrontendBase,
   expandHome,
   isPathInside,
@@ -114,6 +115,71 @@ describe("pi runtime helper seams", () => {
     writeFileSync(extension, "export default {}\n");
 
     expect(resolveBundledPiExtensionPath("browser.ts", extension)).toBe(extension);
+  });
+
+  it("builds the Pi launch plan with stable args, env, skills, and extensions", () => {
+    const root = makeRoot();
+    const pluginSkills = path.join(root, "plugin", "skills");
+    const selectedSkills = path.join(root, "selected-skills");
+    const timeoutExtension = path.join(root, "vllm-studio-timeouts.ts");
+    const mcpExtension = path.join(root, "mcp-plugin.ts");
+    const browserExtension = path.join(root, "browser.ts");
+    const mcpConfigPath = path.join(root, "plugin", ".mcp.json");
+    mkdirSync(pluginSkills, { recursive: true });
+    mkdirSync(selectedSkills, { recursive: true });
+    for (const file of [timeoutExtension, mcpExtension, browserExtension, mcpConfigPath]) {
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, file.endsWith(".json") ? JSON.stringify({ mcpServers: {} }) : "");
+    }
+    process.env.VLLM_STUDIO_TIMEOUT_EXTENSION_PATH = timeoutExtension;
+    process.env.VLLM_STUDIO_MCP_EXTENSION_PATH = mcpExtension;
+    process.env.VLLM_STUDIO_BROWSER_EXTENSION_PATH = browserExtension;
+
+    const plan = buildPiLaunchPlan({
+      agentDir: path.join(root, "agent"),
+      modelId: "qwen",
+      options: {
+        plugins: [{ name: "browser-use", path: path.join(root, "plugin") }],
+        skills: [{ name: "selected", path: selectedSkills }],
+      },
+      pathEnv: "/tmp/pi-bin",
+      piSessionId: "session-123",
+      processEnv: { ...process.env, VLLM_STUDIO_FRONTEND_BASE: "http://frontend.test" },
+      providerId: "vllm-studio",
+      selectedModel: { reasoning: true },
+    });
+
+    expect(plan.args).toEqual([
+      "--mode",
+      "rpc",
+      "--provider",
+      "vllm-studio",
+      "--model",
+      "vllm-studio/qwen",
+      "--thinking",
+      "high",
+      "--session",
+      "session-123",
+      "--skill",
+      pluginSkills,
+      "--skill",
+      selectedSkills,
+      "--extension",
+      timeoutExtension,
+      "--extension",
+      mcpExtension,
+      "--extension",
+      browserExtension,
+    ]);
+    expect(plan.env).toMatchObject({
+      PATH: "/tmp/pi-bin",
+      PI_CODING_AGENT_DIR: path.join(root, "agent"),
+      PI_SKIP_VERSION_CHECK: "1",
+      VLLM_STUDIO_FRONTEND_BASE: "http://frontend.test",
+      VLLM_STUDIO_MCP_PLUGIN_CONFIGS: JSON.stringify([
+        { pluginName: "browser-use", configPath: mcpConfigPath },
+      ]),
+    });
   });
 
   it("filters launch-constrained Computer Use MCP configs unless explicitly allowed", () => {
