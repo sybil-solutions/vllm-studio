@@ -199,6 +199,11 @@ const appendRuntimeCoreArguments = (command: string[], recipe: Recipe): string[]
  */ export const buildExllamav3Command = (recipe: Recipe, config: Config): string[] | null => {
   const commandTemplate = String(getExtraArgument(recipe.extra_args, "exllama_command") ?? getExtraArgument(recipe.extra_args, "exllamav3_command") ?? getExtraArgument(recipe.extra_args, "exllama-cmd") ?? config.exllamav3_command ?? "").trim(); if (!commandTemplate) {
     return null; }
+  
+  if (SHELL_METACHAR_IN_VALUE.test(commandTemplate)) {
+    throw new Error("Invalid exllama_command: shell metacharacters (;&|`$()\\) not allowed");
+  }
+  
   const command = splitCommand(commandTemplate); if (command.length === 0) {
     return null; }
   const executable = command[0] ?? ""; rejectPathTraversal(executable, "exllama_command");
