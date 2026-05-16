@@ -4,7 +4,7 @@ import type { MiddlewareHandler } from "hono";
 import type { AppContext } from "../types/context";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const PUBLIC_PATHS = new Set<string>();
+const PUBLIC_PATHS = new Set<string>(["/health"]);
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 120;
 
@@ -36,7 +36,9 @@ function isMutatingRequest(method: string): boolean {
  * @param path
  */
 function isPublicRequest(method: string, path: string): boolean {
-  return method.toUpperCase() === "OPTIONS" || PUBLIC_PATHS.has(path);
+  if (method.toUpperCase() === "OPTIONS") return true;
+  const normalized = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path;
+  return PUBLIC_PATHS.has(normalized);
 }
 
 /**
