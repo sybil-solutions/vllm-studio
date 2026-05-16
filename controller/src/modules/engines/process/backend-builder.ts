@@ -107,10 +107,17 @@ const normalizeLaunchCommand = (command: string): string => { return command
   if (current) { result.push(current);
   } return result;
 };
-const getLaunchCommandOverride = (recipe: Recipe): string[] | null => { const override = getExtraArgument(recipe.extra_args, "launch_command") ?? getExtraArgument(recipe.extra_args, "custom_command");
-  if (typeof override !== "string" || !override.trim()) { return null;
-  } const command = splitLaunchCommand(override);
-  return command.length > 0 ? command : null; };
+const getLaunchCommandOverride = (recipe: Recipe): string[] | null => { 
+  const override = getExtraArgument(recipe.extra_args, "launch_command") ?? getExtraArgument(recipe.extra_args, "custom_command");
+  if (typeof override !== "string" || !override.trim()) { return null; }
+  
+  if (SHELL_METACHAR_IN_VALUE.test(override)) {
+    throw new Error("Invalid launch_command/custom_command: shell metacharacters (;&|`$()\\) not allowed");
+  }
+  
+  const command = splitLaunchCommand(override);
+  return command.length > 0 ? command : null; 
+};
  /**
  * Build a vLLM launch command. * @param recipe - Recipe data.
  * @param recipe
