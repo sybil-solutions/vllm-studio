@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { safeJson } from "@/lib/agent/safe-json";
-import { clampComputerWidth } from "@/lib/agent/tools/persistence";
+import { clampComputerWidth, gentlySnapComputerWidth } from "@/lib/agent/tools/persistence";
 import { loadInitialFromStorage } from "@/lib/agent/workspace/persistence";
 import {
   createInitialState,
@@ -33,7 +33,12 @@ import type { ChatPaneHandle, SessionTab } from "./chat-pane";
 import type { AgentBrowserHandle } from "./agent-browser";
 import type { SessionDropPayload } from "./pane-grid";
 
-type BrowserCommand = { id: string; verb: string; payload: Record<string, unknown> };
+type BrowserCommand = {
+  id: string;
+  verb: string;
+  sessionId?: string;
+  payload: Record<string, unknown>;
+};
 
 export type WorkspaceHandles = {
   registerBrowserHandle: (handle: AgentBrowserHandle | null) => void;
@@ -88,11 +93,32 @@ function parseBrowserCommand(raw: string): BrowserCommand | null {
     const id = parsed.id;
     const verb = parsed.verb;
     const payload = parsed.payload;
+    const sessionId = parsed.sessionId;
     if (typeof id !== "string" || typeof verb !== "string" || !isRecord(payload)) return null;
-    return { id, verb, payload };
+    return {
+      id,
+      verb,
+      payload,
+      ...(typeof sessionId === "string" && sessionId.trim() ? { sessionId: sessionId.trim() } : {}),
+    };
   } catch {
     return null;
   }
+}
+
+function focusedBrowserSessionId(state: WorkspaceState): string | null {
+  const pane = state.panesById.get(state.focusedPaneId);
+  if (!pane) return null;
+  const activeSession = state.sessions.get(pane.activeSessionId);
+  return activeSession?.runtimeSessionId || pane.runtimeSessionId || null;
+}
+
+function postBrowserResult(id: string, result: BrowserCommandResult) {
+  return fetch("/api/agent/browser/result", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, ...result }),
+  });
 }
 
 function createWorkspaceWindow(source: Window): WorkspaceWindow {
@@ -111,6 +137,7 @@ function createBrowserEvents(
     verb: string,
     payload: Record<string, unknown>,
   ) => Promise<BrowserCommandResult>,
+  focusedSessionId: () => string | null,
 ): BrowserEventsSubscription {
   let source: EventSource | null = null;
   let enabled = false;
@@ -131,14 +158,18 @@ function createBrowserEvents(
         if (typeof event.data !== "string") return;
         const command = parseBrowserCommand(event.data);
         if (!command || typeof fetch !== "function") return;
+        const focused = focusedSessionId();
+        if (command.sessionId && command.sessionId !== focused) {
+          void postBrowserResult(command.id, {
+            ok: false,
+            error: focused
+              ? `Browser is connected to the focused session (${focused}); focus the requesting session to run browser_${command.verb}.`
+              : `Browser is not connected to the requesting session (${command.sessionId}).`,
+          });
+          return;
+        }
         void runBrowserCommand(command.verb, command.payload)
-          .then((result) =>
-            fetch("/api/agent/browser/result", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: command.id, ...result }),
-            }),
-          )
+          .then((result) => postBrowserResult(command.id, result))
           .catch((error) => {
             console.warn("[agent] browser bridge dispatch failed", error);
           });
@@ -197,7 +228,9 @@ export function useWorkspace(): UseWorkspaceResult {
   const controller = useMemo(() => {
     let browserEvents: BrowserEventsSubscription | null = null;
     const getBrowserEvents = () => {
-      browserEvents ??= createBrowserEvents(runBrowserCommand);
+      browserEvents ??= createBrowserEvents(runBrowserCommand, () =>
+        focusedBrowserSessionId(stateRef.current),
+      );
       return browserEvents;
     };
     const makeDeps = (workspaceDispatch: WorkspaceDispatch): WorkspaceEffectDeps | null => {
@@ -340,10 +373,16 @@ export function useWorkspace(): UseWorkspaceResult {
         if (typeof window === "undefined") return;
         event.preventDefault();
         const startX = event.clientX;
-        const startWidth = toolsRef.current.computer.width;
+        const startWidth =
+          computerAsideRef.current?.getBoundingClientRect().width ??
+          toolsRef.current.computer.width;
+        const containerWidth =
+          computerAsideRef.current?.parentElement?.getBoundingClientRect().width ??
+          window.innerWidth;
         let frame = 0;
+        if (computerAsideRef.current) computerAsideRef.current.style.transition = "none";
         const onMove = (moveEvent: MouseEvent) => {
-          const next = clampComputerWidth(startWidth + startX - moveEvent.clientX);
+          const next = clampComputerWidth(startWidth + startX - moveEvent.clientX, containerWidth);
           if (frame) cancelAnimationFrame(frame);
           frame = requestAnimationFrame(() => {
             if (computerAsideRef.current) computerAsideRef.current.style.width = `${next}px`;
@@ -351,8 +390,16 @@ export function useWorkspace(): UseWorkspaceResult {
         };
         const onUp = (upEvent: MouseEvent) => {
           if (frame) cancelAnimationFrame(frame);
-          const next = clampComputerWidth(startWidth + startX - upEvent.clientX);
-          if (computerAsideRef.current) computerAsideRef.current.style.width = `${next}px`;
+          const raw = startWidth + startX - upEvent.clientX;
+          const next = gentlySnapComputerWidth(raw, containerWidth);
+          if (computerAsideRef.current) {
+            computerAsideRef.current.style.transition =
+              "width 150ms cubic-bezier(0.22, 1, 0.36, 1)";
+            computerAsideRef.current.style.width = `${next}px`;
+            window.setTimeout(() => {
+              if (computerAsideRef.current) computerAsideRef.current.style.transition = "";
+            }, 170);
+          }
           toolsRef.current.setComputerWidth(next);
           window.removeEventListener("mousemove", onMove);
           window.removeEventListener("mouseup", onUp);

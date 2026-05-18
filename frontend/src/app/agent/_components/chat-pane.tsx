@@ -10,7 +10,7 @@ import {
   type DragEvent,
   type ReactNode,
 } from "react";
-import { Loader2 } from "lucide-react";
+import { Code2, Loader2 } from "lucide-react";
 import {
   AttachIcon,
   ChevronDownIcon,
@@ -59,6 +59,7 @@ import {
   filesFromDataTransfer,
   formatFileSize,
   isImageAttachment,
+  revokeAttachmentPreview,
   type ChatAttachment,
 } from "./chat-attachments";
 import { Timeline } from "./timeline/timeline";
@@ -255,6 +256,7 @@ export function ChatPane({
     modelId,
     cwd,
     browserToolEnabled,
+    canvasEnabled: tools.computer.canvasEnabled,
     onPiSessionIdChange,
     updateSession,
     selectionFor: tools.selectionFor,
@@ -268,7 +270,7 @@ export function ChatPane({
           ? `Attached: ${attachments.map((file) => file.name).join(", ")}`
           : "";
       const userText = text || attachmentSummary;
-      const displayText = [text, attachmentSummary].filter(Boolean).join("\n\n");
+      const displayText = text;
       const selection = tools.selectionFor(sessionId);
       const contextText = selectedContextPrompt(
         text,
@@ -276,7 +278,13 @@ export function ChatPane({
         selection.skills,
       );
       const prompt = [contextText, attachedText].filter(Boolean).join("\n\n");
-      return { text, prompt, displayText, userText };
+      return {
+        text,
+        prompt,
+        displayText,
+        userText,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      };
     },
     [attachments, tools],
   );
@@ -418,7 +426,10 @@ export function ChatPane({
           const uniqueNext: ChatAttachment[] = [];
           next.forEach((file) => {
             const key = attachmentDedupKey(file);
-            if (seen.has(key)) return;
+            if (seen.has(key)) {
+              revokeAttachmentPreview(file);
+              return;
+            }
             seen.add(key);
             uniqueNext.push(file);
           });
@@ -598,7 +609,7 @@ export function ChatPane({
           onDragOver={handleComposerDragOver}
           onDragLeave={handleComposerDragLeave}
           onDrop={handleComposerDrop}
-          className={`mx-auto max-w-[var(--composer-w)] overflow-visible rounded-lg bg-(--composer) shadow-none transition-colors ${composerDragActive ? "outline outline-1 outline-(--accent)/50" : ""}`}
+          className={`agent-composer-shell mx-auto max-w-[var(--composer-w)] overflow-visible rounded-lg bg-(--composer) shadow-none transition-colors ${composerDragActive ? "outline outline-1 outline-(--accent)/50" : ""}`}
         >
           {" "}
           {composerDragActive ? (
@@ -684,14 +695,27 @@ export function ChatPane({
               {attachments.map((file) => (
                 <span
                   key={file.id}
-                  className="inline-flex max-w-[220px] items-center gap-1 px-1 py-0.5 text-[11px] text-(--dim)"
+                  className="inline-flex max-w-[260px] items-center gap-1.5 rounded-md bg-white/[0.035] px-1.5 py-1 text-[11px] text-(--dim)"
                   title={`${file.name} · ${file.type} · ${formatFileSize(file.size)}${file.path ? ` · ${file.path}` : ""}`}
                 >
                   {isImageAttachment(file) ? (
                     <img
-                      src={file.content}
+                      src={file.previewUrl ?? file.content}
                       alt=""
-                      className="h-7 w-7 shrink-0 rounded object-cover"
+                      className="h-9 w-9 shrink-0 rounded object-cover"
+                    />
+                  ) : file.previewKind === "video" && file.previewUrl ? (
+                    <video
+                      src={file.previewUrl}
+                      muted
+                      playsInline
+                      className="h-9 w-12 shrink-0 rounded object-cover"
+                    />
+                  ) : file.previewKind === "pdf" && file.previewUrl ? (
+                    <iframe
+                      src={file.previewUrl}
+                      title={file.name}
+                      className="h-9 w-12 shrink-0 rounded border border-white/10 bg-(--bg)"
                     />
                   ) : (
                     <FileIcon className="h-3 w-3 shrink-0" />
@@ -700,9 +724,10 @@ export function ChatPane({
                   <span className="shrink-0 opacity-70">{formatFileSize(file.size)}</span>{" "}
                   <button
                     type="button"
-                    onClick={() =>
-                      setAttachments((current) => current.filter((item) => item.id !== file.id))
-                    }
+                    onClick={() => {
+                      revokeAttachmentPreview(file);
+                      setAttachments((current) => current.filter((item) => item.id !== file.id));
+                    }}
                     className="p-0.5 hover:text-(--fg)"
                     aria-label={`Remove ${file.name}`}
                     title={`Remove ${file.name}`}
@@ -778,7 +803,7 @@ export function ChatPane({
             }
             className="min-h-[42px] max-h-[132px] w-full resize-none overflow-y-auto bg-transparent px-4 py-2.5 text-sm leading-5 text-(--fg) outline-none placeholder:text-(--dim)"
           />
-          <div className="flex min-h-10 items-center gap-1.5 bg-transparent px-3 pb-2 pt-1 text-xs">
+          <div className="agent-composer-actions-row flex min-h-10 items-center gap-1.5 bg-transparent px-3 pb-2 pt-1 text-xs">
             {" "}
             <input
               ref={fileInputRef}
@@ -815,8 +840,23 @@ export function ChatPane({
                 {computerUseLoaded ? <ComputerUseActivityDot /> : null}{" "}
               </span>
             </button>{" "}
-            <div className="ml-auto flex shrink-0 items-center gap-1">
-              {modelSelector}{" "}
+            <button
+              type="button"
+              onClick={tools.toggleCanvas}
+              aria-pressed={tools.computer.canvasEnabled}
+              title={
+                tools.computer.canvasEnabled
+                  ? "Canvas: ON — shared scratchboard is visible in Computer"
+                  : "Canvas: OFF — click to open a shared scratchboard in Computer"
+              }
+              className={`inline-flex !h-7 !min-h-7 !w-7 !min-w-7 shrink-0 items-center justify-center rounded-md ${
+                tools.computer.canvasEnabled ? "text-(--accent)" : "text-(--dim) hover:text-(--fg)"
+              }`}
+            >
+              <Code2 className="h-3.5 w-3.5" />
+            </button>{" "}
+            <div className="ml-auto flex min-w-0 shrink items-center gap-1">
+              <div className="agent-model-slot min-w-0 shrink">{modelSelector}</div>{" "}
               {running ? (
                 <>
                   {" "}
@@ -884,9 +924,9 @@ export function ChatPane({
             </div>
           </div>{" "}
         </div>
-        <div className="relative z-20 mx-auto mt-0.5 flex max-w-[var(--composer-w)] items-center gap-2 overflow-visible font-mono text-[10px] text-(--dim)">
+        <div className="agent-composer-meta relative z-20 mx-auto mt-0.5 flex max-w-[var(--composer-w)] flex-wrap items-center gap-x-2 gap-y-0.5 overflow-hidden font-mono text-[10px] text-(--dim)">
           {" "}
-          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-visible">
+          <div className="agent-composer-meta-main flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             <button
               type="button"
               onClick={() => void compactSession()}
@@ -899,7 +939,7 @@ export function ChatPane({
               compact{" "}
             </button>
             <span className="shrink-0 text-(--border)">·</span>{" "}
-            <div className="min-w-0 max-w-[42%] shrink overflow-visible">
+            <div className="agent-composer-project min-w-0 max-w-[42%] shrink overflow-hidden">
               {projectSelector ? (
                 projectSelector
               ) : cwd ? (
@@ -909,7 +949,7 @@ export function ChatPane({
               ) : null}{" "}
             </div>
             {gitBranch ? (
-              <span className="inline-flex min-w-0 shrink items-center gap-1 text-(--dim)">
+              <span className="agent-composer-branch inline-flex min-w-0 shrink items-center gap-1 text-(--dim)">
                 <GitBranchIcon className="h-3 w-3 shrink-0" />{" "}
                 <span className="truncate">{gitBranch}</span>
               </span>
@@ -926,7 +966,7 @@ export function ChatPane({
               </button>
             ) : null}{" "}
             {gitSummary?.isRepo ? (
-              <span className="inline-flex shrink-0 items-center gap-1">
+              <span className="agent-composer-git-summary inline-flex min-w-0 shrink items-center gap-1 overflow-hidden">
                 {" "}
                 <span className="text-emerald-400">+{gitSummary.additions}</span>
                 <span className="text-red-400">-{gitSummary.deletions}</span>{" "}
@@ -936,7 +976,7 @@ export function ChatPane({
               </span>
             ) : null}
           </div>{" "}
-          <div className="flex shrink-0 items-center justify-end gap-2">
+          <div className="agent-composer-tokens flex shrink-0 items-center justify-end gap-2">
             <span>R {formatTokenCount(activeTab?.tokenStats?.read ?? 0)}</span>{" "}
             <span>W {formatTokenCount(activeTab?.tokenStats?.write ?? 0)}</span>
             <span>
