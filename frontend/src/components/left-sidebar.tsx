@@ -270,10 +270,8 @@ export function LeftSidebar({ children }: { children: ReactNode }) {
                 <Link
                   href="/settings"
                   title="Settings"
-                  className={`flex h-7 shrink-0 items-center gap-2 rounded-md px-2.5 transition-colors ${
-                    isRouteActive(pathname, "/settings")
-                      ? "bg-(--hover) text-white"
-                      : "text-(--fg)/85 hover:bg-(--hover) hover:text-white"
+                  className={`flex h-7 shrink-0 items-center gap-2 rounded-md px-2.5 text-(--fg) transition-colors ${
+                    isRouteActive(pathname, "/settings") ? "bg-(--hover)" : "hover:bg-(--hover)"
                   }`}
                 >
                   <Settings className="h-4 w-4 shrink-0" />

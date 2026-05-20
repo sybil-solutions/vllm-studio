@@ -46,16 +46,13 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-/* Links */
+/* Links default to inherited color so UI chrome (sidebar, settings, nav,
+   tabs, etc.) is not painted with --hl1 blue. Markdown/content links opt in
+   via their own Tailwind color classes (e.g. text-(--accent)). */
 a {
-  color: var(--hl1);
+  color: inherit;
   text-decoration: none;
   transition: color 0.15s ease;
-}
-
-a:hover {
-  color: var(--hl1);
-  text-decoration: underline;
 }
 
 nav a,
