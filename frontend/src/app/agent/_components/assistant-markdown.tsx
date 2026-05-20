@@ -68,23 +68,28 @@ function CodeBlockCopyButton({ code }: { code: string }) {
 
 const components: Components = {
   h1: ({ node: _n, ...props }) => (
-    <h1 className="mb-1 mt-3 text-base font-semibold text-(--fg)" {...props} />
+    <h1 className="mb-1 mt-4 text-[18px] font-medium leading-[1.33] text-(--fg)" {...props} />
   ),
   h2: ({ node: _n, ...props }) => (
-    <h2 className="mb-1 mt-3 text-sm font-semibold text-(--fg)" {...props} />
+    <h2 className="mb-1 mt-4 text-[16px] font-medium leading-[1.33] text-(--fg)" {...props} />
   ),
   h3: ({ node: _n, ...props }) => (
-    <h3 className="mb-1 mt-3 text-xs font-semibold text-(--fg)" {...props} />
+    <h3 className="mb-1 mt-3 text-[14px] font-medium leading-[1.4] text-(--fg)" {...props} />
   ),
   h4: ({ node: _n, ...props }) => (
-    <h4 className="mb-1 mt-3 text-xs font-semibold text-(--fg)" {...props} />
+    <h4 className="mb-1 mt-3 text-[13px] font-medium leading-[1.4] text-(--fg)" {...props} />
   ),
   p: ({ node: _n, ...props }) => (
-    <p className="my-2 text-sm leading-6 first:mt-0 last:mb-0" {...props} />
+    <p
+      className="my-2 max-w-full break-words text-[14px] leading-[22px] tracking-[-0.003em] first:mt-0 last:mb-0 [overflow-wrap:anywhere]"
+      {...props}
+    />
   ),
   ul: ({ node: _n, ...props }) => <ul className="my-2 list-disc pl-5" {...props} />,
   ol: ({ node: _n, ...props }) => <ol className="my-2 list-decimal pl-5" {...props} />,
-  li: ({ node: _n, ...props }) => <li className="text-sm leading-6" {...props} />,
+  li: ({ node: _n, ...props }) => (
+    <li className="text-[14px] leading-[22px] tracking-[-0.003em]" {...props} />
+  ),
   code: ({ node: _n, className, children, ...props }) => {
     const isBlock = typeof className === "string" && /\blanguage-/.test(className);
     if (isBlock) {
@@ -96,7 +101,7 @@ const components: Components = {
     }
     return (
       <code
-        className="rounded bg-(--surface) px-1 py-0.5 font-mono text-[12px] text-(--fg)"
+        className="rounded bg-(--surface) px-1 py-0.5 font-mono text-[12px] text-(--fg) [overflow-wrap:anywhere]"
         {...props}
       >
         {children}
@@ -111,7 +116,7 @@ const components: Components = {
     );
     return (
       <pre
-        className="relative my-2 overflow-x-auto rounded border border-(--border) bg-(--surface) p-2 text-[12px] leading-5"
+        className="relative my-2 max-w-full overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded border border-(--border) bg-(--surface) p-2 text-[12px] leading-5 [overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap"
         {...props}
       >
         {code ? <CodeBlockCopyButton code={code} /> : null}
@@ -133,20 +138,26 @@ const components: Components = {
   ),
   hr: ({ node: _n, ...props }) => <hr className="my-3 border-(--border)" {...props} />,
   table: ({ node: _n, ...props }) => (
-    <div className="my-2 overflow-x-auto">
-      <table className="border-collapse border border-(--border) text-xs" {...props} />
+    <div className="my-2 max-w-full overflow-x-hidden">
+      <table
+        className="w-full table-fixed border-collapse border border-(--border) text-xs"
+        {...props}
+      />
     </div>
   ),
   thead: ({ node: _n, ...props }) => <thead className="bg-(--surface)" {...props} />,
   tr: ({ node: _n, ...props }) => <tr className="border-b border-(--border)" {...props} />,
   th: ({ node: _n, ...props }) => (
     <th
-      className="border border-(--border) px-2 py-1 text-left font-medium text-(--fg)"
+      className="break-words border border-(--border) px-2 py-1 text-left font-medium text-(--fg) [overflow-wrap:anywhere]"
       {...props}
     />
   ),
   td: ({ node: _n, ...props }) => (
-    <td className="border border-(--border) px-2 py-1 text-(--fg)" {...props} />
+    <td
+      className="break-words border border-(--border) px-2 py-1 text-(--fg) [overflow-wrap:anywhere]"
+      {...props}
+    />
   ),
 };
 
@@ -169,7 +180,7 @@ export function AssistantMarkdown({ text }: { text: string }) {
           <button
             type="button"
             onClick={() => tools.requestFileOpen(value)}
-            className="rounded bg-(--surface) px-1 py-0.5 font-mono text-[12px] text-(--fg) hover:bg-(--hover)"
+            className="rounded bg-(--surface) px-1 py-0.5 font-mono text-[12px] text-(--fg) hover:bg-(--hover) [overflow-wrap:anywhere]"
             title="Open file"
           >
             {children}
@@ -178,7 +189,7 @@ export function AssistantMarkdown({ text }: { text: string }) {
       }
       return (
         <code
-          className="rounded bg-(--surface) px-1 py-0.5 font-mono text-[12px] text-(--fg)"
+          className="rounded bg-(--surface) px-1 py-0.5 font-mono text-[12px] text-(--fg) [overflow-wrap:anywhere]"
           {...props}
         >
           {children}
@@ -208,8 +219,14 @@ export function AssistantMarkdown({ text }: { text: string }) {
     ),
   };
   return (
-    <div className="min-w-0 text-sm leading-6 text-(--fg)">
-      <MarkdownErrorBoundary fallback={<pre className="whitespace-pre-wrap text-sm">{text}</pre>}>
+    <div className="min-w-0 max-w-full overflow-x-hidden font-sans text-[14px] leading-[22px] tracking-[-0.003em] text-(--fg) [overflow-wrap:anywhere]">
+      <MarkdownErrorBoundary
+        fallback={
+          <pre className="max-w-full whitespace-pre-wrap break-words font-sans text-[14px] leading-[22px] tracking-[-0.003em] [overflow-wrap:anywhere]">
+            {text}
+          </pre>
+        }
+      >
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}

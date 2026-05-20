@@ -400,6 +400,8 @@ export function ChatPane({
             ? [...(t.queue ?? []), { id: queuedId, mode, text, sent: true }]
             : t.queue,
       }));
+      setIsMultiline(false);
+      if (textareaRef.current) textareaRef.current.style.height = "";
       const result = await engine.sendControl(mode, text, runtime, tab.id, tab.piSessionId);
       updateTab(tab.id, (t) => ({
         ...t,
@@ -831,7 +833,7 @@ export function ChatPane({
               }
               element.style.height = "auto";
               element.style.height = `${element.scrollHeight}px`;
-              setIsMultiline(element.scrollHeight > 38);
+              setIsMultiline(element.scrollHeight > 44);
             }}
             onKeyDown={(event) => {
               if (mention) {
@@ -880,12 +882,12 @@ export function ChatPane({
               !modelName && modelsLoading
                 ? "Loading models…"
                 : !modelName
-                  ? "No models available — check /v1/models"
+                  ? "No models available"
                   : running
-                    ? `Steer ${modelName} (Enter) · queue with Tab · Esc to pause`
-                    : `Ask ${modelName} (Enter) · queue with Tab · paste/drop files`
+                    ? `Steer ${modelName}…`
+                    : `Message ${modelName}`
             }
-            className="min-h-[42px] max-h-[132px] w-full resize-none overflow-y-auto bg-transparent px-4 py-2.5 text-sm leading-5 text-(--fg) outline-none placeholder:text-(--dim)"
+            className="min-h-[42px] max-h-[132px] w-full resize-none overflow-y-auto bg-transparent px-4 py-2.5 font-sans text-[14px] leading-[22px] tracking-[-0.003em] text-(--fg) outline-none placeholder:text-(--dim)"
           />
           <div className="flex min-h-10 items-center gap-1.5 bg-transparent px-3 pb-2 pt-1 text-xs">
             {" "}

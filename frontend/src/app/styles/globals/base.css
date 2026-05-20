@@ -44,6 +44,9 @@ body {
     24px 24px;
   color: var(--fg);
   font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Links default to inherited color so UI chrome (sidebar, settings, nav,
