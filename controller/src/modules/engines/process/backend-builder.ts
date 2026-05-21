@@ -2,6 +2,20 @@ import { existsSync } from "node:fs"; import { dirname, join } from "node:path";
 import type { Recipe } from "../../models/types"; import type { Config } from "../../../config/env";
 import { resolveBinary } from "../../../core/command"; import { resolveVllmRecipePythonPath } from "../runtimes/vllm-python-path";
 import { getDefaultReasoningParser, getDefaultToolCallParser, shouldEnableExpertParallel } from "./model-runtime-defaults";
+
+/** Regex to detect shell metacharacters in argument values - prevents command injection */
+const SHELL_METACHAR_IN_VALUE = /[;&|`$()\\]/;
+
+/**
+ * Validate that an extra arg value doesn't contain shell metacharacters.
+ * This prevents command injection via extra_args values.
+ */
+const validateExtraArgValue = (key: string, value: unknown): void => {
+  if (typeof value === "string" && SHELL_METACHAR_IN_VALUE.test(value)) {
+    throw new Error(`Invalid extra_args value for '${key}': shell metacharacters (;&|\`$()\\) not allowed`);
+  }
+};
+
 /** * Normalize JSON-like arguments for CLI flags.
  * @param value - Payload value. * @returns Normalized payload.
  */ export const normalizeJsonArgument = (value: unknown): unknown => {
@@ -40,7 +54,10 @@ const getVllmPythonPath = (recipe: Recipe): string | undefined => { return resol
  * @returns Updated command array. */
 export const appendExtraArguments = (command: string[], extraArguments: Record<string, unknown>): string[] => { const internalKeys = new Set(["venv_path", "env_vars", "visible_devices", "cuda_visible_devices", "hip_visible_devices", "rocr_visible_devices", "description", "tags", "status", "llama_bin", "launch_command", "custom_command", "docker_container", "docker_image", "docker-container", "exllama_command", "exllamav3_command", "exllama-cmd"]);
   const jsonStringKeys = new Set(["speculative_config", "default_chat_template_kwargs"]);
-  for (const [key, value] of Object.entries(extraArguments)) { const normalizedKey = key.replace(/-/g, "_").toLowerCase();
+  for (const [key, value] of Object.entries(extraArguments)) { 
+    // Security: validate value doesn't contain shell metacharacters
+    validateExtraArgValue(key, value);
+    const normalizedKey = key.replace(/-/g, "_").toLowerCase();
     if (internalKeys.has(normalizedKey)) { continue;
     } const flag = `--${key.replace(/_/g, "-")}`;
     if (command.includes(flag)) { continue;
@@ -90,10 +107,17 @@ const normalizeLaunchCommand = (command: string): string => { return command
   if (current) { result.push(current);
   } return result;
 };
-const getLaunchCommandOverride = (recipe: Recipe): string[] | null => { const override = getExtraArgument(recipe.extra_args, "launch_command") ?? getExtraArgument(recipe.extra_args, "custom_command");
-  if (typeof override !== "string" || !override.trim()) { return null;
-  } const command = splitLaunchCommand(override);
-  return command.length > 0 ? command : null; };
+const getLaunchCommandOverride = (recipe: Recipe): string[] | null => { 
+  const override = getExtraArgument(recipe.extra_args, "launch_command") ?? getExtraArgument(recipe.extra_args, "custom_command");
+  if (typeof override !== "string" || !override.trim()) { return null; }
+  
+  if (SHELL_METACHAR_IN_VALUE.test(override)) {
+    throw new Error("Invalid launch_command/custom_command: shell metacharacters (;&|`$()\\) not allowed");
+  }
+  
+  const command = splitLaunchCommand(override);
+  return command.length > 0 ? command : null; 
+};
  /**
  * Build a vLLM launch command. * @param recipe - Recipe data.
  * @param recipe
@@ -175,6 +199,11 @@ const appendRuntimeCoreArguments = (command: string[], recipe: Recipe): string[]
  */ export const buildExllamav3Command = (recipe: Recipe, config: Config): string[] | null => {
   const commandTemplate = String(getExtraArgument(recipe.extra_args, "exllama_command") ?? getExtraArgument(recipe.extra_args, "exllamav3_command") ?? getExtraArgument(recipe.extra_args, "exllama-cmd") ?? config.exllamav3_command ?? "").trim(); if (!commandTemplate) {
     return null; }
+  
+  if (SHELL_METACHAR_IN_VALUE.test(commandTemplate)) {
+    throw new Error("Invalid exllama_command: shell metacharacters (;&|`$()\\) not allowed");
+  }
+  
   const command = splitCommand(commandTemplate); if (command.length === 0) {
     return null; }
   const executable = command[0] ?? ""; rejectPathTraversal(executable, "exllama_command");
