@@ -159,7 +159,7 @@ Lower these in the recipe:
 - llama.cpp: set `VLLM_STUDIO_LLAMA_BIN` to the `llama-server` binary path
 
 **Launch hangs at "waiting":**
-Check the log file — the model is likely still loading weights. Large models can take several minutes. If it exceeds 10 minutes, check `LIFECYCLE_READY_TIMEOUT_MS` (default is generous).
+Check the log file — the model is likely still loading weights. Large models can take several minutes. The default timeout is 5 minutes before the controller reports an error.
 
 **Recipe won't save:**
 The **model path** and **name** fields are required. If you see a validation error, check that the backend is one of `vllm`, `sglang`, `llamacpp`, `transformers`, `tabbyapi`, or `exllamav3`.
@@ -168,6 +168,11 @@ The **model path** and **name** fields are required. If you see a validation err
 
 ## Next steps
 
+- [Agent workspace](./agent-workspace.md) — the main surface: projects, sessions, panes, composer, tools
 - [Environment variables](./environment.md) — `VLLM_STUDIO_MODELS_DIR`, Python paths, GPU monitoring
 - [Operations guide](./operations.md) — daemon mode, remote deploy, health checks
 - [API docs](http://localhost:8080/api/docs) — recipe CRUD via REST (available when controller is running)
+
+---
+
+[← Back to docs index](./README.md)
