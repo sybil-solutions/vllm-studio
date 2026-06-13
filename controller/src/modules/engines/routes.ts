@@ -1,16 +1,16 @@
-import type { Hono } from "hono";
-import type { AppContext } from "../../types/context";
+import type { RouteRegistrar } from "../../http/route-registrar";
 import { delay } from "../../core/async";
 import { HttpStatus, badRequest, notFound, serviceUnavailable } from "../../core/errors";
+import { optionalEnum, optionalStringArray, parseJsonObjectBody } from "../../core/validation";
 import { observeControllerFunction } from "../../core/function-observability";
 import { parseRecipe } from "../models/recipes/recipe-serializer";
 import { Event } from "../system/event-manager";
-import { CONTROLLER_EVENTS } from "../../contracts/controller-events";
-import { fetchInference } from "../../services/inference/inference-client";
+import { CONTROLLER_EVENTS } from "../../../../shared/contracts/controller-events";
+import { fetchInference } from "../../services/inference-client";
 import { isRecipeRunning } from "../models/recipes/recipe-matching";
 import { getVllmConfigHelp, getVllmRuntimeInfo } from "./runtimes/vllm-runtime";
 import { getLlamacppConfigHelp } from "./runtimes/llamacpp-runtime";
-import { getExllamav3RuntimeInfo, getCudaInfo, getMlxRuntimeInfo } from "./runtimes/runtime-info";
+import { getCudaInfo, getMlxRuntimeInfo } from "./runtimes/runtime-info";
 import { getRocmInfo, resolveRocmSmiTool } from "../system/platform/rocm-info";
 import {
   getDefaultRuntimeTarget,
@@ -40,37 +40,30 @@ const resolveHfToken = (
   return bodyToken || headerToken || envToken;
 };
 
+const RUNTIME_JOB_BACKENDS = ["vllm", "sglang", "llamacpp", "mlx", "cuda", "rocm"] as const;
+const RUNTIME_JOB_TYPES = ["install", "update", "download", "inspect"] as const;
+
 const parseRuntimeJobBody = async (ctx: {
   req: { json: () => Promise<unknown> };
 }): Promise<{
-  backend?: "vllm" | "sglang" | "llamacpp" | "mlx" | "cuda" | "rocm";
+  backend?: (typeof RUNTIME_JOB_BACKENDS)[number];
   targetId?: string;
-  type?: "install" | "update" | "download" | "inspect";
+  type?: (typeof RUNTIME_JOB_TYPES)[number];
   command?: string;
   args?: string[];
   version?: string;
   preferBundled?: boolean;
 }> => {
-  const body = await ctx.req.json().catch(() => ({}));
-  if (!body || typeof body !== "object" || Array.isArray(body)) throw badRequest("Invalid payload");
-  const record = body as Record<string, unknown>;
-  const backend = typeof record["backend"] === "string" ? record["backend"] : undefined;
-  if (backend && !["vllm", "sglang", "llamacpp", "mlx", "cuda", "rocm"].includes(backend))
-    throw badRequest("Invalid backend");
-  const type = typeof record["type"] === "string" ? record["type"] : undefined;
-  if (type && !["install", "update", "download", "inspect"].includes(type))
-    throw badRequest("Invalid job type");
-  const args = Array.isArray(record["args"]) ? record["args"] : undefined;
-  if (args?.some((value) => typeof value !== "string"))
-    throw badRequest("args must be an array of strings");
+  const record = await parseJsonObjectBody(ctx);
+  const backend = optionalEnum(record, "backend", RUNTIME_JOB_BACKENDS);
+  const type = optionalEnum(record, "type", RUNTIME_JOB_TYPES, "job type");
+  const args = optionalStringArray(record, "args");
   return {
-    ...(backend
-      ? { backend: backend as "vllm" | "sglang" | "llamacpp" | "mlx" | "cuda" | "rocm" }
-      : {}),
+    ...(backend ? { backend } : {}),
     ...(typeof record["targetId"] === "string" ? { targetId: record["targetId"] } : {}),
-    ...(type ? { type: type as "install" | "update" | "download" | "inspect" } : {}),
+    ...(type ? { type } : {}),
     ...(typeof record["command"] === "string" ? { command: record["command"] } : {}),
-    ...(args ? { args: args as string[] } : {}),
+    ...(args ? { args } : {}),
     ...(typeof record["version"] === "string" ? { version: record["version"] } : {}),
     ...(typeof record["prefer_bundled"] === "boolean"
       ? { preferBundled: record["prefer_bundled"] }
@@ -78,7 +71,7 @@ const parseRuntimeJobBody = async (ctx: {
   };
 };
 
-export const registerEngineRoutes = (app: Hono, context: AppContext): void => {
+export const registerEngineRoutes: RouteRegistrar = (app, context) => {
   const launchAbortControllers = new Map<string, AbortController>();
 
   app.get("/recipes", async (ctx) => {
@@ -86,8 +79,11 @@ export const registerEngineRoutes = (app: Hono, context: AppContext): void => {
     const current = await observeControllerFunction(context, "recipes.list.getCurrentProcess", () =>
       context.engineService.getCurrentProcess()
     );
-    const launchingRecipe = context.engineService.getCurrentRecipe();
-    const launchingId = launchingRecipe?.id ?? null;
+    // launchState is the transitional truth: it marks the recipe between
+    // /launch acceptance and readiness. The process scan is the running truth.
+    // (The old getCurrentRecipe() cache showed a crashed model as "starting"
+    // forever and a launching one as "stopped".)
+    const launchingId = context.launchState.getLaunchingRecipeId();
     const result = recipes.map((recipe) => {
       let status = "stopped";
       if (launchingId === recipe.id) status = "starting";
@@ -406,11 +402,6 @@ export const registerEngineRoutes = (app: Hono, context: AppContext): void => {
       () => context.engineService.getCurrentProcess()
     );
     return ctx.json(getMlxRuntimeInfo(context.config, current));
-  });
-
-  app.get("/runtime/exllamav3", async (ctx) => {
-    const info = getExllamav3RuntimeInfo(context.config);
-    return ctx.json(info);
   });
 
   app.get("/runtime/cuda", async (ctx) => {

@@ -1,8 +1,10 @@
 import { config as loadEnvironment } from "dotenv";
 import { z } from "zod";
 import { existsSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadPersistedConfig, type ProviderConfig } from "./persisted-config";
+import { parseBooleanFlag } from "../core/validation";
 
 export interface Config {
   host: string;
@@ -20,7 +22,6 @@ export interface Config {
   tabby_api_dir?: string;
   llama_bin?: string;
   mlx_python?: string;
-  exllamav3_command?: string;
   strict_openai_models: boolean;
   providers: ProviderConfig[];
 }
@@ -42,23 +43,14 @@ export const loadDotEnvironment = (): string | undefined => {
 export const createConfig = (): Config => {
   loadDotEnvironment();
 
-  const cwd = process.cwd();
-  const localDataDirectory = resolve(cwd, "data");
-  const parentDataDirectory = resolve(cwd, "..", "data");
-  const defaultDataDirectory =
-    basename(cwd) === "controller" && existsSync(parentDataDirectory)
-      ? parentDataDirectory
-      : localDataDirectory;
-  const defaultDatabasePath = resolve(defaultDataDirectory, "controller.db");
+  // Anchor defaults to the controller package root (two levels up from src/config/)
+  // so the data dir lands at <repo>/data regardless of the cwd the process started from.
+  const controllerRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const defaultDataDirectory = resolve(controllerRoot, "..", "data");
 
   const isLoopbackHost = (value: string): boolean => {
     const normalized = value.trim().toLowerCase();
     return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
-  };
-
-  const parseBooleanFlag = (value: string | undefined): boolean => {
-    if (!value) return false;
-    return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
   };
 
   const normalizeOrigin = (value: string): string | null => {
@@ -100,23 +92,24 @@ export const createConfig = (): Config => {
     VLLM_STUDIO_INFERENCE_PORT: z.coerce.number().int().positive().default(8000),
 
     VLLM_STUDIO_DATA_DIR: z.string().default(defaultDataDirectory),
-    VLLM_STUDIO_DB_PATH: z.string().default(defaultDatabasePath),
+    VLLM_STUDIO_DB_PATH: z.string().optional(),
     VLLM_STUDIO_MODELS_DIR: z.string().default("/models"),
     VLLM_STUDIO_SGLANG_PYTHON: z.string().optional(),
     VLLM_STUDIO_TABBY_API_DIR: z.string().optional(),
     VLLM_STUDIO_LLAMA_BIN: z.string().optional(),
     VLLM_STUDIO_MLX_PYTHON: z.string().optional(),
-    VLLM_STUDIO_EXLLAMAV3_COMMAND: z.string().optional(),
     VLLM_STUDIO_STRICT_OPENAI_MODELS: z.string().optional(),
   });
 
   const parsed = schema.parse(process.env);
   const host = parsed.VLLM_STUDIO_HOST.trim() || "127.0.0.1";
 
-  const strictOpenAIModels = parsed.VLLM_STUDIO_STRICT_OPENAI_MODELS;
-  const strictOpenAIModelsEnabled = strictOpenAIModels
-    ? ["1", "true", "yes", "on"].includes(strictOpenAIModels.trim().toLowerCase())
-    : false;
+  const strictOpenAIModelsEnabled = parseBooleanFlag(parsed.VLLM_STUDIO_STRICT_OPENAI_MODELS);
+
+  // The db default follows the resolved data dir so overriding VLLM_STUDIO_DATA_DIR
+  // alone keeps the database inside it.
+  const dataDirectory = resolve(parsed.VLLM_STUDIO_DATA_DIR);
+  const databasePath = resolve(parsed.VLLM_STUDIO_DB_PATH ?? resolve(dataDirectory, "controller.db"));
 
   const config: Config = {
     host,
@@ -124,8 +117,8 @@ export const createConfig = (): Config => {
     inference_host: parsed.VLLM_STUDIO_INFERENCE_HOST.trim() || "localhost",
     inference_port: parsed.VLLM_STUDIO_INFERENCE_PORT,
 
-    data_dir: resolve(parsed.VLLM_STUDIO_DATA_DIR),
-    db_path: resolve(parsed.VLLM_STUDIO_DB_PATH),
+    data_dir: dataDirectory,
+    db_path: databasePath,
     models_dir: resolve(parsed.VLLM_STUDIO_MODELS_DIR),
     strict_openai_models: strictOpenAIModelsEnabled,
     cors_origins: parseCorsOrigins(parsed.VLLM_STUDIO_CORS_ORIGINS),
@@ -156,12 +149,6 @@ export const createConfig = (): Config => {
   }
   if (parsed.VLLM_STUDIO_MLX_PYTHON) {
     config.mlx_python = parsed.VLLM_STUDIO_MLX_PYTHON;
-  }
-  if (parsed.VLLM_STUDIO_EXLLAMAV3_COMMAND) {
-    const command = parsed.VLLM_STUDIO_EXLLAMAV3_COMMAND.trim();
-    if (command) {
-      config.exllamav3_command = command;
-    }
   }
 
   const persisted = loadPersistedConfig(config.data_dir);

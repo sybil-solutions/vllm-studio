@@ -1,13 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ConfigsView } from "../configs/_components/configs-view";
-import { useConfigs } from "../configs/hooks/use-configs";
-import { SetupView } from "../setup/_components/setup-view";
-import { useSetup } from "../setup/hooks/use-setup";
+import { SettingsView } from "@/features/settings/settings-view";
+import { useSettings } from "@/features/settings/use-settings";
+import { SetupView } from "@/features/setup/setup-view/setup-view";
+import { useSetup } from "@/features/setup/use-setup";
+
+const hasSettingsHash = () => {
+  if (typeof window === "undefined") return true;
+  return window.location.hash.length > 1;
+};
 
 export default function SettingsPage() {
-  const configs = useConfigs();
+  const configs = useSettings();
   const setup = useSetup();
   const [setupComplete] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -15,6 +20,7 @@ export default function SettingsPage() {
   });
 
   const showSetupWizard =
+    !hasSettingsHash() &&
     !configs.isInitialLoading &&
     configs.backendOnline === false &&
     !setupComplete &&
@@ -25,14 +31,13 @@ export default function SettingsPage() {
   }
 
   return (
-    <ConfigsView
+    <SettingsView
       data={configs.data}
       compatibilityReport={configs.compatibilityReport}
       loading={configs.loading}
       error={configs.error}
       apiSettings={configs.apiSettings}
       apiSettingsLoading={configs.apiSettingsLoading}
-      showApiKey={configs.showApiKey}
       saving={configs.saving}
       testing={configs.testing}
       connectionStatus={configs.connectionStatus}
@@ -41,7 +46,6 @@ export default function SettingsPage() {
       isInitialLoading={configs.isInitialLoading}
       onReload={configs.loadConfig}
       onApiSettingsChange={configs.setApiSettings}
-      onToggleApiKey={() => configs.setShowApiKey(!configs.showApiKey)}
       onTestConnection={configs.testConnection}
       onSaveSettings={configs.saveApiSettings}
     />

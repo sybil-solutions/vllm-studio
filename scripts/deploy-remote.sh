@@ -109,7 +109,7 @@ sync_controller() {
   sync_dir controller/src/      "$REMOTE_DIR/controller/src/"
   sync_dir controller/scripts/  "$REMOTE_DIR/controller/scripts/" 2>/dev/null || true
   rsync -az -e "ssh $SSH_OPTS" \
-    controller/package.json controller/tsconfig.json \
+    controller/package.json controller/bun.lock controller/tsconfig.json \
     "$REMOTE:$REMOTE_DIR/controller/" 2>/dev/null
   ok "controller/src → remote"
 }
@@ -117,8 +117,10 @@ sync_controller() {
 sync_frontend() {
   step "Syncing frontend"
   sync_dir frontend/src/ "$REMOTE_DIR/frontend/src/"
+  sync_dir frontend/scripts/ "$REMOTE_DIR/frontend/scripts/" 2>/dev/null || true
   local frontend_files=(
     frontend/package.json
+    frontend/package-lock.json
     frontend/tsconfig.json
     frontend/next.config.ts
     frontend/tailwind.config.ts
@@ -160,14 +162,20 @@ sync_all() {
 
 install_controller() {
   step "Installing controller deps"
-  remote "cd $REMOTE_DIR_SHELL/controller && ~/.bun/bin/bun install --frozen-lockfile 2>&1 | tail -1" || \
-  remote "cd $REMOTE_DIR_SHELL/controller && ~/.bun/bin/bun install 2>&1 | tail -1"
+  if remote "cd $REMOTE_DIR_SHELL/controller && ~/.bun/bin/bun install --frozen-lockfile >/tmp/controller-bun-install.log 2>&1"; then
+    remote "tail -5 /tmp/controller-bun-install.log"
+  else
+    remote "tail -20 /tmp/controller-bun-install.log" || true
+    remote "cd $REMOTE_DIR_SHELL/controller && ~/.bun/bin/bun install >/tmp/controller-bun-install.log 2>&1"
+    remote "tail -5 /tmp/controller-bun-install.log"
+  fi
   ok "bun install"
 }
 
 install_frontend() {
   step "Installing frontend deps"
   remote "cd $REMOTE_DIR_SHELL/frontend && npm install --silent 2>&1 | tail -3"
+  remote "cd $REMOTE_DIR_SHELL/frontend && node scripts/patch-pi-ai-openai-text-boundaries.mjs"
   ok "npm install"
 }
 
@@ -177,8 +185,10 @@ build_frontend_local() {
   ok "local next build"
 
   step "Syncing frontend build"
+  remote "rm -rf $REMOTE_DIR_SHELL/frontend/.next/standalone/data"
   rsync -az --delete \
     --exclude 'cache' \
+    --exclude 'standalone/data' \
     -e "ssh $SSH_OPTS" \
     frontend/.next/ "$REMOTE:$REMOTE_DIR/frontend/.next/" 2>/dev/null
   ok ".next/ → remote"
@@ -188,18 +198,66 @@ build_frontend_local() {
 
 restart_controller() {
   step "Restarting controller on :8080"
-  remote bash <<REMOTE
-set -e
-cd $REMOTE_DIR_SHELL
+  remote bash -s -- "$REMOTE_DIR" <<'REMOTE'
+set -euo pipefail
+remote_dir=$1
+cd "$remote_dir"
 docker compose stop controller 2>/dev/null || true
-pkill -f "bun.*controller/src/main.ts" 2>/dev/null || true
-fuser -k 8080/tcp >/dev/null 2>&1 || true
+controller_dir=$(readlink -f "$PWD/controller")
+
+collect_controller_pids() {
+  {
+    port_pids=$(fuser 8080/tcp 2>/dev/null || true)
+    for pid in $port_pids; do
+      echo "$pid"
+    done
+
+    for pid in $(pgrep -x bun 2>/dev/null || true); do
+      cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)
+      if [[ "$cwd" == "$controller_dir" ]]; then
+        echo "$pid"
+      fi
+    done
+  } | sed '/^$/d' | sort -n -u
+}
+
+controller_pids=$(collect_controller_pids)
+if [[ -n "$controller_pids" ]]; then
+  while read -r pid; do
+    [[ -n "$pid" ]] && kill -TERM "$pid" 2>/dev/null || true
+  done <<< "$controller_pids"
+
+  for _ in $(seq 1 20); do
+    if [[ -z "$(collect_controller_pids)" ]] && ! ss -tlnp | grep -q ':8080\b'; then
+      break
+    fi
+    sleep 0.25
+  done
+
+  controller_pids=$(collect_controller_pids)
+  if [[ -n "$controller_pids" ]]; then
+    while read -r pid; do
+      [[ -n "$pid" ]] && kill -KILL "$pid" 2>/dev/null || true
+    done <<< "$controller_pids"
+    sleep 1
+  fi
+fi
+
+if ss -tlnp | grep -q ':8080\b'; then
+  echo "Port 8080 is still in use after stopping controller processes" >&2
+  ss -tlnp | grep ':8080\b' >&2 || true
+  exit 1
+fi
+
 sleep 1
 set -a; source .env 2>/dev/null || true; set +a
+: > /tmp/controller-stdout.log
 nohup ~/.bun/bin/bun run controller/src/main.ts > /tmp/controller-stdout.log 2>&1 &
 REMOTE
   wait_port 8080 controller || return 1
-  ok "controller :8080 (pid $(remote "pgrep -f 'bun.*controller/src/main.ts'" 2>/dev/null || echo '?'))"
+  local controller_pid
+  controller_pid=$(remote "ss -tlnp | sed -n 's/.*:8080\\b.*pid=\\([0-9][0-9]*\\).*/\\1/p' | head -1" 2>/dev/null || true)
+  ok "controller :8080 (pid ${controller_pid:-?})"
 }
 
 restart_frontend() {
@@ -213,7 +271,8 @@ pkill -f "next dev" 2>/dev/null || true
 fuser -k 3000/tcp >/dev/null 2>&1 || true
 sleep 1
 export BACKEND_URL=http://localhost:8080
-nohup npx next start > /tmp/frontend-stdout.log 2>&1 &
+# Use the standalone start (package.json "start"); "next start" breaks SSE streaming.
+nohup node scripts/start-standalone.mjs > /tmp/frontend-stdout.log 2>&1 &
 REMOTE
   wait_port 3000 frontend 15 || return 1
   ok "frontend :3000 (production)"
@@ -233,8 +292,20 @@ start_infra() {
 show_status() {
   step "Status"
   echo ""
-  remote bash <<'REMOTE'
+  remote "cd $REMOTE_DIR_SHELL && bash" <<'REMOTE'
 _g='\033[32m' _r='\033[31m' _d='\033[2m' _n='\033[0m'
+
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+auth_headers=()
+if [[ -n "${VLLM_STUDIO_API_KEY:-}" ]]; then
+  auth_headers=(-H "Authorization: Bearer ${VLLM_STUDIO_API_KEY}")
+fi
 
 probe() {
   local label="$1" url="$2"
@@ -277,7 +348,7 @@ for g in d['gpus']:
 fi
 
 # Running model
-curl -s http://localhost:8080/status 2>/dev/null | python3 -c "
+curl -s "${auth_headers[@]}" http://localhost:8080/status 2>/dev/null | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
 if d.get('running'):

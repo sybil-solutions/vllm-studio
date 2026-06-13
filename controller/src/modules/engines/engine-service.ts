@@ -13,21 +13,6 @@ export interface DownloadRequest {
   hf_token?: string | null;
 }
 
-export interface DownloadHandle {
-  id: string;
-  model_id: string;
-  status: string;
-}
-
-export interface DownloadStatus {
-  id: string;
-  model_id: string;
-  status: string;
-  downloaded_bytes: number;
-  total_bytes: number | null;
-  error: string | null;
-}
-
 export interface HfModel {
   id: string;
   name?: string;
@@ -62,7 +47,6 @@ export interface EngineService {
   ): Promise<SetActiveRecipeResult>;
   ensureActive(recipe: Recipe, options?: EnsureActiveOptions): Promise<EnsureActiveResult>;
 
-  getCurrentRecipe(): Recipe | null;
   getCurrentProcess(): Promise<ProcessInfo | null>;
 
   startDownload(request: DownloadRequest): Promise<ModelDownload>;

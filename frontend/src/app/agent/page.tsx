@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { AgentWorkspace } from "./_components/agent-workspace";
+import { AgentWorkspace } from "@/features/agent/ui/agent-workspace-shell";
 
 export default function AgentPage() {
   return (

@@ -1,8 +1,6 @@
-import * as zod from "zod";
+import { z } from "zod";
 import type { Recipe } from "../types";
-import { asRecipeId } from "../../../types/brand";
-
-const z = zod.z ?? (zod as unknown as { default: typeof zod }).default;
+import { asRecipeId } from "../types";
 
 /**
  * Normalize raw recipe input before validation.
@@ -96,7 +94,7 @@ export const recipeSchema = z.object({
   id: z.string(),
   name: z.string(),
   model_path: z.string(),
-  backend: z.enum(["vllm", "sglang", "llamacpp", "exllamav3", "mlx"]).default("vllm"),
+  backend: z.enum(["vllm", "sglang", "llamacpp", "mlx"]).default("vllm"),
   env_vars: z.record(z.string()).nullable().optional(),
   tensor_parallel_size: z.coerce.number().int().default(1),
   pipeline_parallel_size: z.coerce.number().int().default(1),
@@ -104,7 +102,13 @@ export const recipeSchema = z.object({
   gpu_memory_utilization: z.coerce.number().default(0.9),
   kv_cache_dtype: z.string().default("auto"),
   max_num_seqs: z.coerce.number().int().default(256),
-  trust_remote_code: z.coerce.boolean().default(true),
+  // Defaults to true (unchanged from before) so launching models that need
+  // custom modeling code keeps working out of the box. Security-conscious
+  // operators can flip the default off with
+  // VLLM_STUDIO_DEFAULT_TRUST_REMOTE_CODE=false.
+  trust_remote_code: z.coerce
+    .boolean()
+    .default(process.env["VLLM_STUDIO_DEFAULT_TRUST_REMOTE_CODE"] !== "false"),
   tool_call_parser: z.string().nullable().optional(),
   reasoning_parser: z.string().nullable().optional(),
   enable_auto_tool_choice: z.coerce.boolean().default(false),

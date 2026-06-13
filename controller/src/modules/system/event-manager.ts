@@ -1,13 +1,5 @@
 import { AsyncLock, AsyncQueue } from "../../core/async";
-import { CONTROLLER_EVENTS } from "../../contracts/controller-events";
-
-/** Serialized controller event payload. */
-export interface EventPayload {
-  type: string;
-  data: Record<string, unknown>;
-  timestamp: string;
-  id: string;
-}
+import { CONTROLLER_EVENTS } from "../../../../shared/contracts/controller-events";
 
 /** Controller event that can be serialized to an SSE frame. */
 export class Event {

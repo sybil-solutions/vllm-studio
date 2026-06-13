@@ -4,20 +4,19 @@ import test from "node:test";
 import {
   attachmentDedupKey,
   attachmentPrompt,
+  createAttachment,
   createProjectFileAttachment,
-} from "@/app/agent/_components/chat-attachments";
+} from "@/features/agent/ui/chat-attachments";
 import {
   byQuery,
   consumeComposerMention,
   detectComposerMention,
-  sanitizeComposerExtensionOverrides,
-  type ComposerExtensionRef,
-} from "@/lib/agent/composer-context";
+} from "@/features/agent/composer-context";
 import {
   selectionFromPersistedTab,
   sessionMetaForPersistence,
-} from "@/lib/agent/workspace/store";
-import type { Session } from "@/lib/agent/sessions/types";
+} from "@/features/agent/workspace/store";
+import type { Session } from "@/features/agent/runtime/types";
 
 test("file tagging turns an @ mention into one durable project-file attachment", () => {
   const input = "please inspect @src/app.ts";
@@ -79,69 +78,99 @@ test("truncated tagged files stay metadata-only while preserving the local path"
   assert.doesNotMatch(prompt, /binary payload should not be inlined/);
 });
 
-test("Pi extension slash selection is searchable and persists per-turn overrides", () => {
-  const mention = detectComposerMention(
+test("image attachments are described as metadata for non-vision models", () => {
+  const prompt = attachmentPrompt(
+    [
+      {
+        id: "img:screenshot",
+        name: "screenshot.png",
+        type: "image/png",
+        size: 1200,
+        mode: "data-url",
+        content: "data:image/png;base64,iVBORw0KGgo=",
+        previewKind: "image",
+        previewUrl: "data:image/png;base64,iVBORw0KGgo=",
+      },
+    ],
+    { modelSupportsVision: false },
+  );
+
+  assert.match(prompt, /selected model does not accept image input/);
+  assert.match(prompt, /only attached as metadata/);
+  assert.match(prompt, /cannot see it because only metadata was attached/);
+  assert.doesNotMatch(prompt, /attached as multimodal input/);
+  assert.doesNotMatch(prompt, /iVBORw0KGgo=/);
+});
+
+test("oversized image attachments explain the inline image limit", async () => {
+  const file = new File([new Uint8Array(6_000_001)], "large-screenshot.png", {
+    type: "image/png",
+  });
+  const attachment = await createAttachment(file);
+
+  assert.equal(attachment.mode, "metadata");
+  assert.match(attachment.content, /above the 5\.7 MB inline image limit/);
+  assert.match(attachment.content, /only metadata is attached to the model/);
+});
+
+test("MCP plugin slash and at-mention context persist selected plugin state", () => {
+  const slashMention = detectComposerMention(
     "/plugins browser",
     "/plugins browser".length,
   );
-  const extensions: ComposerExtensionRef[] = [
+  const pluginMention = detectComposerMention(
+    "use @filesystem",
+    "use @filesystem".length,
+  );
+  const plugins = [
     {
-      id: "npm:@openai/browser",
-      name: "browser",
-      source: "npm:@openai/browser",
-      path: "/Users/sero/.pi/extensions/browser",
-      scope: "user",
-      origin: "package",
-      enabled: true,
+      id: "mcp-filesystem",
+      name: "filesystem",
+      path: "/Users/sero/.codex/mcp/filesystem",
+      mcpConfigPath: "/Users/sero/.codex/mcp/filesystem/.mcp.json",
+      source: "manual",
     },
     {
-      id: "auto:/Users/sero/.pi/extensions/unused",
-      name: "unused",
-      source: "auto",
-      path: "/Users/sero/.pi/extensions/unused",
-      scope: "user",
-      origin: "top-level",
-      enabled: false,
+      id: "mcp-git",
+      name: "git",
+      path: "/Users/sero/.codex/mcp/git",
+      mcpConfigPath: "/Users/sero/.codex/mcp/git/.mcp.json",
+      source: "manual",
     },
   ];
-  const overrides = sanitizeComposerExtensionOverrides([
-    { key: "npm:@openai/browser", enabled: false },
-    { key: "npm:@openai/browser", enabled: true },
-    { key: "", enabled: true },
-    { key: "/tmp/not-valid", enabled: "yes" },
-  ]);
   const session = {
-    id: "s-ext",
-    runtimeSessionId: "rt-ext",
+    id: "s-plugin",
+    runtimeSessionId: "rt-plugin",
     piSessionId: null,
-    title: "Extension run",
+    title: "Plugin run",
     messages: [],
     status: "idle",
     error: "",
     input: "",
   } satisfies Session;
 
-  assert.deepEqual(mention, {
-    kind: "extension",
-    query: "browser",
+  assert.deepEqual(slashMention, {
+    kind: "promptTemplate",
+    query: "plugins browser",
     start: 0,
     end: "/plugins browser".length,
   });
+  assert.deepEqual(pluginMention, {
+    kind: "plugin",
+    query: "filesystem",
+    start: 4,
+    end: "use @filesystem".length,
+  });
   assert.deepEqual(
-    byQuery(extensions, "browser").map((extension) => extension.id),
-    ["npm:@openai/browser"],
+    byQuery(plugins, "filesystem").map((plugin) => plugin.id),
+    ["mcp-filesystem"],
   );
-  assert.deepEqual(overrides, [{ key: "npm:@openai/browser", enabled: false }]);
 
   const persisted = sessionMetaForPersistence(session, {
-    plugins: [],
+    plugins: [plugins[0]],
     skills: [],
     promptTemplates: [],
-    extensionOverrides: overrides,
   });
-  assert.deepEqual(persisted.extensionOverrides, overrides);
-  assert.deepEqual(
-    selectionFromPersistedTab(persisted)?.extensionOverrides,
-    overrides,
-  );
+  assert.deepEqual(persisted.plugins, [plugins[0]]);
+  assert.deepEqual(selectionFromPersistedTab(persisted)?.plugins, [plugins[0]]);
 });

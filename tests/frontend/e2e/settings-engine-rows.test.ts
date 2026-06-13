@@ -5,7 +5,7 @@ import {
   FALLBACK_ENGINES,
   hasHydratedEngineRows,
   resolveEngineRowsView,
-} from "@/app/configs/_components/engines-section-model";
+} from "@/features/settings/engines-section-model";
 import type { RuntimeBackendInfo, RuntimeTarget, SystemRuntimeInfo } from "@/lib/types";
 
 function backend(installed: boolean): RuntimeBackendInfo {
@@ -60,7 +60,6 @@ test("settings engine rows fall back to backend summaries before runtime targets
     sglang: backend(false),
     llamacpp: backend(true),
     mlx: backend(true),
-    exllamav3: backend(false),
   };
   const view = resolveEngineRowsView([], backends);
 
@@ -73,7 +72,6 @@ test("settings engine rows fall back to backend summaries before runtime targets
       ["sglang", false],
       ["llamacpp", true],
       ["mlx", true],
-      ["exllamav3", false],
     ],
   );
 });

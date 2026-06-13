@@ -1,7 +1,7 @@
 "use client";
 
-import { LogsView } from "./_components/logs-view";
-import { useLogs } from "./hooks/use-logs";
+import { LogsView } from "@/features/logs/logs-view";
+import { useLogs } from "@/features/logs/use-logs";
 
 export default function LogsPage() {
   const {

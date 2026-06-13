@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
-import { getApiKey } from "@/lib/api-key";
-import { BACKEND_URL_CHANGED_EVENT } from "@/lib/backend-url";
-import { resolveControllerEventsBaseUrl } from "@/lib/backend-config";
-import { CONTROLLER_EVENT_TYPES } from "./use-controller-events/event-types";
-import { dispatchCustomEvent } from "./use-controller-events/helpers";
 import {
-  dispatchControllerDomainEvent,
-  isKnownControllerEvent,
-  logUnknownControllerEvent,
-} from "./use-controller-events/routing";
+  CONTROLLER_STREAM_EVENT_TYPES as CONTROLLER_EVENT_TYPES,
+  getBrowserEventChannelForControllerEvent,
+  isControllerStreamEventType,
+  type ControllerBrowserEventChannel,
+} from "@/lib/controller-events-contract";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import {
+  BACKEND_URL_CHANGED_EVENT,
+  getApiKey,
+  resolveControllerEventsBaseUrl,
+} from "@/lib/api/connection";
 
 interface SSEPayload<T = unknown> {
   data: T;
@@ -46,17 +47,50 @@ export function useControllerEvents(apiBaseUrl: string = resolveControllerEvents
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
-      const es = new EventSource(sseUrl);
-      eventSourceRef.current = es;
+      let disposed = false;
+      let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+      let failureStreak = 0;
 
-      for (const type of CONTROLLER_EVENT_TYPES) {
-        es.addEventListener(type, (event) => handleMessage(event as MessageEvent));
-      }
+      const open = () => {
+        if (disposed) return;
+        const es = new EventSource(sseUrl);
+        eventSourceRef.current = es;
+        let deliveredEvent = false;
 
-      es.onmessage = (event) => handleMessage(event as MessageEvent);
+        const onDelivered = (event: MessageEvent) => {
+          // A delivered event proves this backend's /events actually streams, so
+          // reset the backoff — a genuine mid-stream drop should reconnect fast.
+          failureStreak = 0;
+          deliveredEvent = true;
+          handleMessage(event);
+        };
+
+        for (const type of CONTROLLER_EVENT_TYPES) {
+          es.addEventListener(type, (event) => onDelivered(event as MessageEvent));
+        }
+        es.onmessage = (event) => onDelivered(event as MessageEvent);
+
+        es.onerror = () => {
+          if (disposed) return;
+          es.close();
+          // The browser's native EventSource reconnects immediately. On a backend
+          // whose /events never streams (e.g. CDN-buffered SSE behind Cloudflare),
+          // that pins a long hung request every few seconds for nothing. Take over
+          // reconnection with capped exponential backoff; the realtime-status
+          // store's polling fallback keeps data fresh meanwhile. Connections that
+          // delivered at least one event don't count toward the streak.
+          if (!deliveredEvent) failureStreak = Math.min(failureStreak + 1, 6);
+          const delay = Math.min(60_000, 3_000 * 2 ** failureStreak);
+          reconnectTimer = setTimeout(open, delay);
+        };
+      };
+
+      open();
 
       return () => {
-        es.close();
+        disposed = true;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        eventSourceRef.current?.close();
       };
     },
     [backendRevision, handleMessage, sseUrl],
@@ -81,3 +115,46 @@ export function useControllerEvents(apiBaseUrl: string = resolveControllerEvents
 }
 
 const getControllerEventsSnapshot = (): number => 0;
+
+export const dispatchCustomEvent = (name: string, detail: Record<string, unknown>) => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+};
+
+export type UnknownControllerEventLogger = (
+  message: string,
+  detail: { eventType: string; data: Record<string, unknown> },
+) => void;
+
+export const resolveControllerEventChannel = (
+  eventType: string,
+): ControllerBrowserEventChannel | null => {
+  return getBrowserEventChannelForControllerEvent(eventType);
+};
+
+export const dispatchControllerDomainEvent = (
+  eventType: string,
+  data: Record<string, unknown>,
+  dispatch: (name: string, detail: Record<string, unknown>) => void,
+): boolean => {
+  const channel = resolveControllerEventChannel(eventType);
+  if (!channel) {
+    return false;
+  }
+  dispatch(channel, { type: eventType, data });
+  return true;
+};
+
+export const logUnknownControllerEvent = (
+  eventType: string,
+  data: Record<string, unknown>,
+  logger: UnknownControllerEventLogger = (message, detail) => {
+    console.warn(message, detail);
+  },
+): void => {
+  logger("[Controller SSE] Unhandled event type", { eventType, data });
+};
+
+export const isKnownControllerEvent = (eventType: string): boolean => {
+  return isControllerStreamEventType(eventType);
+};

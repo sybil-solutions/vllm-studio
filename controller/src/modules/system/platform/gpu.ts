@@ -1,8 +1,15 @@
+import { existsSync } from "node:fs";
 import type { GpuInfo, RuntimeGpuMonitoringTool } from "../../models/types";
 import { runCommand } from "../../../core/command";
 import { getGpuInfoFromAmdSmi, getGpuInfoFromRocmSmi } from "./amd-gpu";
+import { getGpuInfoFromIntelSysfs } from "./intel-gpu";
 import { resolveRocmSmiTool } from "./rocm-info";
-import { resolveForcedGpuMonitoringTool, resolveNvidiaSmiBinary } from "./smi-tools";
+import {
+  resolveAmdSmiBinary,
+  resolveForcedGpuMonitoringTool,
+  resolveNvidiaSmiBinary,
+  resolveRocmSmiBinary,
+} from "./smi-tools";
 
 export const getGpuInfoFromNvidiaSmi = (): GpuInfo[] => {
   const query = [
@@ -71,23 +78,34 @@ export const getGpuInfoFromNvidiaSmi = (): GpuInfo[] => {
   }
 };
 
-export const resolveGpuMonitoringTool = (): RuntimeGpuMonitoringTool | null => {
+/** Tool the cascade in getGpuInfo would use, without running any query commands. */
+export const detectGpuMonitoringTool = (): RuntimeGpuMonitoringTool | null => {
   const forced = resolveForcedGpuMonitoringTool();
-  if (forced === "nvidia-smi") {
-    return "nvidia-smi";
-  }
-  if (forced === "amd-smi" || forced === "rocm-smi") {
-    return forced;
-  }
-
-  if (resolveNvidiaSmiBinary()) {
-    return "nvidia-smi";
-  }
-
-  return resolveRocmSmiTool();
+  if (forced) return forced;
+  if (resolveNvidiaSmiBinary()) return "nvidia-smi";
+  const rocmTool = resolveRocmSmiTool();
+  if (rocmTool) return rocmTool;
+  if (getGpuInfoFromIntelSysfs().length > 0) return "intel-sysfs";
+  return null;
 };
 
-export const getGpuInfo = (): GpuInfo[] => {
+// Logged once per process so CPU-only and missing-driver hosts are distinguishable
+// from "zero GPUs" without spamming every poll.
+let warnedNoGpuTooling = false;
+
+const warnNoGpuToolingOnce = (): void => {
+  if (warnedNoGpuTooling) return;
+  warnedNoGpuTooling = true;
+  const attempted = [
+    `nvidia-smi=${resolveNvidiaSmiBinary() ? "found" : "not found"}`,
+    `amd-smi=${resolveAmdSmiBinary() ? "found" : "not found"}`,
+    `rocm-smi=${resolveRocmSmiBinary() ? "found" : "not found"}`,
+    `intel-sysfs=${existsSync("/sys/bus/pci/devices") ? "no compute GPUs" : "unavailable"}`,
+  ].join(" ");
+  console.warn(`No GPUs reported by any monitoring tool; attempted: ${attempted}`);
+};
+
+const collectGpuInfo = (): GpuInfo[] => {
   const forced = resolveForcedGpuMonitoringTool();
   if (forced === "nvidia-smi") {
     return getGpuInfoFromNvidiaSmi();
@@ -97,6 +115,9 @@ export const getGpuInfo = (): GpuInfo[] => {
   }
   if (forced === "rocm-smi") {
     return getGpuInfoFromRocmSmi();
+  }
+  if (forced === "intel-sysfs") {
+    return getGpuInfoFromIntelSysfs();
   }
 
   const nvidia = getGpuInfoFromNvidiaSmi();
@@ -116,74 +137,18 @@ export const getGpuInfo = (): GpuInfo[] => {
     return getGpuInfoFromAmdSmi();
   }
 
+  const intel = getGpuInfoFromIntelSysfs();
+  if (intel.length > 0) {
+    return intel;
+  }
+
   return [];
 };
 
-export const estimateModelMemory = (
-  modelSizeGb: number,
-  quantization?: string,
-  dtype?: string,
-  tensorParallel = 1
-): number => {
-  let memoryGb = modelSizeGb;
-
-  if (quantization) {
-    const quantLower = quantization.toLowerCase();
-    if (quantLower.includes("int4") || quantLower.includes("4bit")) {
-      memoryGb *= 0.25;
-    } else if (
-      quantLower.includes("int8") ||
-      quantLower.includes("8bit") ||
-      quantLower === "awq" ||
-      quantLower === "gptq"
-    ) {
-      memoryGb *= 0.5;
-    } else if (quantLower.includes("fp8")) {
-      memoryGb *= 0.5;
-    }
-  }
-
-  if (dtype) {
-    const dtypeLower = dtype.toLowerCase();
-    if (dtypeLower.includes("float32") || dtypeLower.includes("fp32")) {
-      memoryGb *= 2.0;
-    } else if (dtypeLower.includes("int8")) {
-      memoryGb *= 0.5;
-    }
-  }
-
-  if (tensorParallel > 1) {
-    memoryGb /= tensorParallel;
-  }
-
-  memoryGb *= 1.3;
-  return memoryGb;
-};
-
-export const canFitModel = (
-  modelSizeGb: number,
-  quantization?: string,
-  dtype?: string,
-  tensorParallel = 1
-): boolean => {
-  const gpus = getGpuInfo();
+export const getGpuInfo = (): GpuInfo[] => {
+  const gpus = collectGpuInfo();
   if (gpus.length === 0) {
-    return true;
+    warnNoGpuToolingOnce();
   }
-
-  const requiredGb = estimateModelMemory(modelSizeGb, quantization, dtype, tensorParallel);
-  const requiredBytes = requiredGb * 1024 ** 3;
-
-  if (gpus.length < tensorParallel) {
-    return false;
-  }
-
-  for (let index = 0; index < tensorParallel; index += 1) {
-    const gpu = gpus[index];
-    if (!gpu || gpu.memory_free < requiredBytes) {
-      return false;
-    }
-  }
-
-  return true;
+  return gpus;
 };

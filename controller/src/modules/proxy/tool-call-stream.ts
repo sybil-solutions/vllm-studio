@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { parseToolCallsFromContent, type ToolCall } from "./tool-call-parser";
+import {
+  parseToolCallsFromContent,
+  stripToolCallsFromContent,
+  type ToolCall,
+} from "./tool-call-parser";
+import { REASONING_FIELDS, firstReasoningField } from "./reasoning-fields";
+import { createThinkRewriter, thinkingTagPrefixIsPartial } from "./think-rewriter";
 
 export interface StreamUsage {
   prompt_tokens: number;
@@ -39,60 +45,8 @@ export const createToolCallStream = (
       // upstream already torn down; ignore.
     }
   };
-  const thinkingOpenPrefixes = ["<thinking", "<analysis", "<think"];
-  const thinkingClosePrefixes = ["</thinking", "</analysis", "</think"];
-  const thinkingAllPrefixes = [...thinkingOpenPrefixes, ...thinkingClosePrefixes];
-
-  const getThinkingTagLength = (
-    suffix: string
-  ): { kind: "open" | "close"; length: number } | null => {
-    if (!suffix.startsWith("<")) return null;
-    const closeIndex = suffix.indexOf(">");
-    if (closeIndex < 0) return null;
-    const tag = suffix.slice(0, closeIndex + 1);
-    if (/^<(think|thinking|analysis)(?:\s+[^>]*)?>$/i.test(tag))
-      return { kind: "open", length: closeIndex + 1 };
-    if (/^<\/(think|thinking|analysis)(?:\s+[^>]*)?>$/i.test(tag))
-      return { kind: "close", length: closeIndex + 1 };
-    return null;
-  };
-
-  const thinkingTagPrefixIsPartial = (suffix: string): boolean => {
-    const lower = suffix.toLowerCase();
-    if (!lower.startsWith("<")) return false;
-
-    for (const prefix of thinkingAllPrefixes) {
-      if (prefix.startsWith(lower)) {
-        return true;
-      }
-      if (lower.startsWith(prefix)) {
-        const next = lower[prefix.length];
-        if (!next) return true;
-        if (
-          next === ">" ||
-          next === " " ||
-          next === "/" ||
-          next === "\t" ||
-          next === "\n" ||
-          next === "\r"
-        )
-          return true;
-      }
-    }
-
-    return false;
-  };
-
-  const isThinkingTag = (suffix: string): { kind: "open" | "close"; length: number } | null => {
-    const match = getThinkingTagLength(suffix);
-    if (!match) return null;
-    return match;
-  };
-
   const stripToolXmlDelta = (text: string): string => {
-    return text
-      .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
-      .replace(/<?use_mcp[\s_]*tool>[\s\S]*?<\/use_mcp[\s_]*tool>/gi, "");
+    return stripToolCallsFromContent(text);
   };
 
   const normalizeTextDelta = (
@@ -112,7 +66,15 @@ export const createToolCallStream = (
         else replayCursors.set(key, nextCursor);
         return "";
       }
+      // The supposed replay diverged, so the prefix we suppressed was never a
+      // replay — it was real content whose leading tokens happened to repeat an
+      // earlier prefix (e.g. a new sentence starting with "The "/"Hello"/"\n").
+      // Resurrect exactly what we withheld so no token is silently dropped.
       replayCursors.delete(key);
+      const resurrected = previous.text.slice(0, replayCursor);
+      const merged = resurrected + text;
+      history.set(key, { text: previous.text + merged, snapshot: false });
+      return merged;
     }
     const isCumulative =
       previous.text.length > 0 &&
@@ -125,6 +87,10 @@ export const createToolCallStream = (
       return isCumulative ? text.slice(previous.text.length) : text;
     }
 
+    // A shorter delta that matches the start of the accumulated text *might* be
+    // an upstream stream replaying from the top. Speculatively suppress it, but
+    // the divergence branch above resurrects it if the replay never pans out, so
+    // genuine repeated content (incl. whitespace-only deltas) is never lost.
     if (previous.text.length > text.length && previous.text.startsWith(text)) {
       replayCursors.set(key, text.length);
       return "";
@@ -132,121 +98,6 @@ export const createToolCallStream = (
 
     history.set(key, { text: previous.text + text, snapshot: false });
     return text;
-  };
-
-  type ThinkRewriter = {
-    inThink: () => boolean;
-    drainCarry: () => string;
-    drainPendingContent: () => string;
-    rewrite: (
-      deltaText: string,
-      defaultToReasoning?: boolean
-    ) => { content: string; reasoningAppend: string };
-  };
-
-  const createThinkRewriter = (
-    settings: {
-      bufferImplicitReasoningContent?: boolean;
-    } = {}
-  ): ThinkRewriter => {
-    let inThink = false;
-    let thinkCarry = "";
-    let pendingImplicitContent = "";
-    let seenOpen = false;
-    let resolvedImplicitPrefix = false;
-
-    return {
-      inThink(): boolean {
-        return inThink;
-      },
-      drainCarry(): string {
-        const tail = thinkCarry;
-        thinkCarry = "";
-        return tail;
-      },
-      drainPendingContent(): string {
-        const pending = pendingImplicitContent;
-        pendingImplicitContent = "";
-        return pending;
-      },
-      rewrite(
-        deltaText: string,
-        defaultToReasoning = false
-      ): { content: string; reasoningAppend: string } {
-        const combined = thinkCarry + (deltaText ?? "");
-        const combinedLower = combined.toLowerCase();
-        let carryIndex = combined.length;
-        let index = 0;
-        let contentOut = "";
-        let reasoningOut = "";
-
-        while (index < carryIndex) {
-          const remainingLower = combinedLower.slice(index);
-
-          if (combined[index] === "<") {
-            const thinkTag = isThinkingTag(remainingLower);
-            if (thinkTag?.kind === "open") {
-              if (pendingImplicitContent) {
-                contentOut += pendingImplicitContent;
-                pendingImplicitContent = "";
-              }
-              inThink = true;
-              seenOpen = true;
-              index += thinkTag.length;
-              continue;
-            }
-            if (thinkTag?.kind === "close") {
-              if (!inThink) {
-                // Close tag without an opening tag: model uses implicit
-                // thinking (e.g. DeepSeek sends `...` with no `...`).
-                if (
-                  settings.bufferImplicitReasoningContent &&
-                  !seenOpen &&
-                  !resolvedImplicitPrefix
-                ) {
-                  reasoningOut += pendingImplicitContent;
-                  pendingImplicitContent = "";
-                  resolvedImplicitPrefix = true;
-                }
-                const before = contentOut.trim();
-                if (before) {
-                  reasoningOut += contentOut;
-                  contentOut = "";
-                }
-              }
-              inThink = false;
-              index += thinkTag.length;
-              continue;
-            }
-            if (thinkingTagPrefixIsPartial(remainingLower)) {
-              carryIndex = index;
-              break;
-            }
-          }
-
-          const ch = combined[index] ?? "";
-          if (inThink || defaultToReasoning) {
-            reasoningOut += ch;
-          } else if (
-            settings.bufferImplicitReasoningContent &&
-            !seenOpen &&
-            !resolvedImplicitPrefix
-          ) {
-            pendingImplicitContent += ch;
-          } else {
-            contentOut += ch;
-          }
-          index += 1;
-        }
-
-        thinkCarry = carryIndex < combined.length ? combined.slice(carryIndex) : "";
-
-        return {
-          content: contentOut,
-          reasoningAppend: reasoningOut,
-        };
-      },
-    };
   };
 
   const contentThink = createThinkRewriter({
@@ -266,6 +117,16 @@ export const createToolCallStream = (
       downstreamClosed = true;
       void tearDownUpstream();
     }
+  };
+  // Terminate each synthesized `data:` line with a blank line so the SSE parser
+  // dispatches it as its own event; without it, an injected chunk followed by
+  // `data: [DONE]` concatenates to `{...}\n[DONE]` and fails JSON.parse.
+  const enqueueDataEvent = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    dataLine: string
+  ): void => {
+    enqueueLine(controller, dataLine);
+    enqueueLine(controller, "");
   };
 
   const buildToolCallChunk = (toolCalls: ToolCall[]): string => {
@@ -303,7 +164,7 @@ export const createToolCallStream = (
     visibleContentBuffer += content;
     const cleaned = stripToolXmlDelta(content);
     const chunk = buildFlushChunk({ content: cleaned });
-    if (chunk) enqueueLine(controller, chunk);
+    if (chunk) enqueueDataEvent(controller, chunk);
   };
 
   const flushThinkCarry = (controller: ReadableStreamDefaultController<Uint8Array>): void => {
@@ -315,7 +176,7 @@ export const createToolCallStream = (
       contentThink.inThink() || carryLooksLikeThink
         ? buildFlushChunk({ reasoning_content: stripToolXmlDelta(tail) })
         : buildFlushChunk({ content: stripToolXmlDelta(tail) });
-    if (chunk) enqueueLine(controller, chunk);
+    if (chunk) enqueueDataEvent(controller, chunk);
   };
 
   const parseUsage = (data: Record<string, unknown>): void => {
@@ -351,7 +212,7 @@ export const createToolCallStream = (
     if (toolCallsFound || !visibleContentBuffer) return;
     const parsed = parseToolCallsFromContent(visibleContentBuffer);
     if (parsed.length > 0) {
-      enqueueLine(controller, buildToolCallChunk(parsed));
+      enqueueDataEvent(controller, buildToolCallChunk(parsed));
       toolCallsFound = true;
     }
   };
@@ -391,7 +252,7 @@ export const createToolCallStream = (
           for (const outLine of otherLines) {
             enqueueLine(controller, outLine);
           }
-          enqueueLine(controller, "data: [DONE]");
+          enqueueDataEvent(controller, "data: [DONE]");
           return;
         }
 
@@ -431,15 +292,15 @@ export const createToolCallStream = (
               rawContent,
               !hasDelta
             );
-            const reasoningRaw =
-              typeof delta["reasoning_content"] === "string"
-                ? normalizeTextDelta(
-                    reasoningHistory,
-                    `${choiceIndex}:reasoning`,
-                    String(delta["reasoning_content"]),
-                    !hasDelta
-                  )
-                : "";
+            const rawReasoning = firstReasoningField(delta);
+            const reasoningRaw = rawReasoning
+              ? normalizeTextDelta(
+                  reasoningHistory,
+                  `${choiceIndex}:reasoning`,
+                  rawReasoning,
+                  !hasDelta
+                )
+              : "";
             if (content || reasoningRaw) trackFirstToken();
             let reasoning = "";
             let reasoningFromContent = "";
@@ -470,16 +331,18 @@ export const createToolCallStream = (
 
             if (reasoning) {
               delta["reasoning_content"] = stripToolXmlDelta(reasoning);
-            } else if ("reasoning_content" in delta) {
+            } else if (REASONING_FIELDS.some((field) => field in delta)) {
               delete delta["reasoning_content"];
             }
+            delete delta["reasoning"];
+            delete delta["reasoning_text"];
           }
         }
 
         for (const outLine of otherLines) {
           enqueueLine(controller, outLine);
         }
-        enqueueLine(controller, `data: ${JSON.stringify(parsed)}`);
+        enqueueDataEvent(controller, `data: ${JSON.stringify(parsed)}`);
       };
 
       if (downstreamClosed) {

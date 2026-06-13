@@ -1,8 +1,7 @@
-import type { Hono } from "hono";
 import { basename, dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import type { AppContext } from "../../types/context";
+import type { RouteRegistrar } from "../../http/route-registrar";
 import type { Recipe } from "../models/types";
 
 /**
@@ -15,6 +14,7 @@ interface OpenAIModelInfo {
   owned_by: string;
   active: boolean;
   max_model_len?: number | null;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -27,16 +27,22 @@ interface OpenAIModelList {
 import { buildModelInfo, discoverModelDirectories } from "./model-browser";
 import { notFound } from "../../core/errors";
 import { observeControllerFunction } from "../../core/function-observability";
-import { fetchInference } from "../../services/inference/inference-client";
+import { parseBooleanFlag } from "../../core/validation";
+import { fetchInference } from "../../services/inference-client";
 
 function isMockInferenceEnabled(): boolean {
-  const raw = process.env["VLLM_STUDIO_MOCK_INFERENCE"];
-  if (!raw) return false;
-  const normalized = String(raw).trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+  return parseBooleanFlag(process.env["VLLM_STUDIO_MOCK_INFERENCE"]);
 }
 
-export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
+function recipeMetadata(recipe: Recipe): Record<string, unknown> | undefined {
+  const metadata = recipe.extra_args?.["metadata"];
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return undefined;
+  }
+  return metadata as Record<string, unknown>;
+}
+
+export const registerModelsRoutes: RouteRegistrar = (app, context) => {
   app.get("/v1/models", async (ctx) => {
     const recipes = context.stores.recipeStore.list();
     const current = await observeControllerFunction(
@@ -79,6 +85,7 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
         }
       }
       const modelId = recipe.served_model_name ?? recipe.id;
+      const metadata = recipeMetadata(recipe);
       models.push({
         id: modelId,
         object: "model",
@@ -86,6 +93,7 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
         owned_by: "vllm-studio",
         active: isActive,
         max_model_len: maxModelLength,
+        ...(metadata ? { metadata } : {}),
       });
     }
 
@@ -270,23 +278,27 @@ export const registerModelsRoutes = (app: Hono, context: AppContext): void => {
   app.get("/v1/huggingface/models", async (ctx) => {
     const search = ctx.req.query("search")?.trim() || undefined;
     const filter = ctx.req.query("filter") || undefined;
-    const sort = ctx.req.query("sort") || "trending";
+    const sort = ctx.req.query("sort")?.trim() || undefined;
     const limit = Math.min(Math.max(Number(ctx.req.query("limit") ?? 50), 1), 100);
     const offset = Math.max(Number(ctx.req.query("offset") ?? 0), 0);
 
     const sortMapping: Record<string, string> = {
+      createdAt: "createdAt",
       trending: "trendingScore",
       downloads: "downloads",
       likes: "likes",
+      lastModified: "lastModified",
       modified: "lastModified",
     };
-    const hfSort = sortMapping[sort] ?? "trendingScore";
+    const hfSort = sort ? (sortMapping[sort] ?? "trendingScore") : undefined;
     const requestLimit = Math.min(limit + offset, 500);
     const params = new URLSearchParams({
       limit: String(requestLimit),
       full: "false",
-      sort: hfSort,
     });
+    if (hfSort) {
+      params.set("sort", hfSort);
+    }
     if (search) {
       params.set("search", search);
     }

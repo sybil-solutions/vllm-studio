@@ -1,5 +1,4 @@
-import { getApiKey } from "../api-key";
-import { clearStoredBackendUrl, getStoredBackendUrl } from "../backend-url";
+import { clearStoredBackendUrl, getApiKey, getStoredBackendUrl } from "./connection";
 import { delay } from "../async";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -267,11 +266,17 @@ export function createApiCore(params: {
     const storedBackendUrl = backendUrlOverride?.trim() || getStoredBackendUrl();
     if (useProxy && storedBackendUrl) {
       headers["X-Backend-Url"] = storedBackendUrl;
+      // An explicitly selected controller is sticky: never let the proxy
+      // silently fall back to the default and clear the selection just because
+      // the chosen controller is momentarily unreachable.
+      headers["X-Backend-Strict"] = "1";
     }
 
-    const storedKey = apiKeyOverride?.trim() || getApiKey();
+    const storedKey = apiKeyOverride === undefined ? getApiKey() : apiKeyOverride.trim();
     if (storedKey) {
       headers["Authorization"] = `Bearer ${storedKey}`;
+    } else if (apiKeyOverride !== undefined) {
+      headers["X-Backend-Suppress-Auth"] = "1";
     }
 
     if (extraHeaders) {
