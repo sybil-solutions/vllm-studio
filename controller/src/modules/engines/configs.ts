@@ -1,5 +1,8 @@
 export const LIFECYCLE_READY_TIMEOUT_MS = 300_000;
 
+export const CRASH_LOOP_MAX_FAILURES = 3;
+export const CRASH_LOOP_WINDOW_MS = 60_000;
+
 export const DOWNLOAD_DEFAULT_IGNORE_FILENAMES = [".gitattributes", ".gitignore"];
 export const DOWNLOAD_PROGRESS_THROTTLE_MS = 750;
 

@@ -22,6 +22,7 @@ export interface HfModel {
 export interface EnsureActiveResult {
   switched: boolean;
   error: string | null;
+  quarantineInfo?: CrashLoopInfo | undefined;
 }
 
 export interface EnsureActiveOptions {
@@ -29,7 +30,9 @@ export interface EnsureActiveOptions {
   publish_events?: boolean;
 }
 
-export type SetActiveRecipeResult = { ok: true } | { ok: false; error: string };
+export type SetActiveRecipeResult =
+  | { ok: true }
+  | { ok: false; error: string; quarantineInfo?: CrashLoopInfo | undefined };
 
 /** Options for setting the active recipe. */
 export interface SetActiveRecipeOptions {
@@ -40,6 +43,12 @@ export interface SetActiveRecipeOptions {
  * The single public contract for the engines module.
  * All consumers (HTTP routes, other modules, tests) use this interface.
  */
+export interface CrashLoopInfo {
+  consecutiveFailures: number;
+  windowStart: number;
+  quarantined: boolean;
+}
+
 export interface EngineService {
   setActiveRecipe(
     recipe: Recipe | null,
@@ -48,6 +57,10 @@ export interface EngineService {
   ensureActive(recipe: Recipe, options?: EnsureActiveOptions): Promise<EnsureActiveResult>;
 
   getCurrentProcess(): Promise<ProcessInfo | null>;
+
+  resetLaunchFailures(recipeId: string): void;
+  isQuarantined(recipeId: string): boolean;
+  getQuarantinedRecipes(): { recipe_id: string; info: CrashLoopInfo }[];
 
   startDownload(request: DownloadRequest): Promise<ModelDownload>;
   pauseDownload(downloadId: string): ModelDownload;

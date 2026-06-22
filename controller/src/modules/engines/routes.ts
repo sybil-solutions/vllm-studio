@@ -105,6 +105,7 @@ export const registerEngineRoutes: RouteRegistrar = (app, context) => {
     try {
       const recipe = parseRecipe(body);
       context.stores.recipeStore.save(recipe);
+      context.engineService.resetLaunchFailures(recipe.id);
       await context.eventManager.publish(new Event(CONTROLLER_EVENTS.RECIPE_CREATED, { recipe }));
       return ctx.json({ success: true, id: recipe.id });
     } catch (error) {
@@ -118,6 +119,7 @@ export const registerEngineRoutes: RouteRegistrar = (app, context) => {
     try {
       const recipe = parseRecipe({ ...body, id: recipeId });
       context.stores.recipeStore.save(recipe);
+      context.engineService.resetLaunchFailures(recipe.id);
       await context.eventManager.publish(new Event(CONTROLLER_EVENTS.RECIPE_UPDATED, { recipe }));
       return ctx.json({ success: true, id: recipe.id });
     } catch (error) {
@@ -129,6 +131,7 @@ export const registerEngineRoutes: RouteRegistrar = (app, context) => {
     const recipeId = ctx.req.param("recipeId");
     const deleted = context.stores.recipeStore.delete(recipeId);
     if (!deleted) throw notFound("Recipe not found");
+    context.engineService.resetLaunchFailures(recipeId);
     await context.eventManager.publish(
       new Event(CONTROLLER_EVENTS.RECIPE_DELETED, { recipe_id: recipeId })
     );

@@ -3,8 +3,8 @@ import { Event, type EventManager } from "../system/event-manager"; import { CON
 import { pidExists } from "./process/process-utilities"; import { isRecipeRunning } from "../models/recipes/recipe-matching";
 import type { ProcessInfo, Recipe } from "../models/types"; import type { Config } from "../../config/env";
 import type { Logger } from "../../core/logger"; import type { ProcessManager } from "./process/process-manager";
-import type { RecipeStore } from "../models/recipes/recipe-store"; import { LIFECYCLE_READY_TIMEOUT_MS } from "./configs";
-import type { EngineService, DownloadRequest, HfModel, SetActiveRecipeResult, SetActiveRecipeOptions } from "./engine-service"; import type { ModelDownload } from "../shared/recipe-types";
+import type { RecipeStore } from "../models/recipes/recipe-store"; import { LIFECYCLE_READY_TIMEOUT_MS, CRASH_LOOP_MAX_FAILURES, CRASH_LOOP_WINDOW_MS } from "./configs";
+import type { EngineService, CrashLoopInfo, DownloadRequest, HfModel, SetActiveRecipeResult, SetActiveRecipeOptions, EnsureActiveResult } from "./engine-service"; import type { ModelDownload } from "../shared/recipe-types";
  import type { DownloadManager } from "./downloads/download-manager";
 import { fetchHuggingFaceModelInfo } from "./downloads/huggingface-api";
 interface CoordinatorDeps { config: Config;
@@ -16,6 +16,7 @@ export class EngineCoordinator implements EngineService {
   private readonly switchLock = new AsyncLock();
   private activeLifecycleAbort: AbortController | null = null; private activeLaunchPid: number | null = null;
   private lifecycleIntentSerial = 0; private autoActivationBlocked = false;
+  private readonly launchFailures = new Map<string, CrashLoopEntry>();
  constructor(private readonly deps: CoordinatorDeps) {}
 
   async setActiveRecipe(recipe: Recipe | null, options: SetActiveRecipeOptions = {}): Promise<SetActiveRecipeResult> { const intentSerial = ++this.lifecycleIntentSerial;
@@ -59,10 +60,15 @@ export class EngineCoordinator implements EngineService {
  const postEvictAbort = await abortIfNeeded(recipe);
       if (postEvictAbort) return postEvictAbort;
       if (!recipe) { return { ok: true }; }
+      if (this.isQuarantined(recipe.id)) {
+        const info = this.getFailureEntry(recipe.id);
+        return { ok: false, error: `Recipe ${recipe.id} is temporarily quarantined due to repeated launch failures`, quarantineInfo: info ? this.toCrashLoopInfo(info) : undefined };
+      }
  await this.deps.eventManager.publishLaunchProgress(recipe.id, "launching", `Starting ${recipe.name}...`, 0.25);
       const launch = await this.deps.processManager.launchModel(recipe); spawnedPid = launch.pid;
       this.activeLaunchPid = launch.pid; if (!launch.success) {
-        await this.deps.eventManager.publishLaunchProgress(recipe.id, "error", launch.message, 0); return { ok: false, error: launch.message };
+        const info = this.recordLaunchFailure(recipe.id);
+        await this.deps.eventManager.publishLaunchProgress(recipe.id, "error", launch.message, 0); return { ok: false, error: launch.message, quarantineInfo: info };
       }
       const postLaunchAbort = await abortIfNeeded(recipe); if (postLaunchAbort) return postLaunchAbort;
  await this.deps.eventManager.publishLaunchProgress(recipe.id, "waiting", "Loading model... (0s)", 0.5);
@@ -74,11 +80,13 @@ export class EngineCoordinator implements EngineService {
  if (isAborted()) {
         return publishCancelled(recipe); }
  if (ready.ready) {
+        this.recordLaunchSuccess(recipe.id);
         await this.deps.eventManager.publishLaunchProgress(recipe.id, "ready", "Model is ready!", 1);
         return { ok: true }; }
  if (launch.pid) {
         await this.deps.processManager.killProcess(launch.pid, true); }
-      await this.deps.eventManager.publishLaunchProgress(recipe.id, "error", ready.message, 0); return { ok: false, error: ready.message };
+      const failureInfo = this.recordLaunchFailure(recipe.id);
+      await this.deps.eventManager.publishLaunchProgress(recipe.id, "error", ready.message, 0); return { ok: false, error: ready.message, quarantineInfo: failureInfo };
     } finally { if (this.activeLifecycleAbort === lifecycleAbort) {
         this.activeLifecycleAbort = null; }
       if (this.activeLaunchPid === spawnedPid) { this.activeLaunchPid = null;
@@ -128,7 +136,7 @@ export class EngineCoordinator implements EngineService {
         recipe_id: recipe.id, aborted_runs: totalAborted,
       }); }
   }
-  async ensureActive(recipe: Recipe, options: { force_evict?: boolean; publish_events?: boolean } = {}): Promise<{ switched: boolean; error: string | null }> {
+  async ensureActive(recipe: Recipe, options: { force_evict?: boolean; publish_events?: boolean } = {}): Promise<EnsureActiveResult> {
     const existing = await this.deps.processManager.findInferenceProcess(this.deps.config.inference_port); if (existing && isRecipeRunning(recipe, existing)) {
       return { switched: false, error: null }; }
     if (this.autoActivationBlocked) { return {
@@ -144,6 +152,10 @@ export class EngineCoordinator implements EngineService {
       } if (this.autoActivationBlocked) {
         return { switched: false,
           error: "Model auto-loading is disabled because the model was manually stopped. Start a model from vLLM Studio before sending local inference requests.", };
+      }
+      if (this.isQuarantined(recipe.id)) {
+        const info = this.getFailureEntry(recipe.id);
+        return { switched: false, error: `Recipe ${recipe.id} is temporarily quarantined due to repeated launch failures`, quarantineInfo: info ? this.toCrashLoopInfo(info) : undefined };
       }
       const publishEvents = options.publish_events !== false; const observedProcess = latest ?? existing;
       const fromRecipe = observedProcess ? this.findRecipeForProcess(observedProcess) : null; const fromModel = fromRecipe ? (fromRecipe.served_model_name ?? fromRecipe.id) : observedProcess ? observedProcess.model_path : null;
@@ -161,13 +173,14 @@ export class EngineCoordinator implements EngineService {
         return { switched: true, error: "Model switch cancelled" }; }
       const launch = await this.deps.processManager.launchModel(recipe); launchPid = launch.pid;
       this.activeLaunchPid = launch.pid; if (!launch.success) {
+        const info = this.recordLaunchFailure(recipe.id);
         const message = `Failed to launch model ${recipe.id}: ${launch.message}`; if (publishEvents) {
           await this.deps.eventManager.publish( new Event(CONTROLLER_EVENTS.MODEL_SWITCH, {
               status: "error", to_recipe_id: recipe.id,
               to_model: recipe.served_model_name ?? recipe.id, to_backend: recipe.backend,
               reason: message, })
           ); }
-        return { switched: true, error: message }; }
+        return { switched: true, error: message, quarantineInfo: info }; }
  const logFilePath = primaryLogPathFor(this.deps.config.data_dir, recipe.id);
       const ready = await this.waitForReady({ recipe,
         pid: launch.pid, logFilePath,
@@ -176,6 +189,7 @@ export class EngineCoordinator implements EngineService {
         if (launch.pid) { await this.deps.processManager.killProcess(launch.pid, true);
         } return { switched: true, error: "Model switch cancelled" };
       } if (ready.ready) {
+        this.recordLaunchSuccess(recipe.id);
         if (publishEvents) { await this.deps.eventManager.publish(
             new Event(CONTROLLER_EVENTS.MODEL_SWITCH, { status: "ready",
               to_recipe_id: recipe.id, to_model: recipe.served_model_name ?? recipe.id,
@@ -185,13 +199,15 @@ export class EngineCoordinator implements EngineService {
         return { switched: true, error: null };
       }
       if (launch.pid) { await this.deps.processManager.killProcess(launch.pid, true);
-      } if (publishEvents) {
+      }
+      const failureInfo = this.recordLaunchFailure(recipe.id);
+      if (publishEvents) {
         await this.deps.eventManager.publish( new Event(CONTROLLER_EVENTS.MODEL_SWITCH, {
             status: "error", to_recipe_id: recipe.id,
             to_model: recipe.served_model_name ?? recipe.id, to_backend: recipe.backend,
             reason: ready.message, })
         ); }
-      return { switched: true, error: ready.message }; } finally {
+      return { switched: true, error: ready.message, quarantineInfo: failureInfo }; } finally {
       if (this.activeLifecycleAbort === lifecycleAbort) { this.activeLifecycleAbort = null;
       } if (this.activeLaunchPid === launchPid) {
         this.activeLaunchPid = null; }
@@ -223,6 +239,67 @@ export class EngineCoordinator implements EngineService {
         name: info.modelId ?? query, },
     ]; }
 
+  resetLaunchFailures(recipeId: string): void {
+    this.launchFailures.delete(recipeId);
+  }
+
+  isQuarantined(recipeId: string): boolean {
+    return this.getFailureEntry(recipeId)?.quarantined ?? false;
+  }
+
+  getQuarantinedRecipes(): { recipe_id: string; info: CrashLoopInfo }[] {
+    const result: { recipe_id: string; info: CrashLoopInfo }[] = [];
+    for (const [recipeId, entry] of this.launchFailures) {
+      if (entry.quarantined) {
+        result.push({ recipe_id: recipeId, info: this.toCrashLoopInfo(entry) });
+      }
+    }
+    return result;
+  }
+
+  private recordLaunchFailure(recipeId: string): CrashLoopInfo {
+    const now = Date.now();
+    let entry = this.launchFailures.get(recipeId);
+    if (!entry || now - entry.windowStart > CRASH_LOOP_WINDOW_MS) {
+      entry = { consecutiveFailures: 0, windowStart: now, quarantined: false };
+      this.launchFailures.set(recipeId, entry);
+    }
+    entry.consecutiveFailures += 1;
+    if (entry.consecutiveFailures >= CRASH_LOOP_MAX_FAILURES) {
+      entry.quarantined = true;
+    }
+    return this.toCrashLoopInfo(entry);
+  }
+
+  private recordLaunchSuccess(recipeId: string): void {
+    this.launchFailures.delete(recipeId);
+  }
+
+  private getFailureEntry(recipeId: string): CrashLoopEntry | undefined {
+    const entry = this.launchFailures.get(recipeId);
+    if (!entry) return undefined;
+    if (Date.now() - entry.windowStart > CRASH_LOOP_WINDOW_MS) {
+      this.launchFailures.delete(recipeId);
+      return undefined;
+    }
+    return entry;
+  }
+
+  private toCrashLoopInfo(entry: CrashLoopEntry): CrashLoopInfo {
+    return {
+      consecutiveFailures: entry.consecutiveFailures,
+      windowStart: entry.windowStart,
+      quarantined: entry.quarantined,
+    };
+  }
+
 }
+
+interface CrashLoopEntry {
+  consecutiveFailures: number;
+  windowStart: number;
+  quarantined: boolean;
+}
+
  export const createEngineCoordinator = (deps: CoordinatorDeps): EngineCoordinator => {
   return new EngineCoordinator(deps); };
