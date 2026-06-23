@@ -151,7 +151,7 @@ test("detectCollisions finds duplicate ids across sources", () => {
   assert.equal(collisions[0].entries[1].provenance.source, "mcp-server");
 });
 
-test("detectCollisions ignores duplicates within the same input array", () => {
+test("detectCollisions flags duplicate ids even within a single input array", () => {
   // Two entries with the same id in the same array still count as a collision
   const entries = adaptMcpCatalogue([
     fakeCatalogueEntry({ id: "dup" }),
