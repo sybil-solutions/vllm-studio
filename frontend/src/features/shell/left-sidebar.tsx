@@ -25,6 +25,7 @@ import {
   PanelLeftOpen,
   Square,
   X,
+  ListChecks,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store";
@@ -49,6 +50,7 @@ const tabs = [
   { href: "/usage", label: "Usage", icon: Microchip },
   { href: "/recipes", label: "Models", icon: HardDrive },
   { href: "/plugins", label: "Plugins", icon: Plug },
+  { href: "/capabilities", label: "Capabilities", icon: ListChecks },
   { href: "/server", label: "Server", icon: Globe },
 ];
 
