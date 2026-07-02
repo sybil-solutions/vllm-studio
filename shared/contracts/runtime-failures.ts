@@ -1,0 +1,17 @@
+export type RuntimeFailureReason =
+  | "binary_missing"
+  | "binary_not_executable"
+  | "model_file_missing"
+  | "model_file_unreadable"
+  | "model_file_corrupt_or_truncated"
+  | "unsupported_backend_flag"
+  | "port_in_use"
+  | "vram_oom"
+  | "system_ram_oom_or_swap"
+  | "context_exceeds_runtime_capacity"
+  | "kv_cache_capacity_too_small"
+  | "health_timeout"
+  | "process_exited_early"
+  | "model_not_served"
+  | "backend_unreachable"
+  | "unknown";

@@ -52,12 +52,14 @@ const contractNames = [
   "StudioDiagnostics",
   "ControllerUsageStats",
   "UsageStats",
+  "RuntimeFailureReason",
 ];
 const allowedFiles = new Set([
   "shared/contracts/recipes.ts",
   "shared/contracts/system.ts",
   "shared/contracts/controller-events.ts",
   "shared/contracts/observability.ts",
+  "shared/contracts/runtime-failures.ts",
   "shared/contracts/usage.ts",
   "shared/contracts/environments.ts",
   "controller/src/modules/shared/recipe-types.ts",
