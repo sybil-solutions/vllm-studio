@@ -89,7 +89,9 @@ export function areLaunchProgressEqual(a: LaunchProgressData | null, b: LaunchPr
     a.recipe_id === b.recipe_id &&
     a.stage === b.stage &&
     a.message === b.message &&
-    (a.progress ?? null) === (b.progress ?? null)
+    (a.progress ?? null) === (b.progress ?? null) &&
+    (a.reason ?? null) === (b.reason ?? null) &&
+    (a.code ?? null) === (b.code ?? null)
   );
 }
 

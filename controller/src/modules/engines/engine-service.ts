@@ -1,5 +1,6 @@
 import type { Recipe, ProcessInfo } from "../models/types";
 import type { ModelDownload } from "../shared/recipe-types";
+import type { RuntimeFailureReason } from "../../../../shared/contracts/runtime-failures";
 
 export type { Recipe, ProcessInfo };
 export type { ModelDownload };
@@ -13,8 +14,9 @@ export interface DownloadRequest {
   hf_token?: string | null;
 }
 
-
-export type SetActiveRecipeResult = { ok: true } | { ok: false; error: string };
+export type SetActiveRecipeResult =
+  | { ok: true }
+  | { ok: false; error: string; reason?: RuntimeFailureReason; code?: string };
 
 /** Options for setting the active recipe. */
 export interface SetActiveRecipeOptions {

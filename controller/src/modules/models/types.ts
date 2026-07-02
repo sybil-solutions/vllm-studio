@@ -1,5 +1,6 @@
 import type { Backend as SharedBackend, RecipeBase } from "../shared/recipe-types";
 import type { GPU, ProcessInfo as PublicProcessInfo } from "../../../../shared/contracts/observability";
+import type { RuntimeFailureReason } from "../../../../shared/contracts/runtime-failures";
 import type { ConfigData } from "../shared/system-types";
 
 export type { ModelInfo } from "../shared/recipe-types";
@@ -53,6 +54,8 @@ export interface LaunchResult {
   pid: number | null;
   message: string;
   log_file: string | null;
+  reason?: RuntimeFailureReason;
+  code?: string;
 }
 
 export type GpuInfo = Required<Omit<GPU, "id">>;
