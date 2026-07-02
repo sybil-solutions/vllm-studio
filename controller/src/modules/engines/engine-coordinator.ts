@@ -20,6 +20,27 @@ import type { DownloadManager } from "./downloads/download-manager";
 import type { LaunchFailureBudget } from "./process/launch-failure-budget";
 import { formatLaunchFailureBudgetMessage } from "./process/launch-failure-budget";
 import { getEngineSpec } from "./engine-spec";
+import { classifyLaunchFailure } from "./process/launch-failure-classifier";
+import type { RuntimeFailureReason } from "../../../../shared/contracts/runtime-failures";
+
+const classifyReadyFailure = (
+  logFilePath: string | null,
+  message: string
+): { reason?: RuntimeFailureReason; code?: string } => {
+  if (message === "Launch cancelled") return {};
+  if (message.includes("crashed during startup")) {
+    const logTail = logFilePath ? readFileTailBytes(logFilePath, 3000) : "";
+    return {
+      reason: classifyLaunchFailure(message, { logTail }) ?? "process_exited_early",
+      code: "crash",
+    };
+  }
+  if (message.includes("failed to become ready (timeout)")) {
+    return { reason: "health_timeout", code: "timeout" };
+  }
+  return {};
+};
+
 interface CoordinatorDeps {
   config: Config;
   eventManager: EventManager;
@@ -130,8 +151,15 @@ export class EngineCoordinator implements EngineService {
       const blocked = this.deps.launchFailureBudget.isBlocked(recipe.id);
       if (blocked) {
         const message = formatLaunchFailureBudgetMessage(blocked);
-        await this.deps.eventManager.publishLaunchProgress(recipe.id, "error", message, 0);
-        return { ok: false, error: message };
+        await this.deps.eventManager.publishLaunchProgress(
+          recipe.id,
+          "error",
+          message,
+          0,
+          undefined,
+          "crash-loop-blocked"
+        );
+        return { ok: false, error: message, code: "crash-loop-blocked" };
       }
       await this.deps.eventManager.publishLaunchProgress(
         recipe.id,
@@ -148,9 +176,16 @@ export class EngineCoordinator implements EngineService {
           recipe.id,
           "error",
           `${launch.message} (${failure.failure_count}/${failure.limit} launch failures in the current window)`,
-          0
+          0,
+          launch.reason,
+          launch.code
         );
-        return { ok: false, error: launch.message };
+        return {
+          ok: false,
+          error: launch.message,
+          ...(launch.reason ? { reason: launch.reason } : {}),
+          ...(launch.code ? { code: launch.code } : {}),
+        };
       }
       const postLaunchAbort = await abortIfNeeded(recipe);
       if (postLaunchAbort) return postLaunchAbort;
@@ -191,9 +226,16 @@ export class EngineCoordinator implements EngineService {
         recipe.id,
         "error",
         `${ready.message} (${failure.failure_count}/${failure.limit} launch failures in the current window)`,
-        0
+        0,
+        ready.reason,
+        ready.code
       );
-      return { ok: false, error: ready.message };
+      return {
+        ok: false,
+        error: ready.message,
+        ...(ready.reason ? { reason: ready.reason } : {}),
+        ...(ready.code ? { code: ready.code } : {}),
+      };
     } finally {
       if (this.activeLifecycleAbort === lifecycleAbort) {
         this.activeLifecycleAbort = null;
@@ -240,7 +282,9 @@ export class EngineCoordinator implements EngineService {
     logFilePath: string | null;
     cancel?: AbortSignal;
     timeoutMs?: number;
-  }): Promise<{ ready: true } | { ready: false; message: string }> {
+  }): Promise<
+    { ready: true } | { ready: false; message: string; reason?: RuntimeFailureReason; code?: string }
+  > {
     const result = await this.pollHealthy({
       healthPath: getEngineSpec(options.recipe.backend).healthPath,
       timeoutMs: options.timeoutMs ?? LIFECYCLE_READY_TIMEOUT_MS,
@@ -254,10 +298,8 @@ export class EngineCoordinator implements EngineService {
       },
     });
     if (result.ready) return { ready: true };
-    return {
-      ready: false,
-      message: result.message ?? `Model ${options.recipe.id} failed to become ready (timeout)`,
-    };
+    const message = result.message ?? `Model ${options.recipe.id} failed to become ready (timeout)`;
+    return { ready: false, message, ...classifyReadyFailure(options.logFilePath, message) };
   }
   private findRecipeForProcess(current: ProcessInfo): Recipe | null {
     for (const candidate of this.deps.recipeStore.list()) {

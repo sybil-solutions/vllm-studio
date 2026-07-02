@@ -15,6 +15,7 @@ import type { Logger } from "../../../core/logger";
 import type { LaunchResult, ProcessInfo, Recipe } from "../../models/types";
 import type { EventManager } from "../../system/event-manager";
 import { buildBackendCommand } from "./backend-builder";
+import { classifyLaunchFailure } from "./launch-failure-classifier";
 import {
   buildEnvironment,
   collectChildren,
@@ -280,11 +281,14 @@ export const createProcessManager = (
       command = buildBackendCommand(updatedRecipe, config);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const reason = classifyLaunchFailure(message);
       return {
         success: false,
         pid: null,
         message,
         log_file: primaryLogPathFor(config.data_dir, updatedRecipe.id),
+        ...(reason ? { reason } : {}),
+        code: "build-command",
       };
     }
     if (!command) {
@@ -377,11 +381,14 @@ export const createProcessManager = (
         if (logStream) {
           logStream.end();
         }
+        const reason = classifyLaunchFailure(spawnError, { spawnError });
         return {
           success: false,
           pid: null,
           message: spawnError,
           log_file: logFile,
+          ...(reason ? { reason } : {}),
+          code: "spawn",
         };
       }
       if (child.exitCode !== null) {
@@ -398,9 +405,10 @@ export const createProcessManager = (
         const message = tail
           ? `Process exited early (code ${child.exitCode}):\n${tail}`
           : `Process exited early (code ${child.exitCode})`;
+        const reason = classifyLaunchFailure(message, { logTail: tail }) ?? "process_exited_early";
         if (eventManager) {
           void eventManager
-            .publishLaunchProgress(updatedRecipe.id, "error", message)
+            .publishLaunchProgress(updatedRecipe.id, "error", message, undefined, reason, "exited-early")
             .catch(() => {});
         }
         return {
@@ -408,6 +416,8 @@ export const createProcessManager = (
           pid: null,
           message,
           log_file: logFile,
+          reason,
+          code: "exited-early",
         };
       }
       return {

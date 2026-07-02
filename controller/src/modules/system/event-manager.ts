@@ -1,5 +1,6 @@
 import { AsyncLock, AsyncQueue } from "../../core/async";
 import { CONTROLLER_EVENTS } from "../../../../shared/contracts/controller-events";
+import type { RuntimeFailureReason } from "../../../../shared/contracts/runtime-failures";
 
 /** Controller event that can be serialized to an SSE frame. */
 export class Event {
@@ -125,11 +126,19 @@ export class EventManager {
     recipeId: string,
     stage: string,
     message: string,
-    progress?: number
+    progress?: number,
+    reason?: RuntimeFailureReason,
+    code?: string
   ): Promise<void> {
     const payload: Record<string, unknown> = { recipe_id: recipeId, stage, message };
     if (progress !== undefined) {
       payload["progress"] = progress;
+    }
+    if (reason !== undefined) {
+      payload["reason"] = reason;
+    }
+    if (code !== undefined) {
+      payload["code"] = code;
     }
     await this.publish(new Event(CONTROLLER_EVENTS.LAUNCH_PROGRESS, payload));
   }
