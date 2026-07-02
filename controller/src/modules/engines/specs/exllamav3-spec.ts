@@ -22,7 +22,8 @@ const buildExllamav3Command = (recipe: Recipe, config: Config): string[] => {
   if (!mainPath) {
     throw new Error("TabbyAPI directory is not configured. Set LOCAL_STUDIO_TABBY_API_DIR.");
   }
-  const python = getPythonPath(recipe) || resolvePythonPath() || "python3";
+  const python =
+    getPythonPath(recipe) || tabbyVenvPython(config) || resolvePythonPath() || "python3";
   const command = [python, mainPath];
   command.push("--host", recipe.host, "--port", String(recipe.port));
   command.push("--model-name", basename(recipe.model_path));

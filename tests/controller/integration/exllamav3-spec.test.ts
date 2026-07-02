@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { getEngineSpec } from "../../../controller/src/modules/engines/engine-spec";
 import type { Config } from "../../../controller/src/config/env";
@@ -54,6 +57,20 @@ describe("exllamav3 spec", () => {
   it("passes extra_args through to the command", () => {
     const cmd = spec.buildCommand(recipe({ "disable-auth": "true" }), config);
     expect(cmd).toContain("--disable-auth");
+  });
+
+  it("prefers the python from the TabbyAPI venv when present", () => {
+    const tabbyDir = mkdtempSync(join(tmpdir(), "tabby-venv-"));
+    const venvBin = join(tabbyDir, "venv", "bin");
+    mkdirSync(venvBin, { recursive: true });
+    const venvPython = join(venvBin, "python");
+    writeFileSync(venvPython, "");
+    chmodSync(venvPython, 0o755);
+    const cmd = spec.buildCommand(recipe(), {
+      data_dir: "/tmp/local-studio-test",
+      tabby_api_dir: tabbyDir,
+    } as Config);
+    expect(cmd[0]).toBe(venvPython);
   });
 
   it("detects a TabbyAPI invocation", () => {
