@@ -3,6 +3,7 @@
  * frontend-only view models used across multiple features.
  */
 import type { RecipeBase, RecipePayload } from "../../../shared/contracts/recipes";
+import type { RuntimeFailureReason } from "../../../shared/contracts/runtime-failures";
 
 // --- Shared contract re-exports ---
 
@@ -126,6 +127,8 @@ export interface LaunchProgress {
 export interface LaunchProgressData extends LaunchProgress {
   recipe_id: string;
   message: string;
+  reason?: RuntimeFailureReason;
+  code?: string;
 }
 
 // --- Model discovery + recommendation ---
